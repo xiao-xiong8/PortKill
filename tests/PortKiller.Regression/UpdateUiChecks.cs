@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -18,7 +19,7 @@ internal static class UpdateUiChecks
         var manifest = new UpdateManifest
         {
             Version = "0.2", Size = 71722598,
-            ReleaseNotes = ["新增独立的软件更新窗口，可在后台下载更新。", "支持暂停与继续下载，显示实时进度与速度。", "优化 HTTP 更新校验和失败重试。", "安装失败时自动恢复上一可用版本。"]
+            ReleaseNotes = ["新增：独立的软件更新窗口，可在后台下载更新。", "优化：暂停与继续下载，显示实时进度与速度。", "修复：网络波动后的更新重试。", "安装失败时自动恢复上一可用版本。"]
         };
         string? output = Environment.GetEnvironmentVariable("PORTKILLER_UI_ARTIFACTS");
         if (output != null) Directory.CreateDirectory(output);
@@ -26,6 +27,7 @@ internal static class UpdateUiChecks
         {
             foreach (var theme in new[] { ThemeVariant.Light, ThemeVariant.Dark })
             {
+                manifest.ReleaseNotes = ["新增：独立的软件更新窗口，可在后台下载更新。", "优化：暂停与继续下载，显示实时进度与速度。", "修复：网络波动后的更新重试。", "安装失败时自动恢复上一可用版本。"];
                 Application.Current.RequestedThemeVariant = theme;
                 using var vm = new UpdateViewModel(currentVersion: "0.1");
                 var window = new UpdateWindow(vm) { ShowActivated = false,
@@ -72,10 +74,34 @@ internal static class UpdateUiChecks
                         window.Measure(new Size(560, 400)); window.Arrange(new Rect(0, 0, 560, 400));
                         await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(window.UpdateLayout, Avalonia.Threading.DispatcherPriority.Background);
                         var root = window.FindControl<Border>("UpdateSurfaceRoot")!;
-                        Program.Assert(root.Bounds.Size == new Size(560, 400) && root.CornerRadius == new CornerRadius(10),
+                        Program.Assert(root.Bounds.Size == new Size(560, 400) && root.CornerRadius == new CornerRadius(18),
                             $"{theme}/{stage} 窗口尺寸或圆角不符：root={root.Bounds}, window={window.Bounds}, radius={root.CornerRadius}。");
                         Program.Assert(window.GetVisualDescendants().OfType<TextBlock>().Any(t => t.IsEffectivelyVisible && t.Text == vm.Title),
                             $"{theme}/{stage} 缺少状态标题。");
+                        Program.Assert(root.Background is ISolidColorBrush surface && surface.Color == Color.Parse(theme == ThemeVariant.Light ? "#FFFFFF" : "#141D2E"),
+                            $"{theme}/{stage} 窗口未使用 HTML 的主题底色。");
+                        var footer = window.FindControl<Border>("UpdateFooter")!;
+                        foreach (var button in footer.GetVisualDescendants().OfType<Button>().Where(button => button.IsEffectivelyVisible))
+                        {
+                            var point = button.TranslatePoint(default, root)!.Value;
+                            Program.Assert(button.Bounds.Height > 0 && point.X >= 0 && point.Y >= footer.Bounds.Y
+                                && point.X + button.Bounds.Width <= 560 && point.Y + button.Bounds.Height <= 400,
+                                $"{theme}/{stage} 底部按钮被裁切：{button.Name ?? button.Content?.ToString()}。");
+                        }
+                        if (!vm.IsTransfer)
+                        {
+                            var primary = window.FindControl<Button>("UpdatePrimaryButton")!;
+                            Program.Assert(primary.Background is ISolidColorBrush accent && accent.Color == Color.Parse(theme == ThemeVariant.Light ? "#345FF1" : "#537BFF")
+                                && primary.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == vm.PrimaryText && t.Foreground is ISolidColorBrush foreground && foreground.Color == Colors.White),
+                                $"{theme}/{stage} 主按钮的主题蓝色或浅色文字被其他模板覆盖。");
+                        }
+                        if (vm.IsLatest)
+                        {
+                            var toggle = window.FindControl<ToggleButton>("UpdateAutomaticSwitch")!;
+                            toggle.IsChecked = false;
+                            Program.Assert(!vm.AutomaticCheck && vm.AutomaticCheckDescription.Contains("已关闭"), "最新页面开关未回写自动检查偏好。");
+                            toggle.IsChecked = true;
+                        }
                         foreach (var text in root.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible && t.Bounds.Width > 0))
                         {
                             var point = text.TranslatePoint(default, root);
@@ -84,12 +110,10 @@ internal static class UpdateUiChecks
                         }
                         if (output != null)
                         {
-                            foreach (double scale in new[] { 1d, 1.25, 1.5, 2d })
-                            {
-                                using var image = new RenderTargetBitmap(new PixelSize((int)(560 * scale), (int)(400 * scale)), new Vector(96 * scale, 96 * scale));
-                                image.Render(root);
-                                image.Save(Path.Combine(output, $"{theme}-{stage}-{scale * 100:0}.png"), PngBitmapEncoderOptions.Default);
-                            }
+                            // 仅导出当前已核对的 100% 绘制；高倍率离屏接口有裁切，不能作为实机 DPI 验证。
+                            using var image = new RenderTargetBitmap(new PixelSize(560, 400), new Vector(96, 96));
+                            image.Render(root);
+                            image.Save(Path.Combine(output, $"{theme}-{stage}-100.png"), PngBitmapEncoderOptions.Default);
                         }
                     }
                     // 长说明、旧清单空说明和长错误均不能改变底部按钮的可见性。
@@ -97,9 +121,9 @@ internal static class UpdateUiChecks
                     vm.Apply(new(UpdateStage.Available, "发现更新", manifest));
                     window.Measure(new Size(560, 400)); window.Arrange(new Rect(0, 0, 560, 400));
                     await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(window.UpdateLayout, Avalonia.Threading.DispatcherPriority.Background);
-                    var scroller = window.GetVisualDescendants().OfType<ScrollViewer>().First();
+                    var scroller = window.FindControl<ScrollViewer>("UpdateNotesScroller")!;
                     Program.Assert(scroller.Extent.Height > scroller.Viewport.Height, $"长更新说明未使用滚动区域：{scroller.Extent}/{scroller.Viewport}。");
-                    Program.Assert(window.GetVisualDescendants().OfType<Button>().Any(b => b.IsEffectivelyVisible && Equals(b.Content, "立即更新")),
+                    Program.Assert(window.FindControl<Button>("UpdatePrimaryButton")!.IsEffectivelyVisible && vm.PrimaryText == "立即更新",
                         "长说明挤掉了更新按钮。");
                     manifest.ReleaseNotes = [];
                     vm.Apply(new(UpdateStage.Available, "发现更新", manifest));
@@ -107,6 +131,8 @@ internal static class UpdateUiChecks
                 }
                 finally { window.CloseForShutdown(); }
             }
+
+            CheckPresentationAndProgress();
 
             int starts = 0, cancellations = 0, saves = 0;
             using var interaction = new UpdateViewModel(beginInstall: () => true,
@@ -140,6 +166,41 @@ internal static class UpdateUiChecks
         Console.WriteLine("PASS 更新窗口全部状态、深浅主题、关闭按钮首帧稳定、长内容、重启确认与窗口生命周期");
     }
 
+    private static void CheckPresentationAndProgress()
+    {
+        using var vm = new UpdateViewModel(currentVersion: "0.1");
+        var manifest = new UpdateManifest { Version = "0.2", Size = 1000,
+            ReleaseNotes = ["新增：新功能", "优化:更快", "【修复】旧问题", "普通说明", "新增："] };
+        vm.Apply(new(UpdateStage.Available, "发现更新", manifest));
+        Program.Assert(vm.ReleaseNoteItems.Select(note => note.Tag).SequenceEqual(new[] { "新增", "优化", "修复", "更新", "更新" })
+            && vm.ReleaseNoteItems[0].Text == "新功能" && vm.ReleaseNoteItems[^1].Text == "新增：",
+            "说明标签分类丢失了原文或兼容性。");
+        vm.Apply(new(UpdateStage.Downloading, "下载中", manifest, 200, 100));
+        var items = vm.ReleaseNoteItems;
+        var notifications = new List<string?>();
+        vm.PropertyChanged += (_, e) => notifications.Add(e.PropertyName);
+        vm.Apply(new(UpdateStage.Downloading, "下载中", manifest, 400, 200));
+        Program.Assert(vm.PercentNumber == "40" && ReferenceEquals(items, vm.ReleaseNoteItems)
+            && !notifications.Contains("") && !notifications.Contains(nameof(vm.ReleaseNoteItems))
+            && notifications.Contains(nameof(vm.PercentNumber)), "同阶段进度重建了说明或通知全部界面。");
+        vm.Apply(new(UpdateStage.Latest, "已是最新"));
+        Program.Assert(vm.StatusSubtitle.Contains("上次检查"), "最新页面没有真实检查时间。");
+        vm.AutomaticCheck = false;
+        Program.Assert(vm.AutomaticCheckDescription.Contains("已关闭"), "最新页面的自动检查说明未同步。");
+        var failed = new UpdateSnapshot(UpdateStage.Failed, "失败", manifest,
+            Failure: UpdateFailure.Network, ErrorDetail: "真实错误详情");
+        vm.Apply(failed);
+        vm.ViewReleaseNotesCommand.Execute(null);
+        Program.Assert(vm.IsReleaseNotesVisible && vm.IsViewingReleaseNotes && ReferenceEquals(vm.Snapshot, failed),
+            "查看更新说明覆盖了失败状态。");
+        vm.ReturnToStatusCommand.Execute(null);
+        string? copied = null;
+        vm.RequestCopy += detail => copied = detail;
+        vm.CopyDetailsCommand.Execute(null);
+        Program.Assert(vm.IsFailedStatus && vm.ErrorDetail == "真实错误详情" && copied?.Contains("真实错误详情") == true,
+            "返回失败页或复制详情丢失了原始原因。");
+    }
+
     private static byte[] RenderCaption(Button caption)
     {
         using var image = new RenderTargetBitmap(new PixelSize(32, 32), new Vector(96, 96));
@@ -148,4 +209,5 @@ internal static class UpdateUiChecks
         image.Save(stream, PngBitmapEncoderOptions.Default);
         return stream.ToArray();
     }
+
 }

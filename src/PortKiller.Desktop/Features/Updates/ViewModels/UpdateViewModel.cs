@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -22,7 +23,21 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
     private readonly string _currentVersion;
     private bool _settingPreference, _disposed;
     private UpdateSnapshot _snapshot = new(UpdateStage.Idle, "检查并获取最新版本");
+    private UpdateSnapshot? _pendingSnapshot;
+    private int _updatePosted;
+    private string[]? _notesSource;
+    private DateTimeOffset? _lastCheckedAt;
+    private IReadOnlyList<UpdateReleaseNoteItem> _releaseNoteItems = [new("更新", "此版本未提供更新说明。")];
     [ObservableProperty] private bool _automaticCheck = true;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsReleaseNotesVisible))]
+    [NotifyPropertyChangedFor(nameof(IsStatusVisible))]
+    [NotifyPropertyChangedFor(nameof(Title))]
+    [NotifyPropertyChangedFor(nameof(Subtitle))]
+    [NotifyPropertyChangedFor(nameof(Eyebrow))]
+    [NotifyPropertyChangedFor(nameof(IsFailedStatus))]
+    [NotifyPropertyChangedFor(nameof(ShowUpgradeArtwork))]
+    private bool _isViewingReleaseNotes;
     [ObservableProperty] private bool _isConfirming;
     [ObservableProperty] private bool _isInstalling;
     [ObservableProperty] private string _notice = "";
@@ -42,6 +57,17 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
     public bool IsLatest => _snapshot.Stage == UpdateStage.Latest;
     public bool IsNeutral => !IsAvailable && !IsTransfer && !IsReady && !IsFailed && !IsLatest;
     public bool IsChecking => _snapshot.Stage == UpdateStage.Checking;
+    public bool IsReleaseNotesVisible => IsAvailable || IsViewingReleaseNotes;
+    public bool IsStatusVisible => !IsReleaseNotesVisible && !IsTransfer;
+    public bool IsFailedStatus => IsFailed && !IsViewingReleaseNotes;
+    public bool ShowUpgradeArtwork => IsReleaseNotesVisible || IsNeutral;
+    public bool ShowNonTransferSecondary => IsAvailable || IsReady || IsFailed;
+    public bool ShowRestartIcon => IsReady || IsFailed;
+    public bool ShowAutomaticCheck => IsAvailable || IsNeutral;
+    public bool HasReleaseNotes => _snapshot.Manifest?.ReleaseNotes is { Length: > 0 };
+    public IReadOnlyList<UpdateReleaseNoteItem> ReleaseNoteItems => _releaseNoteItems;
+    public string Eyebrow => IsViewingReleaseNotes ? "RELEASE NOTES" : IsTransfer ? "GETTING BETTER" : "NEW RELEASE";
+    public string AutomaticCheckDescription => AutomaticCheck ? "每次启动时，自动为你检查新版本" : "已关闭，可随时手动检查更新";
     public bool HasNotice => !string.IsNullOrEmpty(Notice);
     public bool CanPause => _snapshot.Stage == UpdateStage.Downloading;
     public bool CanPrimary => !IsBusy && !IsConfirming;
@@ -49,22 +75,31 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
     public bool ShowProgress => IsTransfer || IsReady;
     public string CurrentVersion => "当前版本 " + _currentVersion;
     public string TargetVersion => _snapshot.Manifest?.Version ?? _currentVersion;
-    public string Title => IsInstalling ? "正在准备重启安装" : _snapshot.Stage switch
+    public string Title => IsViewingReleaseNotes ? "本次更新内容" : IsInstalling ? "正在准备重启安装" : _snapshot.Stage switch
     {
-        UpdateStage.Available => "发现新版本 " + TargetVersion,
-        UpdateStage.Downloading => "正在下载更新 " + TargetVersion,
+        UpdateStage.Available => "发现新版本",
+        UpdateStage.Downloading => "正在下载更新",
         UpdateStage.Paused => "下载已暂停",
         UpdateStage.Verifying => "正在校验更新包",
-        UpdateStage.Ready => "更新已就绪",
-        UpdateStage.Latest => "你已是最新版本",
-        UpdateStage.Failed => "更新未完成",
+        UpdateStage.Ready => "一切就绪，焕新出发",
+        UpdateStage.Latest => "已是最新，安心使用",
+        UpdateStage.Failed => "更新暂时遇到一点问题",
         UpdateStage.Checking => "正在检查更新",
         UpdateStage.Disabled => "自动更新尚未配置",
         _ => "软件更新"
     };
-    public string Subtitle => IsAvailable ? $"{CurrentVersion}    ·    更新包 {FormatBytes(_snapshot.Manifest?.Size ?? 0)}"
-        : IsTransfer ? $"更新包 {FormatBytes(_snapshot.Manifest?.Size ?? 0)}    ·    {RemainingText}"
+    public string Subtitle => IsReleaseNotesVisible ? $"{CurrentVersion}    /    更新包 {FormatBytes(_snapshot.Manifest?.Size ?? 0)}"
+        : IsTransfer ? $"版本 {TargetVersion}    /    {RemainingText}"
         : IsReady ? $"版本 {TargetVersion} 已下载并通过完整性校验" : CurrentVersion;
+    public string StatusSubtitle => IsReady ? Subtitle : IsLatest ? CurrentVersion + (_lastCheckedAt is { } time
+        ? "    /    上次检查 " + time.ToLocalTime().ToString("HH:mm", CultureInfo.CurrentCulture) : "") : Body;
+    public string ErrorHeading => _snapshot.Failure switch
+    {
+        UpdateFailure.Network => "网络连接中断或超时", UpdateFailure.Server => "更新服务暂时不可用",
+        UpdateFailure.Integrity => "更新文件未通过校验", UpdateFailure.Storage => "无法写入更新文件",
+        UpdateFailure.Configuration => "更新配置不可用", _ => "本次更新未能完成"
+    };
+    public string ErrorDetail => string.IsNullOrWhiteSpace(_snapshot.ErrorDetail) ? _snapshot.Message : _snapshot.ErrorDetail;
     public string Body => IsReady ? "重启后即可使用新版本。当前操作可以继续，安装失败会恢复旧版本。"
         : IsFailed ? _snapshot.Failure switch
         {
@@ -83,15 +118,17 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
     public string NotesCount => _snapshot.Manifest?.ReleaseNotes is { Length: > 0 } notes ? $"共 {notes.Length} 项" : "";
     public double Percent => _snapshot.Percent;
     public string PercentText => $"{Math.Round(Percent):0}%";
-    public string DownloadedText => $"已下载 {FormatBytes(_snapshot.DownloadedBytes)} / {FormatBytes(_snapshot.Manifest?.Size ?? 0)}";
+    public string PercentNumber => $"{Math.Round(Percent):0}";
+    public string TransferStatus => IsPaused ? "进度已保存" : IsVerifying ? "下载完成，正在校验" : "正在为你准备新版本";
+    public string DownloadedText => $"{FormatBytes(_snapshot.DownloadedBytes)} / {FormatBytes(_snapshot.Manifest?.Size ?? 0)}";
     public string SpeedText => IsPaused ? "已暂停" : IsVerifying ? "SHA-256 校验" : _snapshot.BytesPerSecond > 0 ? FormatBytes((long)_snapshot.BytesPerSecond) + "/s" : "正在连接…";
     public string RemainingText => IsPaused ? "点击继续下载" : IsVerifying ? "正在验证完整性"
         : _snapshot.Remaining is { } remaining ? remaining.TotalSeconds < 60 ? $"预计剩余 {Math.Ceiling(remaining.TotalSeconds):0} 秒" : $"预计剩余 {Math.Ceiling(remaining.TotalMinutes):0} 分钟" : "正在估算剩余时间";
     public string PrimaryText => IsInstalling ? "准备安装…" : IsAvailable ? "立即更新" : IsPaused ? "继续下载"
         : IsReady ? "立即重启" : IsFailed ? "重新检查" : IsLatest ? "完成" : IsChecking ? "检查中…" : "检查更新";
-    public string SecondaryText => IsFailed ? "复制错误详情" : IsAvailable ? "稍后提醒" : IsReady ? "稍后重启" : "后台运行";
+    public string SecondaryText => IsFailed ? "稍后再说" : IsAvailable ? "稍后提醒" : IsReady ? "稍后重启" : "后台运行";
     public string ConfirmText => IsInstalling ? "准备安装…" : "确认重启安装";
-    public string FooterHint => IsTransfer ? "关闭窗口不会中断下载" : IsReady ? "由你确认重启，不会自动倒计时" : IsFailed ? "更新日志保存在本机 error.log" : "";
+    public string FooterHint => IsTransfer ? "可在后台下载，不影响当前工作" : IsReady ? "由你确认重启安装" : IsLatest ? "所有功能均已准备就绪" : "当前版本仍可正常使用";
     public string DetailText => $"PortKiller {UpdateService.CurrentVersion}\n{_snapshot.Failure}\n{_snapshot.ErrorDetail}\n{_snapshot.Message}";
 
     public UpdateViewModel(CancellationToken lifetime = default, Func<bool>? beginInstall = null,
@@ -112,16 +149,41 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
 
     private void OnChanged(UpdateSnapshot snapshot)
     {
-        if (Dispatcher.UIThread.CheckAccess()) { if (!_disposed) Apply(snapshot); }
-        else Dispatcher.UIThread.Post(() => { if (!_disposed) Apply(snapshot); });
+        Interlocked.Exchange(ref _pendingSnapshot, snapshot);
+        if (Interlocked.Exchange(ref _updatePosted, 1) != 0) return;
+        Dispatcher.UIThread.Post(() =>
+        {
+            Interlocked.Exchange(ref _updatePosted, 0);
+            var latest = Interlocked.Exchange(ref _pendingSnapshot, null);
+            if (!_disposed && latest != null) Apply(latest);
+        }, DispatcherPriority.Background);
     }
 
     internal void Apply(UpdateSnapshot snapshot)
     {
+        bool progressOnly = snapshot.Stage == _snapshot.Stage && IsTransfer
+            && ReferenceEquals(snapshot.Manifest, _snapshot.Manifest);
+        bool stageChanged = snapshot.Stage != _snapshot.Stage;
         _snapshot = snapshot; Notice = "";
-        // 派生展示统一通知，不解析服务的状态文字；没有反射绑定，兼容 AOT。
+        if (progressOnly)
+        {
+            foreach (string name in ProgressProperties) OnPropertyChanged(name);
+            return;
+        }
+        if (stageChanged) IsViewingReleaseNotes = false;
+        if (snapshot.Stage is UpdateStage.Latest or UpdateStage.Available) _lastCheckedAt = DateTimeOffset.UtcNow;
+        var notes = snapshot.Manifest?.ReleaseNotes;
+        if (!ReferenceEquals(notes, _notesSource))
+        {
+            _notesSource = notes;
+            _releaseNoteItems = notes is { Length: > 0 } ? notes.Select(UpdateReleaseNoteItem.Parse).ToArray()
+                : [new("更新", "此版本未提供更新说明。")];
+        }
+        // 阶段切换更新页面；同阶段进度仅通知进度字段，不重建更新说明或状态模板。
         OnPropertyChanged(string.Empty);
     }
+    private static readonly string[] ProgressProperties = [nameof(Snapshot), nameof(Percent), nameof(PercentText),
+        nameof(PercentNumber), nameof(DownloadedText), nameof(SpeedText), nameof(RemainingText), nameof(Subtitle)];
 
     public void SetAutomaticCheck(bool enabled)
     {
@@ -130,6 +192,7 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
 
     partial void OnAutomaticCheckChanged(bool value)
     {
+        OnPropertyChanged(nameof(AutomaticCheckDescription));
         if (!_settingPreference && _saveAutomaticCheck != null && !_saveAutomaticCheck(value))
         { SetAutomaticCheck(!value); Notice = "更新检查偏好保存失败，请重试。"; }
     }
@@ -146,6 +209,7 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
         else await CheckAsync();
     }
 
+    [RelayCommand]
     public async Task CheckAsync()
     {
         if (_disposed || IsBusy || IsConfirming || _service == null) return;
@@ -164,15 +228,18 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand] private void Pause() => _service?.PauseDownload();
+    [RelayCommand] private void CopyDetails() => RequestCopy?.Invoke(DetailText);
+    [RelayCommand] private void ViewReleaseNotes() { if (HasReleaseNotes) IsViewingReleaseNotes = true; }
+    [RelayCommand] private void ReturnToStatus() => IsViewingReleaseNotes = false;
     [RelayCommand] private void Secondary()
     {
         if (IsInstalling) return;
-        if (IsFailed) RequestCopy?.Invoke(DetailText);
-        else Hide();
+        Hide();
     }
     [RelayCommand] private void Hide()
     {
         if (IsInstalling) return;
+        IsViewingReleaseNotes = false;
         CancelConfirmation();
         RequestHide?.Invoke();
     }
@@ -201,6 +268,7 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _disposed = true;
+        Interlocked.Exchange(ref _pendingSnapshot, null);
         if (_service != null) _service.Changed -= OnChanged;
     }
 }

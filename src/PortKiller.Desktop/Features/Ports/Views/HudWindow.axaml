@@ -1,0 +1,112 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="PortKiller.Views.HudWindow"
+        xmlns:vm="using:PortKiller.ViewModels"
+        xmlns:m="using:PortKiller.Models"
+        x:DataType="vm:MainViewModel"
+        Width="344" SizeToContent="Height" CanResize="False"
+        ShowInTaskbar="False" Topmost="True" ShowActivated="False"
+        WindowDecorations="None" TransparencyLevelHint="Transparent"
+        Background="Transparent"
+        Title="PortKiller HUD">
+
+    <Window.Styles>
+        <Style Selector="Border.hudCard">
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Background" Value="{DynamicResource BgBase}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSoft}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BoxShadow" Value="0 18 48 -8 #99000000" />
+            <Setter Property="ClipToBounds" Value="True" />
+        </Style>
+        <Style Selector="Border.hudRow">
+            <Setter Property="Height" Value="36" />
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.hudRow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgHover}" />
+        </Style>
+        <!-- HUD 端口数字：设计稿服务语义配色（等宽字体由 TextBlock 内联指定） -->
+        <Style Selector="TextBlock.web"><Setter Property="Foreground" Value="{DynamicResource SvcWebFg}" /></Style>
+        <Style Selector="TextBlock.db"><Setter Property="Foreground" Value="{DynamicResource SvcDbFg}" /></Style>
+        <Style Selector="TextBlock.dev"><Setter Property="Foreground" Value="{DynamicResource SvcDevFg}" /></Style>
+        <Style Selector="TextBlock.net"><Setter Property="Foreground" Value="{DynamicResource SvcNetFg}" /></Style>
+        <Style Selector="TextBlock.sys"><Setter Property="Foreground" Value="{DynamicResource SvcSysFg}" /></Style>
+        <Style Selector="TextBlock.app"><Setter Property="Foreground" Value="{DynamicResource SvcAppFg}" /></Style>
+        <Style Selector="Border.hudRow > TextBlock.hudProcess">
+            <Setter Property="FontSize" Value="{DynamicResource TypeCaption}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </Window.Styles>
+
+    <Border Classes="hudCard">
+        <StackPanel>
+            <!-- HUD 标题栏 38px：拖拽点 + 标题 + 关闭 -->
+            <Border Height="38" Background="{DynamicResource BgSidebar}" BorderBrush="{DynamicResource BorderSoft}"
+                    BorderThickness="0,0,0,1" PointerPressed="OnTitlePressed">
+                <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,0,8,0">
+                    <Canvas Grid.Column="0" Width="12" Height="12" VerticalAlignment="Center" Opacity="0.6">
+                        <Ellipse Canvas.Left="3.8" Canvas.Top="2.3" Width="1.4" Height="1.4" Fill="{DynamicResource TextMuted}" />
+                        <Ellipse Canvas.Left="6.8" Canvas.Top="2.3" Width="1.4" Height="1.4" Fill="{DynamicResource TextMuted}" />
+                        <Ellipse Canvas.Left="3.8" Canvas.Top="5.3" Width="1.4" Height="1.4" Fill="{DynamicResource TextMuted}" />
+                        <Ellipse Canvas.Left="6.8" Canvas.Top="5.3" Width="1.4" Height="1.4" Fill="{DynamicResource TextMuted}" />
+                        <Ellipse Canvas.Left="3.8" Canvas.Top="8.3" Width="1.4" Height="1.4" Fill="{DynamicResource TextMuted}" />
+                        <Ellipse Canvas.Left="6.8" Canvas.Top="8.3" Width="1.4" Height="1.4" Fill="{DynamicResource TextMuted}" />
+                    </Canvas>
+                    <TextBlock Grid.Column="1" Text="PortKiller · 端口悬浮窗" FontSize="{DynamicResource TypeCaption}"
+                               FontWeight="Medium" Foreground="{DynamicResource TextTertiary}"
+                               VerticalAlignment="Center" Margin="8,0,0,0" />
+                    <Button Grid.Column="2" Classes="bare" Width="22" Height="22" Padding="0"
+                            Click="OnCloseHud" VerticalAlignment="Center">
+                        <Viewbox Width="13" Height="13">
+                            <Canvas Width="24" Height="24">
+                                <Path Classes="ic" StrokeThickness="2" Stroke="{DynamicResource TextMuted}"
+                                      Data="M6.5 6.5l11 11M17.5 6.5l-11 11" />
+                            </Canvas>
+                        </Viewbox>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- 端口行（点击行唤起主窗口；按服务语义色着色） -->
+            <StackPanel Margin="8" Spacing="1">
+                <ItemsControl ItemsSource="{Binding HudRows}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="m:HudRow">
+                            <Border Classes="hudRow" Cursor="Hand" PointerPressed="OnRowPressed">
+                                <Grid ColumnDefinitions="52,*" ColumnSpacing="10">
+                                    <TextBlock Grid.Column="0" Text="{Binding Port}"
+                                               FontFamily="{DynamicResource AppFontMono}"
+                                               FontSize="{DynamicResource TypeBody}" FontWeight="Bold"
+                                               Foreground="{DynamicResource TextSecondary}"
+                                               VerticalAlignment="Center"
+                                               Classes.web="{Binding IsWeb}"
+                                               Classes.db="{Binding IsDb}"
+                                               Classes.dev="{Binding IsDev}"
+                                               Classes.net="{Binding IsNet}"
+                                               Classes.sys="{Binding IsKernel}"
+                                               Classes.app="{Binding IsApp}" />
+                                    <TextBlock Grid.Column="1" Classes="hudProcess"
+                                               Text="{Binding Process}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- 底栏 36px -->
+            <Border Height="36" Background="{DynamicResource BgSidebar}" BorderBrush="{DynamicResource BorderSoft}"
+                    BorderThickness="0,1,0,0" PointerPressed="OnTitlePressed" Cursor="Hand"
+                    DoubleTapped="OnExpandMain">
+                <TextBlock Text="{Binding HudTotalText}" FontSize="{DynamicResource TypeMicro}"
+                           Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="12,0,0,0" />
+            </Border>
+        </StackPanel>
+    </Border>
+</Window>

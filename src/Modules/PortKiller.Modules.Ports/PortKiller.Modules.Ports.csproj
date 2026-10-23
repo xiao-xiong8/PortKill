@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsAotCompatible>true</IsAotCompatible>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PortKiller" />
+    <InternalsVisibleTo Include="PortKiller.Regression" />
+    <InternalsVisibleTo Include="PortKiller.MemoryProbe" />
+    <ProjectReference Include="../../PortKiller.Core/PortKiller.Core.csproj" />
+    <ProjectReference Include="../../PortKiller.Infrastructure.Windows/PortKiller.Infrastructure.Windows.csproj" />
+  </ItemGroup>
+</Project>

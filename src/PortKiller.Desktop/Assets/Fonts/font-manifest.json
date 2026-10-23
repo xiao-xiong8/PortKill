@@ -1,0 +1,60 @@
+{
+  "tool": "fonttools 4.67.0",
+  "sources": {
+    "NotoSansSC-VF.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanssc/NotoSansSC%5Bwght%5D.ttf",
+    "Inter-VF.ttf": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf"
+  },
+  "sourceSha256": {
+    "NotoSansSC-VF.ttf": "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da",
+    "Inter-VF.ttf": "29160a80ff49ddcab2c97711247e08b1fab27a484a329ce8b813d820dc559031"
+  },
+  "coverage": "GB2312 + current project source text + punctuation/arrows",
+  "faces": [
+    {
+      "file": "NotoSansSC-Regular.ttf",
+      "family": "Noto Sans SC",
+      "style": "Regular",
+      "weight": 400,
+      "bytes": 2448272,
+      "glyphs": 7665,
+      "sha256": "0249dbbb8005195cdf01ec6dbffa6acdfb69fa8d56de8fb487a3120060f6992e"
+    },
+    {
+      "file": "NotoSansSC-Medium.ttf",
+      "family": "Noto Sans SC",
+      "style": "Medium",
+      "weight": 500,
+      "bytes": 2446968,
+      "glyphs": 7665,
+      "sha256": "1fd9101ad20cc328565d16cc3ac16106058a3ba3303badc9944ec7ca8f157f7a"
+    },
+    {
+      "file": "NotoSansSC-SemiBold.ttf",
+      "family": "Noto Sans SC",
+      "style": "SemiBold",
+      "weight": 600,
+      "bytes": 2446336,
+      "glyphs": 7665,
+      "sha256": "6701c7872d7c3770b04715ca457d033126224206fb345b31ec098b9f69a83333"
+    },
+    {
+      "file": "Inter-Medium.ttf",
+      "family": "Inter",
+      "style": "Medium",
+      "weight": 500,
+      "bytes": 114992,
+      "glyphs": 469,
+      "sha256": "b20bd0652fd600345a3f82a373c1bf810f06cf00e2ab86765afe10a6c77e03f4"
+    },
+    {
+      "file": "Inter-SemiBold.ttf",
+      "family": "Inter",
+      "style": "SemiBold",
+      "weight": 600,
+      "bytes": 115200,
+      "glyphs": 469,
+      "sha256": "8e9c23332354109ec3ed2359f0806cd6c9ff32b1c20d7dce87ae8f00b90dfe3f"
+    }
+  ],
+  "totalBytes": 7571768
+}

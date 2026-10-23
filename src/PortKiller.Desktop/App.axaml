@@ -1,0 +1,1293 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="PortKiller.App"
+             xmlns:local="using:PortKiller"
+             xmlns:sys="using:System"
+             RequestedThemeVariant="Default">
+
+    <Application.DataTemplates>
+        <local:ViewLocator />
+    </Application.DataTemplates>
+
+    <Application.Resources>
+        <ResourceDictionary>
+
+            <!-- ════════════════════════════════════════════════════════════
+                 排版令牌 · Typography Tokens
+                 ════════════════════════════════════════════════════════════
+                 设计稿字号阶梯被角色化，运行时由 TypographyService 覆写。
+                 两条互相独立的轴：
+                   · 界面字号 → 标题 / 统计 / 区块 / 卡片 / 正文 / 辅助 / 微标签
+                   · 数据字号 → 等宽数据（端口 / PID / 端点），不受界面字号影响
+                 默认值与设计稿 Design Tokens 一一对应：
+                   主标题 20 · 统计 19 · 区块 14 · 卡片 13 · 正文 12 · 辅助 11 ·
+                   微标签 10 · 极小 9 · 等宽 12 · 等宽辅助 11 · 端口 14
+                 ════════════════════════════════════════════════════════════ -->
+            <!-- 英文/数字由 Inter 呈现；汉字通过 FontManagerOptions 回退至内嵌 Noto Sans SC。 -->
+            <FontFamily x:Key="AppFontUi">fonts:PortKiller#Inter</FontFamily>
+            <FontFamily x:Key="AppFontMono">fonts:PortKiller#Inter</FontFamily>
+            <FontFamily x:Key="AppFontChinese">fonts:PortKiller#Noto Sans SC</FontFamily>
+            <FontFamily x:Key="AppFontNumbers">fonts:PortKiller#Inter</FontFamily>
+
+            <sys:Double x:Key="TypeTitle">20</sys:Double>
+            <sys:Double x:Key="TypeStat">19</sys:Double>
+            <sys:Double x:Key="TypeSection">14</sys:Double>
+            <sys:Double x:Key="TypeCard">13</sys:Double>
+            <sys:Double x:Key="TypeBody">12</sys:Double>
+            <sys:Double x:Key="TypeCaption">11</sys:Double>
+            <sys:Double x:Key="TypeMicro">10</sys:Double>
+            <sys:Double x:Key="TypeTiny">9</sys:Double>
+            <sys:Double x:Key="TypeMono">12</sys:Double>
+            <sys:Double x:Key="TypeMonoCaption">11</sys:Double>
+            <sys:Double x:Key="TypeMonoPort">14</sys:Double>
+            <sys:Double x:Key="TypeDialogTitle">18</sys:Double>
+            <sys:Double x:Key="TypeDialogBody">14</sys:Double>
+            <sys:Double x:Key="TypeDialogCaption">13</sys:Double>
+            <sys:Double x:Key="DialogActionWidth">144</sys:Double>
+
+            <!-- 统一焦点环色：品牌色 22% 透明度（交互状态规范） -->
+            <SolidColorBrush x:Key="FocusRing" Color="#380EA5E9" />
+
+            <ResourceDictionary.ThemeDictionaries>
+
+                <!-- ============================================================
+                     深色主题 · 严格取自设计稿 Design Tokens
+                     ============================================================ -->
+                <ResourceDictionary x:Key="Dark">
+                    <!-- 基底与表面 -->
+                    <SolidColorBrush x:Key="BgBase"       Color="#0A0A0B" />
+                    <SolidColorBrush x:Key="BgTitleBar"   Color="#0F0F11" />
+                    <SolidColorBrush x:Key="BgSidebar"    Color="#0C0C0E" />
+                    <SolidColorBrush x:Key="BgCard"       Color="#101013" />
+                    <SolidColorBrush x:Key="BgTableHead"  Color="#0F0F12" />
+                    <SolidColorBrush x:Key="BgInput"      Color="#131316" />
+                    <SolidColorBrush x:Key="BgHover"      Color="#17171B" />
+                    <SolidColorBrush x:Key="BgBadge"      Color="#1C1C21" />
+                    <SolidColorBrush x:Key="BgRaised"     Color="#16161A" />
+
+                    <!-- 分段控件：轨道与激活块（深色轨道更深、激活块更亮） -->
+                    <SolidColorBrush x:Key="SegTrack"  Color="#131316" />
+                    <SolidColorBrush x:Key="SegActive" Color="#27272A" />
+
+                    <!-- 描边 -->
+                    <SolidColorBrush x:Key="BorderSoft"   Color="#1F1F24" />
+                    <SolidColorBrush x:Key="BorderStrong" Color="#27272A" />
+                    <SolidColorBrush x:Key="BorderHover"  Color="#3F3F46" />
+                    <SolidColorBrush x:Key="RowLine"      Color="#17171A" />
+
+                    <!-- 文字阶梯 -->
+                    <SolidColorBrush x:Key="TextPrimary"   Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="TextSecondary" Color="#E4E4E7" />
+                    <SolidColorBrush x:Key="TextTertiary"  Color="#A1A1AA" />
+                    <SolidColorBrush x:Key="TextMuted"     Color="#71717A" />
+                    <SolidColorBrush x:Key="TextDim"       Color="#52525B" />
+                    <SolidColorBrush x:Key="TextFaint"     Color="#3F3F46" />
+
+                    <!-- 品牌强调色 -->
+                    <SolidColorBrush x:Key="AccentFill"   Color="#0EA5E9" />
+                    <SolidColorBrush x:Key="AccentText"   Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="AccentFg"     Color="#38BDF8" />
+                    <SolidColorBrush x:Key="AccentSoft"   Color="#7DD3FC" />
+                    <SolidColorBrush x:Key="AccentSurface" Color="#180EA5E9" />
+                    <SolidColorBrush x:Key="AccentBorder" Color="#400EA5E9" />
+
+                    <!-- 浮层（右键菜单 / 列设置 / 下拉面板） -->
+                    <SolidColorBrush x:Key="MenuSurface" Color="#16161A" />
+                    <SolidColorBrush x:Key="MenuHover"   Color="#344156" />
+                    <SolidColorBrush x:Key="MenuHoverRest" Color="#00344156" />
+                    <SolidColorBrush x:Key="MenuBorder"  Color="#1F1F24" />
+
+                    <!-- 复选框：未选中底盘与描边 -->
+                    <SolidColorBrush x:Key="CbBg"     Color="#0A0A0B" />
+                    <SolidColorBrush x:Key="CbBorder" Color="#404044" />
+
+                    <!-- 表头：未排序箭头 / 列宽拖拽手柄 -->
+                    <SolidColorBrush x:Key="SortIdle"  Color="#3F3F46" />
+                    <SolidColorBrush x:Key="HandleBar" Color="#27272A" />
+
+                    <!-- Fluent 下拉框资源覆写（语义化，浅深两套一致） -->
+                    <SolidColorBrush x:Key="ComboBoxBackground"                    Color="#131316" />
+                    <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver"         Color="#17171B" />
+                    <SolidColorBrush x:Key="ComboBoxBackgroundPressed"             Color="#17171B" />
+                    <SolidColorBrush x:Key="ComboBoxBorderBrush"                   Color="#27272A" />
+                    <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver"        Color="#3F3F46" />
+                    <SolidColorBrush x:Key="ComboBoxForeground"                    Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="ComboBoxForegroundPointerOver"         Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="ComboBoxDropDownBackground"            Color="#16161A" />
+                    <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush"           Color="#1F1F24" />
+                    <SolidColorBrush x:Key="ComboBoxDropDownForeground"            Color="#E4E4E7" />
+                    <SolidColorBrush x:Key="ComboBoxItemForeground"                Color="#E4E4E7" />
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundPointerOver"     Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundSelected"        Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver"     Color="#1C1C21" />
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected"        Color="#180EA5E9" />
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="#1C1C21" />
+
+                    <!-- 滚动区底部渐隐：让被视口裁切的半行自然收尾，而不是硬切 -->
+                    <LinearGradientBrush x:Key="ScrollFade" StartPoint="0%,0%" EndPoint="0%,100%">
+                        <GradientStop Offset="0" Color="#00101013" />
+                        <GradientStop Offset="1" Color="#FF101013" />
+                    </LinearGradientBrush>
+
+                    <!-- 滚动条 -->
+                    <SolidColorBrush x:Key="ScrollThumb" Color="#2E2E33" />
+
+                    <!-- 语义：服务分类 -->
+                    <SolidColorBrush x:Key="SvcWebFg" Color="#38BDF8" />
+                    <SolidColorBrush x:Key="SvcWebBg" Color="#1F0EA5E9" />
+                    <SolidColorBrush x:Key="SvcDbFg"  Color="#FBBF24" />
+                    <SolidColorBrush x:Key="SvcDbBg"  Color="#1FF59E0B" />
+                    <SolidColorBrush x:Key="SvcDevFg" Color="#A78BFA" />
+                    <SolidColorBrush x:Key="SvcDevBg" Color="#1F8B5CF6" />
+                    <SolidColorBrush x:Key="SvcNetFg" Color="#34D399" />
+                    <SolidColorBrush x:Key="SvcNetBg" Color="#1F10B981" />
+                    <SolidColorBrush x:Key="SvcSysFg" Color="#FB7185" />
+                    <SolidColorBrush x:Key="SvcSysBg" Color="#1FF43F5E" />
+                    <SolidColorBrush x:Key="SvcAppFg" Color="#A1A1AA" />
+                    <SolidColorBrush x:Key="SvcAppBg" Color="#1FA1A1AA" />
+
+                    <!-- 语义：状态胶囊 -->
+                    <SolidColorBrush x:Key="PillListenFg"  Color="#34D399" />
+                    <SolidColorBrush x:Key="PillListenBg"  Color="#2910B981" />
+                    <SolidColorBrush x:Key="PillListenBd"  Color="#5910B981" />
+                    <SolidColorBrush x:Key="PillEstFg"     Color="#60A5FA" />
+                    <SolidColorBrush x:Key="PillEstBg"     Color="#293B82F6" />
+                    <SolidColorBrush x:Key="PillEstBd"     Color="#593B82F6" />
+                    <SolidColorBrush x:Key="PillWaitFg"    Color="#FB923C" />
+                    <SolidColorBrush x:Key="PillWaitBg"    Color="#29F97316" />
+                    <SolidColorBrush x:Key="PillWaitBd"    Color="#59F97316" />
+                    <SolidColorBrush x:Key="PillKernelFg"  Color="#F87171" />
+                    <SolidColorBrush x:Key="PillKernelBg"  Color="#29EF4444" />
+                    <SolidColorBrush x:Key="PillKernelBd"  Color="#59EF4444" />
+                    <SolidColorBrush x:Key="PillIdleFg"    Color="#A1A1AA" />
+                    <SolidColorBrush x:Key="PillIdleBg"    Color="#24A1A1AA" />
+                    <SolidColorBrush x:Key="PillIdleBd"    Color="#4DA1A1AA" />
+
+                    <!-- 语义：统计数字 -->
+                    <SolidColorBrush x:Key="StatListen"    Color="#34D399" />
+                    <SolidColorBrush x:Key="StatConnected" Color="#60A5FA" />
+                    <SolidColorBrush x:Key="StatWait"      Color="#FB923C" />
+                    <SolidColorBrush x:Key="StatKernel"    Color="#FB7185" />
+                    <SolidColorBrush x:Key="StatTotal"     Color="#FAFAFA" />
+
+                    <!-- 语义：操作按钮 -->
+                    <SolidColorBrush x:Key="DangerFg"     Color="#FB7185" />
+                    <SolidColorBrush x:Key="DangerFgSoft" Color="#FDA4AF" />
+                    <SolidColorBrush x:Key="DangerBg"     Color="#1AF43F5E" />
+                    <SolidColorBrush x:Key="DangerBd"     Color="#4DF43F5E" />
+                    <SolidColorBrush x:Key="DangerBgHover" Color="#2EF43F5E" />
+                    <SolidColorBrush x:Key="DangerBdHover" Color="#80F43F5E" />
+                    <SolidColorBrush x:Key="WarnFg"       Color="#FB923C" />
+                    <SolidColorBrush x:Key="WarnBg"       Color="#1AF97316" />
+                    <SolidColorBrush x:Key="WarnBd"       Color="#4DF97316" />
+                    <SolidColorBrush x:Key="OkFg"         Color="#34D399" />
+                    <SolidColorBrush x:Key="OkBd"         Color="#5234D399" />
+                    <!-- 正向空态图标底盘（设计稿：绿 12%） -->
+                    <SolidColorBrush x:Key="OkBadgeBg"    Color="#1F10B981" />
+
+                    <!-- 滑块（字号设置）：品牌色轨道 + 白色旋钮 -->
+                    <SolidColorBrush x:Key="SliderTrackValueFill" Color="#0EA5E9" />
+                    <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="#38BDF8" />
+                    <SolidColorBrush x:Key="SliderTrackValueFillPressed" Color="#0284C7" />
+                    <SolidColorBrush x:Key="SliderTrackFill" Color="#1F1F24" />
+                    <SolidColorBrush x:Key="SliderTrackFillPointerOver" Color="#27272A" />
+                    <SolidColorBrush x:Key="SliderTrackFillPressed" Color="#27272A" />
+                    <SolidColorBrush x:Key="SliderThumbBackground" Color="#0EA5E9" />
+                    <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#38BDF8" />
+                    <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="#0284C7" />
+                    <SolidColorBrush x:Key="SliderThumbBorderBrush" Color="#0EA5E9" />
+                    <SolidColorBrush x:Key="SliderThumbBorderBrushPointerOver" Color="#0EA5E9" />
+
+                    <!-- Avalonia 12 的 Fluent 滑块模板把「把手尺寸 / 圆角 / 轨道高度」
+                         也做成了 DynamicResource。这些键若缺省，把手会退化成 0 尺寸而
+                         整个不可见（历史现象：浅色卡片上滑块只剩一条细线）。
+                         另外模板里 Thumb 的 BorderThickness 是硬编码 0，样式选择器改不动它，
+                         所以把手的可见性只能靠这几枚尺寸令牌 + 高对比底色来保证。 -->
+                    <sys:Double x:Key="SliderHorizontalThumbWidth">18</sys:Double>
+                    <sys:Double x:Key="SliderHorizontalThumbHeight">18</sys:Double>
+                    <sys:Double x:Key="SliderVerticalThumbWidth">18</sys:Double>
+                    <sys:Double x:Key="SliderVerticalThumbHeight">18</sys:Double>
+                    <CornerRadius x:Key="SliderThumbCornerRadius">9</CornerRadius>
+                    <!-- Fluent 模板上下默认各留 15px；字号滑块高度为 28px 时会裁掉 Thumb。
+                         18px 圆点配 5px 上下留白，刚好完整落在紧凑控件内。 -->
+                    <GridLength x:Key="SliderPreContentMargin">5</GridLength>
+                    <GridLength x:Key="SliderPostContentMargin">5</GridLength>
+                    <sys:Double x:Key="SliderTrackThemeHeight">4</sys:Double>
+                    <sys:Double x:Key="SliderHorizontalHeight">28</sys:Double>
+                    <sys:Double x:Key="SliderVerticalWidth">28</sys:Double>
+
+                    <!-- 卡片分层：深色下靠 1px 描边 + 明度差已经足够，投影留空 -->
+                    <BoxShadows x:Key="CardShadow">0 0 0 0 #00000000</BoxShadows>
+
+                    <!-- 自绘开关（Switch）：关闭态轨道 / 描边 / 旋钮 -->
+                    <SolidColorBrush x:Key="SwitchTrackOff"       Color="#27272A" />
+                    <SolidColorBrush x:Key="SwitchTrackOffBorder" Color="#3F3F46" />
+                    <SolidColorBrush x:Key="SwitchKnob"           Color="#FFFFFF" />
+
+                    <!-- 设置页分组标签：激活底 / 激活描边 / 悬浮底 -->
+                    <SolidColorBrush x:Key="TabActiveBg"     Color="#17171B" />
+                    <SolidColorBrush x:Key="TabActiveBorder" Color="#262629" />
+                    <SolidColorBrush x:Key="TabHoverBg"      Color="#131316" />
+
+                    <!-- 遮罩 -->
+                    <SolidColorBrush x:Key="Scrim" Color="#99000000" />
+                    <SolidColorBrush x:Key="ScrollBg" Color="Transparent" />
+                </ResourceDictionary>
+
+                <!-- ============================================================
+                     浅色主题 · 语义角色一一映射（强调色降阶至 600/700 档）
+                     ============================================================ -->
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="BgBase"       Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="BgTitleBar"   Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="BgSidebar"    Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="BgCard"       Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="BgTableHead"  Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="BgInput"      Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="BgHover"      Color="#F4F4F5" />
+                    <SolidColorBrush x:Key="BgBadge"      Color="#F4F4F5" />
+                    <SolidColorBrush x:Key="BgRaised"     Color="#FFFFFF" />
+
+                    <!-- 分段控件：浅色轨道更灰、激活块为纯白 -->
+                    <SolidColorBrush x:Key="SegTrack"  Color="#F4F4F5" />
+                    <SolidColorBrush x:Key="SegActive" Color="#FFFFFF" />
+
+                    <SolidColorBrush x:Key="BorderSoft"   Color="#E4E4E7" />
+                    <SolidColorBrush x:Key="BorderStrong" Color="#E4E4E7" />
+                    <SolidColorBrush x:Key="BorderHover"  Color="#D4D4D8" />
+                    <SolidColorBrush x:Key="RowLine"      Color="#F1F1F3" />
+
+                    <SolidColorBrush x:Key="TextPrimary"   Color="#18181B" />
+                    <SolidColorBrush x:Key="TextSecondary" Color="#27272A" />
+                    <SolidColorBrush x:Key="TextTertiary"  Color="#52525B" />
+                    <SolidColorBrush x:Key="TextMuted"     Color="#71717A" />
+                    <SolidColorBrush x:Key="TextDim"       Color="#A1A1AA" />
+                    <SolidColorBrush x:Key="TextFaint"     Color="#D4D4D8" />
+
+                    <SolidColorBrush x:Key="AccentFill"   Color="#0EA5E9" />
+                    <SolidColorBrush x:Key="AccentText"   Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="AccentFg"     Color="#0369A1" />
+                    <SolidColorBrush x:Key="AccentSoft"   Color="#0C4A6E" />
+                    <SolidColorBrush x:Key="AccentSurface" Color="#140EA5E9" />
+                    <SolidColorBrush x:Key="AccentBorder" Color="#380EA5E9" />
+
+                    <!-- 浮层（右键菜单 / 列设置 / 下拉面板） -->
+                    <SolidColorBrush x:Key="MenuSurface" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="MenuHover"   Color="#E5EDF8" />
+                    <SolidColorBrush x:Key="MenuHoverRest" Color="#00E5EDF8" />
+                    <SolidColorBrush x:Key="MenuBorder"  Color="#E4E4E7" />
+
+                    <!-- 复选框：未选中底盘与描边 -->
+                    <SolidColorBrush x:Key="CbBg"     Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="CbBorder" Color="#D4D4D8" />
+
+                    <!-- 表头：未排序箭头 / 列宽拖拽手柄 -->
+                    <SolidColorBrush x:Key="SortIdle"  Color="#A1A1AA" />
+                    <SolidColorBrush x:Key="HandleBar" Color="#D4D4D8" />
+
+                    <!-- Fluent 下拉框资源覆写（语义化，浅深两套一致） -->
+                    <SolidColorBrush x:Key="ComboBoxBackground"                    Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver"         Color="#F4F4F5" />
+                    <SolidColorBrush x:Key="ComboBoxBackgroundPressed"             Color="#F4F4F5" />
+                    <SolidColorBrush x:Key="ComboBoxBorderBrush"                   Color="#E4E4E7" />
+                    <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver"        Color="#D4D4D8" />
+                    <SolidColorBrush x:Key="ComboBoxForeground"                    Color="#18181B" />
+                    <SolidColorBrush x:Key="ComboBoxForegroundPointerOver"         Color="#18181B" />
+                    <SolidColorBrush x:Key="ComboBoxDropDownBackground"            Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush"           Color="#E4E4E7" />
+                    <SolidColorBrush x:Key="ComboBoxDropDownForeground"            Color="#27272A" />
+                    <SolidColorBrush x:Key="ComboBoxItemForeground"                Color="#27272A" />
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundPointerOver"     Color="#18181B" />
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundSelected"        Color="#18181B" />
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver"     Color="#F4F4F5" />
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected"        Color="#140EA5E9" />
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="#F4F4F5" />
+
+                    <!-- 滚动区底部渐隐：让被视口裁切的半行自然收尾，而不是硬切 -->
+                    <LinearGradientBrush x:Key="ScrollFade" StartPoint="0%,0%" EndPoint="0%,100%">
+                        <GradientStop Offset="0" Color="#00FFFFFF" />
+                        <GradientStop Offset="1" Color="#FFFFFFFF" />
+                    </LinearGradientBrush>
+
+                    <SolidColorBrush x:Key="ScrollThumb" Color="#D4D4D8" />
+
+                    <SolidColorBrush x:Key="SvcWebFg" Color="#0369A1" />
+                    <SolidColorBrush x:Key="SvcWebBg" Color="#1A0EA5E9" />
+                    <SolidColorBrush x:Key="SvcDbFg"  Color="#B45309" />
+                    <SolidColorBrush x:Key="SvcDbBg"  Color="#1AF59E0B" />
+                    <SolidColorBrush x:Key="SvcDevFg" Color="#7C3AED" />
+                    <SolidColorBrush x:Key="SvcDevBg" Color="#1A8B5CF6" />
+                    <SolidColorBrush x:Key="SvcNetFg" Color="#047857" />
+                    <SolidColorBrush x:Key="SvcNetBg" Color="#1A10B981" />
+                    <SolidColorBrush x:Key="SvcSysFg" Color="#E11D48" />
+                    <SolidColorBrush x:Key="SvcSysBg" Color="#1AF43F5E" />
+                    <SolidColorBrush x:Key="SvcAppFg" Color="#52525B" />
+                    <SolidColorBrush x:Key="SvcAppBg" Color="#1AA1A1AA" />
+
+                    <SolidColorBrush x:Key="PillListenFg"  Color="#047857" />
+                    <SolidColorBrush x:Key="PillListenBg"  Color="#1F10B981" />
+                    <SolidColorBrush x:Key="PillListenBd"  Color="#4D10B981" />
+                    <SolidColorBrush x:Key="PillEstFg"     Color="#2563EB" />
+                    <SolidColorBrush x:Key="PillEstBg"     Color="#1F3B82F6" />
+                    <SolidColorBrush x:Key="PillEstBd"     Color="#4D3B82F6" />
+                    <SolidColorBrush x:Key="PillWaitFg"    Color="#C2410C" />
+                    <SolidColorBrush x:Key="PillWaitBg"    Color="#1FF97316" />
+                    <SolidColorBrush x:Key="PillWaitBd"    Color="#4DF97316" />
+                    <SolidColorBrush x:Key="PillKernelFg"  Color="#DC2626" />
+                    <SolidColorBrush x:Key="PillKernelBg"  Color="#1FEF4444" />
+                    <SolidColorBrush x:Key="PillKernelBd"  Color="#4DEF4444" />
+                    <SolidColorBrush x:Key="PillIdleFg"    Color="#52525B" />
+                    <SolidColorBrush x:Key="PillIdleBg"    Color="#1AA1A1AA" />
+                    <SolidColorBrush x:Key="PillIdleBd"    Color="#3DA1A1AA" />
+
+                    <SolidColorBrush x:Key="StatListen"    Color="#047857" />
+                    <SolidColorBrush x:Key="StatConnected" Color="#2563EB" />
+                    <SolidColorBrush x:Key="StatWait"      Color="#C2410C" />
+                    <SolidColorBrush x:Key="StatKernel"    Color="#E11D48" />
+                    <SolidColorBrush x:Key="StatTotal"     Color="#18181B" />
+
+                    <SolidColorBrush x:Key="DangerFg"     Color="#E11D48" />
+                    <SolidColorBrush x:Key="DangerFgSoft" Color="#BE123C" />
+                    <SolidColorBrush x:Key="DangerBg"     Color="#14F43F5E" />
+                    <SolidColorBrush x:Key="DangerBd"     Color="#40F43F5E" />
+                    <SolidColorBrush x:Key="DangerBgHover" Color="#24F43F5E" />
+                    <SolidColorBrush x:Key="DangerBdHover" Color="#73F43F5E" />
+                    <SolidColorBrush x:Key="WarnFg"       Color="#C2410C" />
+                    <SolidColorBrush x:Key="WarnBg"       Color="#14F97316" />
+                    <SolidColorBrush x:Key="WarnBd"       Color="#40F97316" />
+                    <SolidColorBrush x:Key="OkFg"         Color="#047857" />
+                    <SolidColorBrush x:Key="OkBd"         Color="#4710B981" />
+                    <SolidColorBrush x:Key="OkBadgeBg"    Color="#1F10B981" />
+
+                    <SolidColorBrush x:Key="SliderTrackValueFill" Color="#0EA5E9" />
+                    <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="#38BDF8" />
+                    <SolidColorBrush x:Key="SliderTrackValueFillPressed" Color="#0284C7" />
+                    <SolidColorBrush x:Key="SliderTrackFill" Color="#E4E4E7" />
+                    <SolidColorBrush x:Key="SliderTrackFillPointerOver" Color="#D4D4D8" />
+                    <SolidColorBrush x:Key="SliderTrackFillPressed" Color="#D4D4D8" />
+                    <SolidColorBrush x:Key="SliderThumbBackground" Color="#0EA5E9" />
+                    <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#38BDF8" />
+                    <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="#0284C7" />
+                    <SolidColorBrush x:Key="SliderThumbBorderBrush" Color="#0EA5E9" />
+                    <SolidColorBrush x:Key="SliderThumbBorderBrushPointerOver" Color="#0EA5E9" />
+
+                    <!-- 尺寸令牌：浅色下把手同样必须靠「高对比实心」才可见
+                         （白底卡片 + 白把手 = 隐形，模板不允许加描边） -->
+                    <sys:Double x:Key="SliderHorizontalThumbWidth">18</sys:Double>
+                    <sys:Double x:Key="SliderHorizontalThumbHeight">18</sys:Double>
+                    <sys:Double x:Key="SliderVerticalThumbWidth">18</sys:Double>
+                    <sys:Double x:Key="SliderVerticalThumbHeight">18</sys:Double>
+                    <CornerRadius x:Key="SliderThumbCornerRadius">9</CornerRadius>
+                    <!-- 与深色主题保持相同的紧凑滑块几何尺寸，避免切换主题时圆点被裁剪。 -->
+                    <GridLength x:Key="SliderPreContentMargin">5</GridLength>
+                    <GridLength x:Key="SliderPostContentMargin">5</GridLength>
+                    <sys:Double x:Key="SliderTrackThemeHeight">4</sys:Double>
+                    <sys:Double x:Key="SliderHorizontalHeight">28</sys:Double>
+                    <sys:Double x:Key="SliderVerticalWidth">28</sys:Double>
+
+                    <!-- 卡片分层：浅色白卡贴 #FAFAFA 底明度太近，必须叠加极轻投影 -->
+                    <BoxShadows x:Key="CardShadow">0 2 8 0 #0F000000</BoxShadows>
+
+                    <SolidColorBrush x:Key="SwitchTrackOff"       Color="#E4E4E7" />
+                    <SolidColorBrush x:Key="SwitchTrackOffBorder" Color="#D4D4D8" />
+                    <SolidColorBrush x:Key="SwitchKnob"           Color="#FFFFFF" />
+
+                    <SolidColorBrush x:Key="TabActiveBg"     Color="#F4F4F5" />
+                    <SolidColorBrush x:Key="TabActiveBorder" Color="#E4E4E7" />
+                    <SolidColorBrush x:Key="TabHoverBg"      Color="#F4F4F5" />
+
+                    <SolidColorBrush x:Key="Scrim" Color="#66000000" />
+                    <SolidColorBrush x:Key="ScrollBg" Color="Transparent" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!-- ============================================================
+                 WinUI 3 / WPF UI 风格：现代 ComboBoxItem 控件主题
+                 ============================================================ -->
+            <ControlTheme x:Key="{x:Type ComboBoxItem}" TargetType="ComboBoxItem">
+                <Setter Property="Height" Value="32" />
+                <Setter Property="MinHeight" Value="32" />
+                <Setter Property="Padding" Value="8,0,10,0" />
+                <Setter Property="Margin" Value="0,1" />
+                <Setter Property="CornerRadius" Value="5" />
+                <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+                <Setter Property="Foreground" Value="{DynamicResource ComboBoxItemForeground}" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="FocusAdorner" Value="{x:Null}" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Name="root"
+                                Background="Transparent"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                Margin="{TemplateBinding Margin}"
+                                Padding="{TemplateBinding Padding}">
+                            <Border.Transitions>
+                                <Transitions>
+                                    <BrushTransition Property="Background" Duration="0:0:0.08" />
+                                </Transitions>
+                            </Border.Transitions>
+                            <Grid ColumnDefinitions="Auto,*">
+                                <!-- WinUI 3 标志性：左侧 3×16px 蓝色圆角指示柱 -->
+                                <Border Name="PART_Indicator"
+                                        Grid.Column="0"
+                                        Width="3" Height="16"
+                                        CornerRadius="1.5"
+                                        Background="{DynamicResource AccentFill}"
+                                        Margin="0,0,8,0"
+                                        IsVisible="False"
+                                        VerticalAlignment="Center" />
+
+                                <!-- 内容容器：彻底透明、无边框、无直角底色块 -->
+                                <ContentPresenter Name="PART_ContentPresenter"
+                                                  Grid.Column="1"
+                                                  Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  Background="Transparent"
+                                                  BorderThickness="0"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+                <Style Selector="^:pointerover /template/ Border#root">
+                    <Setter Property="Background" Value="{DynamicResource ComboBoxItemBackgroundPointerOver}" />
+                </Style>
+                <Style Selector="^:pointerover">
+                    <Setter Property="Foreground" Value="{DynamicResource ComboBoxItemForegroundPointerOver}" />
+                </Style>
+                <Style Selector="^:selected /template/ Border#root">
+                    <Setter Property="Background" Value="{DynamicResource ComboBoxItemBackgroundSelected}" />
+                </Style>
+                <Style Selector="^:selected /template/ Border#PART_Indicator">
+                    <Setter Property="IsVisible" Value="True" />
+                </Style>
+                <Style Selector="^:selected">
+                    <Setter Property="Foreground" Value="{DynamicResource ComboBoxItemForegroundSelected}" />
+                    <Setter Property="FontWeight" Value="SemiBold" />
+                </Style>
+                <Style Selector="^:selected:pointerover /template/ Border#root">
+                    <Setter Property="Background" Value="{DynamicResource ComboBoxItemBackgroundSelectedPointerOver}" />
+                </Style>
+            </ControlTheme>
+
+            <!-- ============================================================
+                 WinUI 3 / WPF UI 风格：现代 ComboBox 控件主题
+                 ============================================================ -->
+            <ControlTheme x:Key="{x:Type ComboBox}" TargetType="ComboBox">
+                <Setter Property="Height" Value="36" />
+                <Setter Property="MinHeight" Value="36" />
+                <Setter Property="Padding" Value="11,0,0,0" />
+                <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+                <Setter Property="Foreground" Value="{DynamicResource ComboBoxForeground}" />
+                <Setter Property="Background" Value="{DynamicResource ComboBoxBackground}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource ComboBoxBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FocusAdorner" Value="{x:Null}" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="HorizontalContentAlignment" Value="Left" />
+                <Setter Property="MaxDropDownHeight" Value="360" />
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Grid>
+                            <!-- 外框容器：6px 微圆角，悬停/聚焦微变色 -->
+                            <Border Name="Background"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="{TemplateBinding CornerRadius}">
+                                <Border.Transitions>
+                                    <Transitions>
+                                        <BrushTransition Property="BorderBrush" Duration="0:0:0.1" />
+                                        <BrushTransition Property="Background" Duration="0:0:0.1" />
+                                    </Transitions>
+                                </Border.Transitions>
+                                <Grid ColumnDefinitions="*,28">
+                                    <!-- 折叠态内容呈现：透明背景，垂直严格居中 -->
+                                    <ContentPresenter Name="ContentPresenter"
+                                                      Grid.Column="0"
+                                                      Margin="{TemplateBinding Padding}"
+                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                      Content="{TemplateBinding SelectionBoxItem}"
+                                                      ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                      Background="Transparent"
+                                                      BorderThickness="0" />
+
+                                    <TextBlock Name="PlaceholderTextBlock"
+                                               Grid.Column="0"
+                                               Margin="{TemplateBinding Padding}"
+                                               VerticalAlignment="Center"
+                                               Text="{TemplateBinding PlaceholderText}"
+                                               Foreground="{DynamicResource TextTertiary}"
+                                               IsVisible="{TemplateBinding SelectionBoxItem, Converter={x:Static ObjectConverters.IsNull}}" />
+
+                                    <!-- 右侧 WinUI 3 极细 Chevron 矢量箭头 -->
+                                    <Viewbox Grid.Column="1" Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Canvas Width="24" Height="24">
+                                            <Path Classes="ic"
+                                                  Stroke="{DynamicResource TextTertiary}"
+                                                  StrokeThickness="2"
+                                                  Data="M4 9l8 8 8-8" />
+                                        </Canvas>
+                                    </Viewbox>
+                                </Grid>
+                            </Border>
+
+                            <!-- 下拉面板：8px 大圆角卡片、微边框与扩散阴影 -->
+                            <Popup Name="PART_Popup"
+                                   WindowManagerAddShadowHint="False"
+                                   IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}"
+                                   MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}"
+                                   MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                   PlacementTarget="Background"
+                                   Placement="Bottom"
+                                   IsLightDismissEnabled="True"
+                                   InheritsTransform="True">
+                                <Border Name="PopupBorder"
+                                        Background="{DynamicResource ComboBoxDropDownBackground}"
+                                        BorderBrush="{DynamicResource ComboBoxDropDownBorderBrush}"
+                                        BorderThickness="1"
+                                        Margin="0,4,0,4"
+                                        Padding="4"
+                                        CornerRadius="8"
+                                        BoxShadow="0 8 24 0 #28000000, 0 2 6 0 #0E000000">
+                                    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                                                  VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter Name="PART_ItemsPresenter"
+                                                        ItemsPanel="{TemplateBinding ItemsPanel}" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter>
+                <Style Selector="^:pointerover /template/ Border#Background">
+                    <Setter Property="BorderBrush" Value="{DynamicResource ComboBoxBorderBrushPointerOver}" />
+                    <Setter Property="Background" Value="{DynamicResource ComboBoxBackgroundPointerOver}" />
+                </Style>
+                <Style Selector="^:pointerover">
+                    <Setter Property="Foreground" Value="{DynamicResource ComboBoxForegroundPointerOver}" />
+                </Style>
+                <Style Selector="^:pressed /template/ Border#Background">
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
+                    <Setter Property="Background" Value="{DynamicResource ComboBoxBackgroundPressed}" />
+                </Style>
+                <Style Selector="^:focus-visible /template/ Border#Background">
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
+                </Style>
+                <Style Selector="^:dropdownopen /template/ Border#Background">
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
+                </Style>
+            </ControlTheme>
+
+            <!-- ============================================================
+                 WinUI 3 / 国际标准现代 CheckBox（复选框）控件主题
+                 规范：16×16px 视觉微圆角方框 + 24×24px 透明大热区 + 2.6px 圆润饱满对勾
+                 ============================================================ -->
+            <ControlTheme x:Key="{x:Type CheckBox}" TargetType="CheckBox">
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="MinHeight" Value="24" />
+                <Setter Property="MinWidth" Value="24" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+                <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+                <Setter Property="FocusAdorner" Value="{x:Null}" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="HorizontalContentAlignment" Value="Left" />
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Grid Background="Transparent" ColumnDefinitions="Auto,*">
+                            <!-- 点击热区：24×24px，内部居中 16×16px 视觉方块 -->
+                            <Panel Grid.Column="0" Width="24" Height="24" Background="Transparent">
+                                <Border Name="box" Width="16" Height="16" CornerRadius="4"
+                                        Background="{DynamicResource CbBg}"
+                                        BorderBrush="{DynamicResource BorderStrong}"
+                                        BorderThickness="1"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Border.Transitions>
+                                        <Transitions>
+                                            <BrushTransition Property="Background" Duration="0:0:0.1" />
+                                            <BrushTransition Property="BorderBrush" Duration="0:0:0.1" />
+                                        </Transitions>
+                                    </Border.Transitions>
+                                </Border>
+                                <!-- 饱满矢量对勾 -->
+                                <Viewbox Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Name="check" Data="M4.6 12.4 9.6 17.4 19.4 6.6"
+                                              Stroke="#FFFFFF" StrokeThickness="2.6"
+                                              StrokeLineCap="Round" StrokeJoin="Round" IsVisible="False" />
+                                    </Canvas>
+                                </Viewbox>
+                                <!-- 半选横线 -->
+                                <Viewbox Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Name="dash" Data="M6 12h12" Stroke="#FFFFFF" StrokeThickness="2.6"
+                                              StrokeLineCap="Round" IsVisible="False" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Panel>
+                            <ContentPresenter Name="PART_ContentPresenter"
+                                              Grid.Column="1"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              Margin="4,0,0,0"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              IsVisible="{TemplateBinding Content, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter>
+                <Style Selector="^:pointerover /template/ Border#box">
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
+                    <Setter Property="Background" Value="{DynamicResource BgHover}" />
+                </Style>
+                <Style Selector="^:checked /template/ Border#box">
+                    <Setter Property="Background" Value="{DynamicResource AccentFill}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
+                </Style>
+                <Style Selector="^:checked /template/ Path#check">
+                    <Setter Property="IsVisible" Value="True" />
+                </Style>
+                <Style Selector="^:indeterminate /template/ Border#box">
+                    <Setter Property="Background" Value="{DynamicResource AccentFill}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
+                </Style>
+                <Style Selector="^:indeterminate /template/ Path#dash">
+                    <Setter Property="IsVisible" Value="True" />
+                </Style>
+                <Style Selector="^:pressed /template/ Border#box">
+                    <Setter Property="Opacity" Value="0.8" />
+                </Style>
+            </ControlTheme>
+            <!-- ═══════════════════════════════════════════════════════════
+                 开关 · Switch（38×22 / 旋钮 16）
+                 ════════════════════════════════════════════════════════════
+                 用 ToggleButton 而非 ToggleSwitch：Fluent 的 ToggleSwitch 自带
+                 「开 / 关」文案槽与固定尺寸，塞进设置行会被内置边距挤歪；
+                 ToggleButton 只有一个内容槽，模板完全由这里接管。
+                 原生 MVVM：IsChecked 双向绑定 VM 属性，不再是
+                 「Border + PointerPressed 手工翻转」。
+                 用法：<ToggleButton Theme="{StaticResource AppSwitch}"
+                                     IsChecked="{Binding X, Mode=TwoWay}" />
+                 ═══════════════════════════════════════════════════════════ -->
+            <ControlTheme x:Key="AppSwitch" TargetType="ToggleButton">
+                <Setter Property="Width" Value="38" />
+                <Setter Property="Height" Value="22" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FocusAdorner" Value="{x:Null}" />
+                <Setter Property="Background" Value="{DynamicResource SwitchTrackOff}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource SwitchTrackOffBorder}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Name="SwitchTrack"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="11"
+                                ClipToBounds="True">
+                            <Ellipse Name="SwitchKnob"
+                                     Width="16" Height="16"
+                                     Fill="{DynamicResource SwitchKnob}"
+                                     HorizontalAlignment="Left"
+                                     VerticalAlignment="Center"
+                                     Margin="3,0,0,0">
+                                <Ellipse.Transitions>
+                                    <Transitions>
+                                        <ThicknessTransition Property="Margin" Duration="0:0:0.16" />
+                                    </Transitions>
+                                </Ellipse.Transitions>
+                            </Ellipse>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+
+                <Style Selector="^:checked">
+                    <Setter Property="Background" Value="{DynamicResource AccentFill}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
+                </Style>
+                <Style Selector="^:checked /template/ Ellipse#SwitchKnob">
+                    <Setter Property="Margin" Value="17,0,0,0" />
+                </Style>
+                <Style Selector="^:pointerover /template/ Border#SwitchTrack">
+                    <Setter Property="Opacity" Value="0.88" />
+                </Style>
+                <Style Selector="^:disabled /template/ Border#SwitchTrack">
+                    <Setter Property="Opacity" Value="0.4" />
+                </Style>
+                <Style Selector="^:focus-visible /template/ Border#SwitchTrack">
+                    <Setter Property="BoxShadow" Value="0 0 0 3 #380EA5E9" />
+                </Style>
+            </ControlTheme>
+
+            <!-- 兼容显式引用的 AppCheckBox 键 -->
+            <ControlTheme x:Key="AppCheckBox" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}" />
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+
+        <!-- ============================================================
+             全局排版：现代无衬线字体栈 + 等宽字体栈
+             ============================================================ -->
+        <Style Selector="Window">
+            <Setter Property="FontFamily" Value="{DynamicResource AppFontUi}" />
+            <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+            <Setter Property="Background" Value="{DynamicResource BgBase}" />
+        </Style>
+        <Style Selector="TextBlock">
+            <Setter Property="FontFeatures" Value="+tnum" />
+        </Style>
+
+        <!-- ============================================================
+             减少界面动效 · REDUCE MOTION（WCAG 2.3 尊重动态效果偏好）
+             ════════════════════════════════════════════════════════════
+             主窗口挂 .nomotion 类即全局摘掉过渡动画。默认值取自系统
+             「显示 → 显示动画」偏好（Native/SystemPreferences），
+             用户可在设置页显式覆盖。
+             ============================================================ -->
+        <Style Selector="Window.nomotion Button">
+            <Setter Property="Transitions" Value="{x:Null}" />
+        </Style>
+        <Style Selector="Window.nomotion Border.row">
+            <Setter Property="Transitions" Value="{x:Null}" />
+        </Style>
+        <Style Selector="Window.nomotion ToggleButton">
+            <Setter Property="Transitions" Value="{x:Null}" />
+        </Style>
+        <Style Selector="Window.nomotion ToggleButton /template/ Ellipse#SwitchKnob">
+            <Setter Property="Transitions" Value="{x:Null}" />
+        </Style>
+
+        <!-- ============================================================
+             卡片容器 · 全局统一分层
+             深色：1px 描边 + 明度差即可；浅色：白卡贴 #FAFAFA 底必须叠投影
+             （投影值由 CardShadow 令牌按主题切换，深色为空投影）
+             ============================================================ -->
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="{DynamicResource BgCard}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSoft}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="BoxShadow" Value="{DynamicResource CardShadow}" />
+        </Style>
+
+        <!-- ============================================================
+             数值 / 状态徽章 · BADGE
+             ============================================================
+             20px 高的胶囊读数位，默认中性；.ok 走成功语义、.alert 走危险语义。
+             与 Border.key（快捷键药丸）区分：badge 承载「读数」，key 承载「按键」。
+             ============================================================ -->
+        <Style Selector="Border.badge">
+            <Setter Property="Height" Value="20" />
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="Padding" Value="7,0" />
+            <Setter Property="Background" Value="{DynamicResource BgHover}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Border.badge > TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource TypeMicro}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.badge.ok">
+            <Setter Property="BorderBrush" Value="{DynamicResource OkBd}" />
+        </Style>
+        <Style Selector="Border.badge.ok > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource OkFg}" />
+        </Style>
+        <Style Selector="Border.badge.alert">
+            <Setter Property="BorderBrush" Value="{DynamicResource DangerBd}" />
+        </Style>
+        <Style Selector="Border.badge.alert > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource DangerFg}" />
+        </Style>
+
+        <!-- ============================================================
+             分段控件选项 · SEGMENT CHIP
+             ============================================================
+             原生 MVVM：Button + Command / CommandParameter，替代原先
+             「Border.segChip + PointerPressed」的手工翻转。视觉沿用设计稿：
+             轨道 2px 内边距 + 4px 圆角，激活块用 SegActive。
+             注意：Fluent 模板在 :pointerover 会覆盖 ContentPresenter 背景，
+             因此所有态都必须打到 PART_ContentPresenter 上。
+             ============================================================ -->
+        <Style Selector="Button.segChip">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontWeight" Value="400" />
+            <Setter Property="FontSize" Value="{DynamicResource TypeCaption}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.segChip.sm">
+            <Setter Property="FontSize" Value="{DynamicResource TypeMicro}" />
+        </Style>
+        <Style Selector="Button.segChip /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.segChip:pointerover">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        </Style>
+        <Style Selector="Button.segChip:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgBadge}" />
+        </Style>
+        <Style Selector="Button.segChip.active">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="FontWeight" Value="500" />
+        </Style>
+        <Style Selector="Button.segChip.active /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SegActive}" />
+        </Style>
+        <Style Selector="Button.segChip.active:pointerover">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+        <Style Selector="Button.segChip.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SegActive}" />
+        </Style>
+
+        <!-- ============================================================
+             预设胶囊 · PRESET CHIP
+             ============================================================
+             与分段控件区分：独立 1px 描边 + 品牌色激活，用于「档位吸附」这类
+             可多态点选的独立选项（如字号预设 紧凑 / 标准 / 舒适 / 大号）。
+             ============================================================ -->
+        <Style Selector="Button.chip">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="MinHeight" Value="22" />
+            <Setter Property="Padding" Value="9,0" />
+            <Setter Property="FontWeight" Value="400" />
+            <Setter Property="FontSize" Value="{DynamicResource TypeCaption}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiary}" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+        <Style Selector="Button.chip /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource BgHover}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+        </Style>
+        <Style Selector="Button.chip:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgBadge}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderHover}" />
+        </Style>
+        <Style Selector="Button.chip.active">
+            <Setter Property="Foreground" Value="{DynamicResource AccentFg}" />
+            <Setter Property="FontWeight" Value="500" />
+        </Style>
+        <Style Selector="Button.chip.active /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AccentSurface}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBorder}" />
+        </Style>
+
+        <!-- ============================================================
+             设置页分组标签 · SETTINGS TAB
+             ============================================================
+             34px 高的图标 + 文字标签，激活态 = 一档底色 + 1px 描边 + 品牌色图标。
+             同样走 Button + Command，键盘可达（Tab 聚焦 / 空格触发）。
+             ============================================================ -->
+        <Style Selector="Button.tab">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="12,0,14,0" />
+            <Setter Property="FontWeight" Value="400" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.tab /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.tab /template/ ContentPresenter#PART_ContentPresenter TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+            <Setter Property="FontWeight" Value="400" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+        </Style>
+        <Style Selector="Button.tab Path.tabIc">
+            <Setter Property="Fill" Value="Transparent" />
+            <Setter Property="StrokeThickness" Value="1.7" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Stroke" Value="{DynamicResource TextFaint}" />
+        </Style>
+        <Style Selector="Button.tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource TabHoverBg}" />
+        </Style>
+        <Style Selector="Button.tab:pointerover /template/ ContentPresenter#PART_ContentPresenter TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        </Style>
+        <Style Selector="Button.tab.active /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource TabActiveBg}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource TabActiveBorder}" />
+        </Style>
+        <Style Selector="Button.tab.active /template/ ContentPresenter#PART_ContentPresenter TextBlock">
+            <Setter Property="FontWeight" Value="500" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+        <Style Selector="Button.tab.active Path.tabIc">
+            <Setter Property="Stroke" Value="{DynamicResource AccentFg}" />
+        </Style>
+
+        <!-- ============================================================
+             统一焦点环 · FOCUS RING（交互状态规范）
+             ════════════════════════════════════════════════════════════
+             0 偏移 + 3px 扩散 + 品牌色 22% 透明度。
+             键盘 Tab 到任何可聚焦元素都套用同一焦点环，与鼠标 Hover 的
+             视觉语言区分开，避免「点完不知道焦点在哪」。
+             ============================================================ -->
+        <Style Selector="Button:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="BoxShadow" Value="0 0 0 3 #380EA5E9" />
+        </Style>
+        <Style Selector="TextBox:focus-visible /template/ Border#PART_BorderElement">
+            <Setter Property="BoxShadow" Value="0 0 0 3 #380EA5E9" />
+        </Style>
+        <Style Selector="ComboBox:focus-visible /template/ Border#Background">
+            <Setter Property="BoxShadow" Value="0 0 0 3 #380EA5E9" />
+        </Style>
+        <Style Selector="MenuItem:focus-visible /template/ Border#PART_LayoutRoot">
+            <Setter Property="BoxShadow" Value="0 0 0 3 #380EA5E9" />
+        </Style>
+        <Style Selector="ListBoxItem:focus-visible /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="BoxShadow" Value="0 0 0 3 #380EA5E9" />
+        </Style>
+        <Style Selector="ToggleSwitch:focus-visible /template/ Border#SwitchKnobBounds">
+            <Setter Property="BoxShadow" Value="0 0 0 3 #380EA5E9" />
+        </Style>
+
+        <!-- ============================================================
+             按钮 · Shadcn / Electron 微圆角扁平规范
+             注意：Fluent 模板在 :pointerover 会覆盖 ContentPresenter 背景，
+                   因此所有态都必须打到 PART_ContentPresenter 上
+             ============================================================ -->
+        <Style Selector="Button">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.12" />
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.12" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Button /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource BgInput}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+        </Style>
+        <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgHover}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderHover}" />
+        </Style>
+        <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Opacity" Value="0.86" />
+        </Style>
+        <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Opacity" Value="0.4" />
+        </Style>
+
+        <!-- 主按钮：品牌实心 -->
+        <Style Selector="Button.primary /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AccentFill}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#38BDF8" />
+        </Style>
+        <Style Selector="Button.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#0284C7" />
+        </Style>
+        <Style Selector="Button.primary">
+            <Setter Property="Foreground" Value="#FFFFFF" />
+        </Style>
+
+        <!-- 工具栏中性按钮 -->
+        <Style Selector="Button.tool">
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiary}" />
+        </Style>
+        <Style Selector="Button.tool /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgInput}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+        </Style>
+
+        <!-- 危险幽灵按钮：低饱和，悬浮与按下靠底色+描边同步加深 -->
+        <Style Selector="Button.danger">
+            <Setter Property="Foreground" Value="{DynamicResource DangerFg}" />
+        </Style>
+        <Style Selector="Button.danger /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="Background" Value="{DynamicResource DangerBg}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DangerBd}" />
+        </Style>
+        <Style Selector="Button.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource DangerBgHover}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DangerBdHover}" />
+        </Style>
+        <Style Selector="Button.danger:pointerover">
+            <Setter Property="Foreground" Value="{DynamicResource DangerFg}" />
+        </Style>
+
+        <!-- 橙色释放按钮 -->
+        <Style Selector="Button.warn">
+            <Setter Property="Foreground" Value="{DynamicResource WarnFg}" />
+        </Style>
+        <Style Selector="Button.warn /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="Background" Value="{DynamicResource WarnBg}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource WarnBd}" />
+        </Style>
+        <Style Selector="Button.warn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#33F97316" />
+            <Setter Property="BorderBrush" Value="#80F97316" />
+        </Style>
+
+        <!-- 中性软按钮（内核行「诊断」） -->
+        <Style Selector="Button.soft">
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiary}" />
+        </Style>
+        <Style Selector="Button.soft /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="Background" Value="{DynamicResource BgHover}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+        </Style>
+
+        <!-- 批量条危险按钮（尺寸更大、圆角 6） -->
+        <Style Selector="Button.batch-danger">
+            <Setter Property="Foreground" Value="{DynamicResource DangerFg}" />
+        </Style>
+        <Style Selector="Button.batch-danger /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Background" Value="{DynamicResource DangerBg}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DangerBd}" />
+        </Style>
+        <Style Selector="Button.batch-danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource DangerBgHover}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DangerBdHover}" />
+        </Style>
+
+        <!-- 侧边栏导航 -->
+        <!-- 导航项：横向 Stretch，让「图标 · 文字(fill) · 数量(hug)」三段布局成立，
+             数量徽标因此贴到最右缘（对齐设计稿 Sidebar Nav 的 Label fill_container） -->
+        <Style Selector="Button.nav">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiary}" />
+        </Style>
+        <Style Selector="Button.nav /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.nav:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgInput}" />
+        </Style>
+        <Style Selector="Button.nav.active">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+        <Style Selector="Button.nav.active /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgHover}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+        </Style>
+        <Style Selector="Button.nav.active /template/ ContentPresenter#PART_ContentPresenter TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+
+        <!-- 窗口控制按钮（最小化/最大化/关闭） -->
+        <Style Selector="Button.wctl /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.wctl:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgHover}" />
+        </Style>
+        <Style Selector="Button.wctl-close /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.wctl-close:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#E81123" />
+        </Style>
+
+        <!-- 行内无边框图标按钮 -->
+        <Style Selector="Button.bare">
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiary}" />
+        </Style>
+        <Style Selector="Button.bare /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.bare:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgHover}" />
+        </Style>
+
+        <!-- 分段控件的选项由 MainWindow 内的 Border.segChip 原生绘制，
+             此处不再保留按钮版本，避免两套视觉语言并存 -->
+
+        <!-- ============================================================
+             输入框 · 严格垂直居中
+             ============================================================ -->
+        <Style Selector="TextBox">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="CaretBrush" Value="{DynamicResource AccentFg}" />
+        </Style>
+        <Style Selector="TextBox /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="{DynamicResource BgInput}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+        <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderHover}" />
+        </Style>
+        <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
+        </Style>
+
+        <!-- ============================================================
+             下拉框 · WinUI 3 浮层透光与基础层清理
+             ============================================================ -->
+        <Style Selector="ComboBox /template/ PopupRoot">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+
+        <!-- ============================================================
+             右键菜单 · 圆角浮层
+             ============================================================ -->
+        <Style Selector="ContextMenu">
+            <Setter Property="Background" Value="{DynamicResource BgRaised}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="5" />
+        </Style>
+        <Style Selector="MenuItem">
+            <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="CornerRadius" Value="5" />
+        </Style>
+        <Style Selector="MenuItem:pointerover /template/ Border#PART_LayoutRoot">
+            <Setter Property="Background" Value="{DynamicResource BgHover}" />
+        </Style>
+        <Style Selector="Separator">
+            <Setter Property="Background" Value="{DynamicResource BorderStrong}" />
+        </Style>
+
+        <!-- ============================================================
+             开关 · 开关三态
+             ============================================================ -->
+        <Style Selector="ToggleSwitch">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+        </Style>
+
+        <!-- 工具提示 -->
+        <Style Selector="ToolTip">
+            <Setter Property="Background" Value="{DynamicResource BgRaised}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="FontSize" Value="{DynamicResource TypeCaption}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        </Style>
+
+        <!-- ============================================================
+             滚动条 · 纤细静默
+             ============================================================ -->
+        <Style Selector="ScrollBar">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="ScrollBar:vertical">
+            <Setter Property="Width" Value="10" />
+        </Style>
+        <Style Selector="ScrollBar:horizontal">
+            <Setter Property="Height" Value="10" />
+        </Style>
+        <Style Selector="ScrollBar /template/ Thumb">
+            <Setter Property="Background" Value="{DynamicResource ScrollThumb}" />
+            <Setter Property="CornerRadius" Value="4" />
+        </Style>
+        <!-- 内容极长时滑块被压成几像素难以拖拽；Track 计算时会尊重 Thumb 的最小尺寸 -->
+        <Style Selector="ScrollBar:vertical /template/ Thumb">
+            <Setter Property="MinHeight" Value="56" />
+        </Style>
+        <Style Selector="ScrollBar:horizontal /template/ Thumb">
+            <Setter Property="MinWidth" Value="56" />
+        </Style>
+        <Style Selector="ScrollBar /template/ RepeatButton">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+
+        <!-- 复选框 · 微圆角方形 -->
+        <Style Selector="CheckBox">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        </Style>
+
+        <!-- ============================================================
+             滑动块 · WinUI 3 现代规范（4px 极细胶囊导轨 + 18px 悬浮圆形手柄）
+             ============================================================ -->
+        <!-- ============================================================
+             滑块 · SLIDER
+             ============================================================
+             Avalonia 12 的 Fluent 滑块模板里，Thumb 的 Width / Height /
+             BorderThickness / Background 全部是**模板内联值**，优先级高于样式
+             Setter —— 因此 `Slider /template/ Thumb { BorderThickness=2 }` 这类写法
+             一律无效（历史 bug：把手在浅色白卡上隐形，只剩一条细线）。
+             正确做法是改资源令牌：SliderThumbBackground* + 尺寸令牌，
+             已在 Dark / Light 两个 ThemeDictionaries 中成对定义。
+             ============================================================ -->
+        <Style Selector="Slider">
+            <Setter Property="Height" Value="{DynamicResource SliderHorizontalHeight}" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusAdorner" Value="{x:Null}" />
+        </Style>
+        <StyleInclude Source="/Presentation/Styles/ConfirmationDialogs.axaml" />
+    </Application.Styles>
+</Application>

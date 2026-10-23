@@ -1,0 +1,1329 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PortKiller.ViewModels"
+        xmlns:m="using:PortKiller.Models"
+        xmlns:svc="using:PortKiller.Services"
+        xmlns:views="using:PortKiller.Views"
+        xmlns:ports="using:PortKiller.Features.Ports"
+        xmlns:kernel="using:PortKiller.Features.KernelDiagnostics"
+        xmlns:settings="using:PortKiller.Features.Settings"
+        xmlns:shell="using:PortKiller.Shell"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1600" d:DesignHeight="900"
+        x:Class="PortKiller.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="PortKiller — 端口占用排查与释放"
+        Width="1600" Height="900"
+        MinWidth="1180" MinHeight="700"
+        WindowStartupLocation="CenterScreen"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="46"
+        WindowDecorations="None"
+        TransparencyLevelHint="Transparent"
+        KeyDown="OnWindowKeyDown"
+        Background="Transparent"
+        Classes.nomotion="{Binding ReduceMotion}"
+        TextOptions.TextRenderingMode="SubpixelAntialias"
+        RenderOptions.BitmapInterpolationMode="HighQuality"
+        RenderOptions.EdgeMode="Antialias">
+
+    <Window.Resources>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             右键菜单项：自绘模板
+             设计稿 242px / 项高 32 / 圆角 5 / 内边距 10 / 悬停过渡 120ms。
+             原方案只覆写默认模板里的 HeaderPresenter，悬停高亮来自两处，
+             出现「高亮跳动、移开不消失」的过渡问题；这里整体接管。
+             ═══════════════════════════════════════════════════════════ -->
+        <ControlTheme x:Key="AppMenuItem" TargetType="MenuItem">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <!-- 透明端点沿用悬停色，避免白色 RGB 参与渐变造成深色模式泛白。 -->
+                    <Border Name="root" Background="{DynamicResource MenuHoverRest}" CornerRadius="5" Padding="10,0">
+                        <Border.Transitions>
+                            <Transitions>
+                                <BrushTransition Property="Background" Duration="0:0:0.12" />
+                            </Transitions>
+                        </Border.Transitions>
+                        <ContentPresenter Name="PART_HeaderPresenter" Content="{TemplateBinding Header}"
+                                          ContentTemplate="{TemplateBinding HeaderTemplate}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Style Selector="^:pointerover /template/ Border#root">
+                <Setter Property="Background" Value="{DynamicResource MenuHover}" />
+            </Style>
+            <Style Selector="^:disabled">
+                <Setter Property="Opacity" Value="0.5" />
+            </Style>
+        </ControlTheme>
+
+        <!-- 行右键菜单 · 全表共享单实例（原先内联在每行 DataTemplate 里，
+            虚拟化滚动每实例化一行都要白造约 40 个菜单控件，是滚动卡顿主因）-->
+        <ContextMenu x:Key="RowCtxMenu" Classes="ctx">
+            <MenuItem Click="OnCtxCopyRow">
+                <MenuItem.Header>
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                        <Viewbox Grid.Column="0" Width="13" Height="13" VerticalAlignment="Center">
+                            <Canvas Width="24" Height="24">
+                                <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource TextMuted}"
+                                Data="M8.5 3.5h7A3 3 0 0 1 18.5 6.5V13" />
+                                <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource TextMuted}"
+                                Data="M6 7.5h8.5A2.5 2.5 0 0 1 17 10v8.5A2.5 2.5 0 0 1 14.5 21H6A2.5 2.5 0 0 1 3.5 18.5V10A2.5 2.5 0 0 1 6 7.5Z" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Grid.Column="1" Text="复制整行数据" VerticalAlignment="Center"
+                        Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock Grid.Column="2" Text="Ctrl+C" VerticalAlignment="Center"
+                        FontSize="{DynamicResource TypeCaption}"
+                        Foreground="{DynamicResource TextDim}" />
+                    </Grid>
+                </MenuItem.Header>
+            </MenuItem>
+            <MenuItem Click="OnCtxCopyPort">
+                <MenuItem.Header>
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                        <Viewbox Grid.Column="0" Width="13" Height="13" VerticalAlignment="Center">
+                            <Canvas Width="24" Height="24">
+                                <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource TextMuted}"
+                                Data="M9.5 3.5 5.5 20.5M18.5 3.5 14.5 20.5M3.5 9h17M3.5 15h17" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Grid.Column="1" Text="仅复制端口与 PID" VerticalAlignment="Center"
+                        Foreground="{DynamicResource TextPrimary}" />
+                    </Grid>
+                </MenuItem.Header>
+            </MenuItem>
+            <Separator />
+            <MenuItem Click="OnCtxKill">
+                <MenuItem.Header>
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                        <Viewbox Grid.Column="0" Width="13" Height="13" VerticalAlignment="Center">
+                            <Canvas Width="24" Height="24">
+                                <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource DangerFg}"
+                                Data="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource DangerFg}"
+                                Data="M8 12h8" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Grid.Column="1" Text="终止该进程" VerticalAlignment="Center"
+                        FontWeight="Medium" Foreground="{DynamicResource DangerFg}" />
+                        <TextBlock Grid.Column="2" Text="Delete" VerticalAlignment="Center"
+                        FontSize="{DynamicResource TypeCaption}"
+                        Foreground="{DynamicResource TextDim}" />
+                    </Grid>
+                </MenuItem.Header>
+            </MenuItem>
+            <MenuItem Click="OnCtxKillTree">
+                <MenuItem.Header>
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                        <Viewbox Grid.Column="0" Width="13" Height="13" VerticalAlignment="Center">
+                            <Canvas Width="24" Height="24">
+                                <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource DangerFg}"
+                                Data="M12 2.6a3.1 3.1 0 1 1 0 6.2 3.1 3.1 0 0 1 0-6.2Z" />
+                                <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource DangerFg}"
+                                Data="M5.6 15.2a3.1 3.1 0 1 1 0 6.2 3.1 3.1 0 0 1 0-6.2ZM18.4 15.2a3.1 3.1 0 1 1 0 6.2 3.1 3.1 0 0 1 0-6.2Z" />
+                                <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource DangerFg}"
+                                Data="M12 8.8v3.4M12 12.2H5.6v3M12 12.2h6.4v3" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Grid.Column="1" Text="终止进程树（含全部子进程）" VerticalAlignment="Center"
+                        Foreground="{DynamicResource DangerFg}" />
+                    </Grid>
+                </MenuItem.Header>
+            </MenuItem>
+            <MenuItem Click="OnCtxReveal">
+                <MenuItem.Header>
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                        <Viewbox Grid.Column="0" Width="13" Height="13" VerticalAlignment="Center">
+                            <Canvas Width="24" Height="24">
+                                <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource TextMuted}"
+                                Data="M3.5 7.6A2.1 2.1 0 0 1 5.6 5.5h3.3l1.9 2.3h8A2.1 2.1 0 0 1 20.5 9.9v7.9a2.1 2.1 0 0 1-2.1 2.1H5.6a2.1 2.1 0 0 1-2.1-2.1V7.6Z" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Grid.Column="1" Text="在资源管理器中定位可执行文件" VerticalAlignment="Center"
+                        Foreground="{DynamicResource TextPrimary}" />
+                    </Grid>
+                </MenuItem.Header>
+            </MenuItem>
+        </ContextMenu>
+    </Window.Resources>
+
+    <Window.Styles>
+        <!-- ═══════════════════════════════════════════════════════════
+             矢量图标原语：统一 24×24 设计栅格 → Viewbox 缩放到目标尺寸
+             ═══════════════════════════════════════════════════════════ -->
+        <Style Selector="Path.ic">
+            <Setter Property="Fill" Value="Transparent" />
+            <Setter Property="StrokeThickness" Value="1.7" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+        </Style>
+        <Style Selector="Path.icf">
+            <Setter Property="StrokeThickness" Value="0" />
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             侧边栏导航
+             ═══════════════════════════════════════════════════════════ -->
+        <Style Selector="TextBlock.groupLabel">
+            <Setter Property="FontSize" Value="{DynamicResource TypeMicro}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Foreground" Value="{DynamicResource TextDim}" />
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             分段控件容器（严格对齐原型：轨道 6px 圆角 + 2px 内边距 + 2px 间距）
+             ═══════════════════════════════════════════════════════════ -->
+        <Style Selector="Border.segment">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="2" />
+            <Setter Property="Background" Value="{DynamicResource SegTrack}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Border.segment.tall">
+            <Setter Property="Height" Value="30" />
+        </Style>
+
+        <!-- 段内选项（Border.segChip）已升级为原生 MVVM 的 Button.segChip，
+             视觉规格与交互状态统一定义在 App.axaml 的全局样式中 -->
+
+        <!-- ═══════════════════════════════════════════════════════════
+             系统状态规范：错误态 / 骨架屏 / 权限受限 Banner
+             ═══════════════════════════════════════════════════════════ -->
+        <Style Selector="Border.errCard">
+            <Setter Property="Background" Value="{DynamicResource DangerBg}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DangerBd}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="20" />
+        </Style>
+        <Style Selector="Border.sk">
+            <Setter Property="Height" Value="14" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="{DynamicResource BorderSoft}" />
+        </Style>
+        <Style Selector="Border.sk.faint">
+            <Setter Property="Background" Value="{DynamicResource RowLine}" />
+        </Style>
+        <Style Selector="Border.permBanner">
+            <Setter Property="Height" Value="52" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="14,0,12,0" />
+            <Setter Property="Background" Value="{DynamicResource AccentSurface}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Border.chip.ok">
+            <Setter Property="BorderBrush" Value="{DynamicResource OkBd}" />
+        </Style>
+        <Style Selector="Border.chip.ok > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource OkFg}" />
+        </Style>
+        <Style Selector="Border.chip.alert">
+            <Setter Property="BorderBrush" Value="{DynamicResource DangerBd}" />
+        </Style>
+        <Style Selector="Border.chip.alert > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource DangerFg}" />
+        </Style>
+        <Style Selector="Border.fontList">
+            <Setter Property="Background" Value="{DynamicResource BgInput}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="ClipToBounds" Value="True" />
+        </Style>
+        <Style Selector="ListBox.fontPick">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="ListBox.fontPick ListBoxItem">
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Margin" Value="2,0" />
+        </Style>
+        <Style Selector="ListBox.fontPick ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AccentSurface}" />
+        </Style>
+        <Style Selector="ListBox.fontPick ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BgHover}" />
+        </Style>
+        <Style Selector="Slider.typescale">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+
+        <!-- 自绘开关（Border.toggle）已升级为原生 MVVM 的 ToggleButton +
+             AppSwitch 控件主题（IsChecked 双向绑定），定义在 App.axaml -->
+
+        <!-- ═══════════════════════════════════════════════════════════
+             表格：行 / 勾选框 / 服务分类标签 / 状态胶囊 / 端口号
+             ═══════════════════════════════════════════════════════════ -->
+        <Style Selector="Border.row">
+            <Setter Property="Height" Value="48" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource RowLine}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+            <!-- hover 闪烁由交互静默闸口根治；快速滑动鼠标时背景过渡自身就是
+                 闪烁源，故数据行禁用 Transitions（窗口回归强制约定） -->
+        </Style>
+        <Style Selector="Border.row:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgHover}" />
+        </Style>
+        <Style Selector="Border.row.checked">
+            <Setter Property="Background" Value="{DynamicResource AccentSurface}" />
+        </Style>
+
+        <!-- 勾选框 15×15 微圆角 -->
+        <Style Selector="Border.cb">
+            <Setter Property="Width" Value="15" />
+            <Setter Property="Height" Value="15" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderHover}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+        <Style Selector="Border.cb.on">
+            <Setter Property="Background" Value="{DynamicResource AccentFill}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
+        </Style>
+
+        <!-- 服务分类标签 -->
+        <Style Selector="Border.tag">
+            <Setter Property="Height" Value="22" />
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.tag > TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource TypeCaption}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.tag.web"><Setter Property="Background" Value="{DynamicResource SvcWebBg}" /></Style>
+        <Style Selector="Border.tag.web > TextBlock"><Setter Property="Foreground" Value="{DynamicResource SvcWebFg}" /></Style>
+        <Style Selector="Border.tag.db"><Setter Property="Background" Value="{DynamicResource SvcDbBg}" /></Style>
+        <Style Selector="Border.tag.db > TextBlock"><Setter Property="Foreground" Value="{DynamicResource SvcDbFg}" /></Style>
+        <Style Selector="Border.tag.dev"><Setter Property="Background" Value="{DynamicResource SvcDevBg}" /></Style>
+        <Style Selector="Border.tag.dev > TextBlock"><Setter Property="Foreground" Value="{DynamicResource SvcDevFg}" /></Style>
+        <Style Selector="Border.tag.net"><Setter Property="Background" Value="{DynamicResource SvcNetBg}" /></Style>
+        <Style Selector="Border.tag.net > TextBlock"><Setter Property="Foreground" Value="{DynamicResource SvcNetFg}" /></Style>
+        <Style Selector="Border.tag.sys"><Setter Property="Background" Value="{DynamicResource SvcSysBg}" /></Style>
+        <Style Selector="Border.tag.sys > TextBlock"><Setter Property="Foreground" Value="{DynamicResource SvcSysFg}" /></Style>
+        <Style Selector="Border.tag.app"><Setter Property="Background" Value="{DynamicResource SvcAppBg}" /></Style>
+        <Style Selector="Border.tag.app > TextBlock"><Setter Property="Foreground" Value="{DynamicResource SvcAppFg}" /></Style>
+
+        <!-- 状态胶囊 -->
+        <Style Selector="Border.pill">
+            <Setter Property="Height" Value="22" />
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="Padding" Value="9,0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.pill > TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource TypeMicro}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.pill.listen"><Setter Property="Background" Value="{DynamicResource PillListenBg}" /><Setter Property="BorderBrush" Value="{DynamicResource PillListenBd}" /></Style>
+        <Style Selector="Border.pill.listen > TextBlock"><Setter Property="Foreground" Value="{DynamicResource PillListenFg}" /></Style>
+        <Style Selector="Border.pill.est"><Setter Property="Background" Value="{DynamicResource PillEstBg}" /><Setter Property="BorderBrush" Value="{DynamicResource PillEstBd}" /></Style>
+        <Style Selector="Border.pill.est > TextBlock"><Setter Property="Foreground" Value="{DynamicResource PillEstFg}" /></Style>
+        <Style Selector="Border.pill.wait"><Setter Property="Background" Value="{DynamicResource PillWaitBg}" /><Setter Property="BorderBrush" Value="{DynamicResource PillWaitBd}" /></Style>
+        <Style Selector="Border.pill.wait > TextBlock"><Setter Property="Foreground" Value="{DynamicResource PillWaitFg}" /></Style>
+        <Style Selector="Border.pill.kernel"><Setter Property="Background" Value="{DynamicResource PillKernelBg}" /><Setter Property="BorderBrush" Value="{DynamicResource PillKernelBd}" /></Style>
+        <Style Selector="Border.pill.kernel > TextBlock"><Setter Property="Foreground" Value="{DynamicResource PillKernelFg}" /></Style>
+        <Style Selector="Border.pill.idle"><Setter Property="Background" Value="{DynamicResource PillIdleBg}" /><Setter Property="BorderBrush" Value="{DynamicResource PillIdleBd}" /></Style>
+        <Style Selector="Border.pill.idle > TextBlock"><Setter Property="Foreground" Value="{DynamicResource PillIdleFg}" /></Style>
+
+        <!-- 端口号（等宽粗体 + 服务语义色） -->
+        <Style Selector="TextBlock.port">
+            <Setter Property="FontFamily" Value="{DynamicResource AppFontMono}" />
+            <Setter Property="FontSize" Value="{DynamicResource TypeMonoPort}" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style Selector="TextBlock.port.web"><Setter Property="Foreground" Value="{DynamicResource SvcWebFg}" /></Style>
+        <Style Selector="TextBlock.port.db"><Setter Property="Foreground" Value="{DynamicResource SvcDbFg}" /></Style>
+        <Style Selector="TextBlock.port.dev"><Setter Property="Foreground" Value="{DynamicResource SvcDevFg}" /></Style>
+        <Style Selector="TextBlock.port.net"><Setter Property="Foreground" Value="{DynamicResource SvcNetFg}" /></Style>
+        <Style Selector="TextBlock.port.sys"><Setter Property="Foreground" Value="{DynamicResource SvcSysFg}" /></Style>
+        <Style Selector="TextBlock.port.app"><Setter Property="Foreground" Value="{DynamicResource SvcAppFg}" /></Style>
+
+        <!-- 表格内的等宽数据列 -->
+        <Style Selector="TextBlock.mono">
+            <Setter Property="FontFamily" Value="{DynamicResource AppFontMono}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style Selector="TextBlock.ellipsis">
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- 表头列 -->
+        <Style Selector="TextBlock.th">
+            <Setter Property="FontSize" Value="{DynamicResource TypeCaption}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <!-- 区块小标题 -->
+        <Style Selector="TextBlock.sectionTitle">
+            <Setter Property="FontSize" Value="{DynamicResource TypeCaption}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             搜索框（自绘容器 + 无边框 TextBox）
+             ═══════════════════════════════════════════════════════════ -->
+        <Style Selector="Border.search">
+            <Setter Property="Height" Value="36" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="11,0,9,0" />
+            <Setter Property="Background" Value="{DynamicResource BgInput}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Border.search:focus-within">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
+        </Style>
+        <Style Selector="Border.search TextBox.flat">
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+        </Style>
+        <Style Selector="Border.search TextBox.flat /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             卡片容器已提升为全局样式（含按主题切换的 CardShadow 投影），
+             定义在 App.axaml；此处不再重复声明，避免覆盖全局投影。
+             ═══════════════════════════════════════════════════════════ -->
+
+        <!-- 统计卡（可点击快速筛选） -->
+        <Style Selector="Border.stat">
+            <Setter Property="Background" Value="{DynamicResource BgCard}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSoft}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="12" />
+            <Setter Property="Height" Value="64" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.12" />
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.12" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.stat:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderHover}" />
+        </Style>
+        <Style Selector="Border.stat.active">
+            <Setter Property="Background" Value="{DynamicResource AccentSurface}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBorder}" />
+        </Style>
+        <Style Selector="Border.stat > StackPanel > TextBlock.statLabel">
+            <Setter Property="FontSize" Value="{DynamicResource TypeCaption}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+        </Style>
+        <Style Selector="Border.stat > StackPanel > TextBlock.statValue">
+            <Setter Property="FontSize" Value="{DynamicResource TypeStat}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontFamily" Value="{DynamicResource AppFontUi}" />
+        </Style>
+
+        <!-- 快捷键药丸 -->
+        <Style Selector="Border.key">
+            <Setter Property="Height" Value="20" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="7,0" />
+            <Setter Property="Background" Value="{DynamicResource BgHover}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Border.key > TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource TypeMicro}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- 表头药丸（不是可点按钮，纯标签） -->
+        <Style Selector="Border.chip">
+            <Setter Property="Height" Value="19" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="7,0" />
+            <Setter Property="Background" Value="{DynamicResource BgBadge}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <!-- ═══ 表头单元格：排序热区 + 列宽拖拽手柄（设计稿「列宽拖拽」三态） ═══ -->
+        <Style Selector="Border.thCell">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.thCell:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BgHover}" />
+        </Style>
+        <!-- 未排序双箭头：悬浮提亮 -->
+        <Style Selector="Border.thCell:pointerover Path.thIdleArrow">
+            <Setter Property="Stroke" Value="{DynamicResource TextTertiary}" />
+        </Style>
+        <!-- 手柄：默认 1×14 静默分隔（内联声明），Hover 3×20 提亮，拖拽中 2×22 品牌色，到底转琥珀 -->
+        <Style Selector="Border.colHandle:pointerover Border.colHandleBar">
+            <Setter Property="Width" Value="3" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Background" Value="{DynamicResource TextMuted}" />
+        </Style>
+        <Style Selector="Border.colHandle.dragging Border.colHandleBar">
+            <Setter Property="Width" Value="2" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Background" Value="{DynamicResource AccentFill}" />
+        </Style>
+        <Style Selector="Border.colHandle.locked Border.colHandleBar">
+            <Setter Property="Width" Value="2" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Background" Value="#F59E0B" />
+        </Style>
+        <!-- 拖拽中的宽度提示（品牌色小方块 + 等宽数字） -->
+        <Style Selector="Border.widthTip">
+            <Setter Property="Height" Value="22" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="Background" Value="{DynamicResource AccentFill}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <!-- 拖动中的列 chip（列顺序拖拽） -->
+        <Style Selector="Border.dragChip">
+            <Setter Property="Height" Value="34" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Background" Value="{DynamicResource BgBadge}" />
+            <Setter Property="BorderBrush" Value="#660EA5E9" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BoxShadow" Value="0 8 20 0 #80000000" />
+        </Style>
+
+        <!-- ═══ 右键上下文菜单（设计稿「表格交互增强」242px） ═══ -->
+        <Style Selector="ContextMenu.ctx">
+            <Setter Property="Background" Value="{DynamicResource MenuSurface}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource MenuBorder}" />
+            <Setter Property="Padding" Value="5" />
+            <Setter Property="MinWidth" Value="242" />
+            <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+        </Style>
+        <Style Selector="ContextMenu.ctx MenuItem">
+            <Setter Property="Theme" Value="{StaticResource AppMenuItem}" />
+        </Style>
+        <Style Selector="ContextMenu.ctx Separator">
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Margin" Value="5,5" />
+            <Setter Property="Background" Value="{DynamicResource MenuBorder}" />
+        </Style>
+
+        <Style Selector="Border.chip > TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource TypeMicro}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiary}" />
+        </Style>
+        <Style Selector="Border.chip.accent">
+            <Setter Property="Background" Value="{DynamicResource AccentSurface}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBorder}" />
+        </Style>
+        <Style Selector="Border.chip.accent > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentFg}" />
+        </Style>
+        <Style Selector="Border.chip.mono > TextBlock">
+            <Setter Property="FontFamily" Value="{DynamicResource AppFontMono}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+        </Style>
+
+        <!-- 行内 KV -->
+        <Style Selector="TextBlock.kvLabel">
+            <Setter Property="FontSize" Value="{DynamicResource TypeMicro}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextDim}" />
+        </Style>
+        <Style Selector="TextBlock.kvValue">
+            <Setter Property="FontSize" Value="{DynamicResource TypeMonoCaption}" />
+            <Setter Property="FontFamily" Value="{DynamicResource AppFontMono}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiary}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.copyable">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="ToolTip.Tip" Value="点击复制路径" />
+        </Style>
+        <Style Selector="TextBlock.copyable:pointerover">
+            <Setter Property="Foreground" Value="{DynamicResource AccentFg}" />
+        </Style>
+
+        <!-- 详情面板：进程端口小胶囊 -->
+        <Style Selector="Border.portChip">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="9,0" />
+            <Setter Property="Background" Value="{DynamicResource BgHover}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.12" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.portChip:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderHover}" />
+        </Style>
+        <Style Selector="Border.portChip > TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource TypeMonoCaption}" />
+            <Setter Property="FontFamily" Value="{DynamicResource AppFontMono}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- 进程树行 -->
+        <Style Selector="Border.treeRow">
+            <Setter Property="Height" Value="30" />
+            <Setter Property="CornerRadius" Value="5" />
+        </Style>
+        <Style Selector="Border.treeRow.root">
+            <Setter Property="Background" Value="{DynamicResource AccentSurface}" />
+        </Style>
+        <Style Selector="Border.treeRow > TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource TypeMonoCaption}" />
+            <Setter Property="FontFamily" Value="{DynamicResource AppFontMono}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextTertiary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style Selector="Border.treeRow.root > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="FontWeight" Value="Medium" />
+        </Style>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             内核诊断视图
+             ═══════════════════════════════════════════════════════════ -->
+        <Style Selector="Border.svcRow">
+            <Setter Property="Height" Value="44" />
+            <Setter Property="BorderThickness" Value="0,0,0,1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource RowLine}" />
+        </Style>
+
+        <!-- ═══ 列设置面板（设计稿 Menu / 列设置 326px）═══ -->
+        <Style Selector="Border.colMenu">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="{DynamicResource MenuSurface}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource MenuBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="5" />
+            <Setter Property="BoxShadow" Value="0 10 28 -4 #66000000" />
+        </Style>
+        <Style Selector="Border.colMenuItem">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.12" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.colMenuItem > Grid > TextBlock">
+            <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.colMenuItem:pointerover">
+            <Setter Property="Background" Value="{DynamicResource MenuHover}" />
+        </Style>
+
+
+        <!-- 全局反馈 Toast -->
+        <Style Selector="Border.toast">
+            <Setter Property="BorderBrush" Value="{DynamicResource OkBd}" />
+        </Style>
+        <Style Selector="Border.toast.err">
+            <Setter Property="BorderBrush" Value="{DynamicResource DangerBd}" />
+        </Style>
+        <Style Selector="TextBlock.pageTitle">
+            <Setter Property="FontSize" Value="{DynamicResource TypeTitle}" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+        <Style Selector="TextBlock.pageDesc">
+            <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.bannerText">
+            <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+            <Setter Property="Foreground" Value="{DynamicResource DangerFgSoft}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.note">
+            <Setter Property="FontSize" Value="{DynamicResource TypeCaption}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <!-- 窗口最大化时消除外边框，完美贴合全屏 -->
+        <Style Selector="Window[WindowState=Maximized] Border#WindowFrameBorder">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="0" />
+        </Style>
+    </Window.Styles>
+
+    <Window.KeyBindings>
+        <KeyBinding Gesture="F5" Command="{Binding RefreshCommand}" />
+        <KeyBinding Gesture="Delete" Command="{Binding KillFocusedCommand}" />
+        <KeyBinding Gesture="Ctrl+C" Command="{Binding CopyFocusedRowCommand}" />
+        <KeyBinding Gesture="Escape" Command="{Binding DismissToastCommand}" />
+    </Window.KeyBindings>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         窗口外壳：现代纯平直角边框 + 1px 细边（确保最大/最小化/关闭按钮完整贴合无遮挡）
+         ══════════════════════════════════════════════════════════════════ -->
+    <Border Name="WindowFrameBorder"
+            CornerRadius="0"
+            Background="{DynamicResource BgBase}"
+            BorderBrush="{DynamicResource BorderStrong}" BorderThickness="1">
+    <Grid>
+        <Grid RowDefinitions="46,*">
+
+            <!-- ────────────────────────────────────────────────────────
+                 1. 标题栏 · 46px
+                 ──────────────────────────────────────────────────────── -->
+            <Border Grid.Row="0" Background="{DynamicResource BgTitleBar}"
+                    BorderBrush="{DynamicResource BorderSoft}" BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="9" VerticalAlignment="Center"
+                                Margin="16,0,0,0" Background="Transparent" PointerPressed="OnTitleBarPressed">
+                        <Viewbox Width="18" Height="18">
+                            <Canvas Width="24" Height="24">
+                                <Path Classes="ic" StrokeThickness="1.6" Stroke="{DynamicResource AccentFill}"
+                                      Data="M12 2.6 20.4 5.6v6.2c0 4.6-3.4 8.6-8.4 10-5-1.4-8.4-5.4-8.4-10V5.6L12 2.6Z" />
+                                <Path Classes="ic" StrokeThickness="1.6" Stroke="{DynamicResource AccentFill}"
+                                      Data="M14.6 10.4a2.6 2.6 0 1 1-5.2 0 2.6 2.6 0 0 1 5.2 0Z" />
+                                <Path Classes="ic" StrokeThickness="1.6" Stroke="{DynamicResource AccentFill}"
+                                      Data="M12 13v4.4" />
+                            </Canvas>
+                        </Viewbox>
+
+                        <TextBlock Text="PortKiller" FontSize="{DynamicResource TypeCard}" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
+
+                        <!-- 面包屑：非端口监控页显示当前页名（原型：PortKiller / 系统设置） -->
+                        <TextBlock Text="/" FontSize="{DynamicResource TypeBody}" FontFamily="{DynamicResource AppFontUi}"
+                                   Foreground="{DynamicResource TextFaint}" VerticalAlignment="Center"
+                                   IsVisible="{Binding !IsPortsViewVisible}" />
+                        <TextBlock Text="{Binding CurrentViewTitle}" FontSize="{DynamicResource TypeBody}" FontWeight="Medium"
+                                   Foreground="{DynamicResource TextTertiary}" VerticalAlignment="Center"
+                                   IsVisible="{Binding !IsPortsViewVisible}" />
+
+                        <Border Classes="chip" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding VersionLabel}" FontFamily="{DynamicResource AppFontUi}" />
+                        </Border>
+
+                        <!-- 权限徽章 -->
+                        <Border Classes="chip accent" VerticalAlignment="Center" IsVisible="{Binding IsAdmin}">
+                            <TextBlock Text="管理员模式" />
+                        </Border>
+                        <Border Classes="chip" VerticalAlignment="Center" IsVisible="{Binding !IsAdmin}">
+                            <TextBlock Text="受限模式" Foreground="{DynamicResource WarnFg}" />
+                        </Border>
+
+                        <Border Classes="chip mono" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ScanDurationText, StringFormat='快照 {0}'}" />
+                        </Border>
+                    </StackPanel>
+
+                    <!-- 空白拖拽区：交由系统按标题栏角色处理（拖拽 / 双击最大化） -->
+                    <Border Grid.Column="1" Background="Transparent"
+                            chrome:WindowDecorationProperties.ElementRole="TitleBar"
+                            PointerPressed="OnTitleBarPressed" />
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                        <Button Classes="wctl" Width="46" Height="46" Click="OnMinimize" ToolTip.Tip="最小化">
+                            <Viewbox Width="14" Height="14">
+                                <Canvas Width="24" Height="24">
+                                    <Path Classes="ic" Stroke="{DynamicResource TextTertiary}" StrokeThickness="1.6"
+                                          Data="M2.5 12h19" />
+                                </Canvas>
+                            </Viewbox>
+                        </Button>
+                        <Button Classes="wctl" x:Name="MaxButton" Width="46" Height="46" Click="OnToggleMaximize" ToolTip.Tip="最大化">
+                            <Viewbox Width="14" Height="14">
+                                <Canvas Width="24" Height="24">
+                                    <Path Classes="ic" x:Name="MaxButtonIcon" Stroke="{DynamicResource TextTertiary}" StrokeThickness="1.6"
+                                          Data="M3 3h18v18H3z" />
+                                </Canvas>
+                            </Viewbox>
+                        </Button>
+                        <Button Classes="wctl-close" Width="46" Height="46" Click="OnClose" ToolTip.Tip="关闭">
+                            <Viewbox Width="14" Height="14">
+                                <Canvas Width="24" Height="24">
+                                    <Path Classes="ic" Stroke="{DynamicResource TextTertiary}" StrokeThickness="1.6"
+                                          Data="M3.5 3.5l17 17M20.5 3.5l-17 17" />
+                                </Canvas>
+                            </Viewbox>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ────────────────────────────────────────────────────────
+                 2. 主体：侧边栏 180 | 工作区 * | 详情面板 320
+                 ──────────────────────────────────────────────────────── -->
+            <Grid Grid.Row="1" ColumnDefinitions="180,*,Auto">
+
+                <!-- ═══ 2.1 侧边导航栏 ═══ -->
+                <Border Grid.Column="0" Background="{DynamicResource BgSidebar}"
+                        BorderBrush="{DynamicResource BorderSoft}" BorderThickness="0,0,1,0"
+                        Padding="12">
+                    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
+                        <TextBlock Grid.Row="0" Classes="groupLabel" Text="工具" Margin="0,0,0,4" />
+                        <ItemsControl Grid.Row="1" ItemsSource="{Binding Shell.Tools}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="shell:ToolEntry">
+                                    <Button Classes="nav" Classes.active="{Binding IsActive}" Height="36" Padding="10,0" Margin="0,0,0,3"
+                                            Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).SwitchToolCommand}"
+                                            CommandParameter="{Binding Id}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <Path Grid.Column="0" Classes="ic" Data="{Binding Icon}" Width="15" Height="15" Stretch="Uniform"
+                                                  Stroke="{DynamicResource TextMuted}" StrokeThickness="1.8" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="{DynamicResource TypeBody}" Margin="9,0,0,0"
+                                                       Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2" Text="{Binding Badge}" FontSize="{DynamicResource TypeMicro}"
+                                                       Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- 分隔线 → 外观分组 → 主题三态 → 版本 -->
+                        <Border Grid.Row="3" Height="1" Background="{DynamicResource BorderSoft}" Margin="0,10,0,10" />
+
+                        <TextBlock Grid.Row="4" Classes="groupLabel" Text="外观" Margin="0,0,0,6" />
+
+                        <Border Grid.Row="5" Classes="segment">
+                            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="2">
+                                <Button Grid.Column="0" Classes="segChip sm" Classes.active="{Binding IsThemeSystem}"
+                                        Command="{Binding SetThemeCommand}" CommandParameter="跟随系统" Content="跟随" />
+                                <Button Grid.Column="1" Classes="segChip sm" Classes.active="{Binding IsThemeDark}"
+                                        Command="{Binding SetThemeCommand}" CommandParameter="深色模式" Content="深色" />
+                                <Button Grid.Column="2" Classes="segChip sm" Classes.active="{Binding IsThemeLight}"
+                                        Command="{Binding SetThemeCommand}" CommandParameter="浅色模式" Content="浅色" />
+                            </Grid>
+                        </Border>
+
+                        <StackPanel Grid.Row="6" VerticalAlignment="Bottom" Spacing="8" Margin="0,10,0,0">
+                            <TextBlock Text="{Binding VersionLabelAot}" FontSize="{DynamicResource TypeTiny}"
+                                       FontFamily="{DynamicResource AppFontUi}" Foreground="{DynamicResource TextFaint}" />
+                            <Button Classes="primary" Command="{Binding RestartAsAdminCommand}"
+                                    Height="30" Padding="10,0" IsVisible="{Binding !IsAdmin}"
+                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                                <TextBlock Text="以管理员身份重启" FontSize="{DynamicResource TypeCaption}" Foreground="#FFFFFF" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- ═══ 2.2 主工作区 ═══ -->
+                <Grid Grid.Column="1" RowDefinitions="Auto,*">
+
+                    <!-- ── 权限受限 Banner（系统状态规范：普通用户运行时的降级提示） ── -->
+                    <Border Grid.Row="0" Classes="permBanner" Margin="16,16,16,0"
+                            IsVisible="{Binding !IsAdmin}">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="11">
+                            <Viewbox Grid.Column="0" Width="16" Height="16" VerticalAlignment="Center">
+                                <Canvas Width="24" Height="24">
+                                    <Path Classes="ic" StrokeThickness="1.7" Stroke="{DynamicResource AccentFg}"
+                                          Data="M12 2.6 20.4 5.6v6.2c0 4.6-3.4 8.6-8.4 10-5-1.4-8.4-5.4-8.4-10V5.6L12 2.6Z" />
+                                    <Path Classes="ic" StrokeThickness="1.7" Stroke="{DynamicResource AccentFg}"
+                                          Data="M12 8.6v4.2" />
+                                    <Ellipse Canvas.Left="11.35" Canvas.Top="15.2" Width="1.3" Height="1.3"
+                                             Fill="{DynamicResource AccentFg}" />
+                                </Canvas>
+                            </Viewbox>
+                            <TextBlock Grid.Column="1" VerticalAlignment="Center" TextWrapping="Wrap"
+                                       FontSize="{DynamicResource TypeBody}"
+                                       Foreground="{DynamicResource AccentSoft}"
+                                       Text="当前以普通用户身份运行 — 特权端口（80 / 443 / 445 等）无法终止或释放" />
+                            <Button Grid.Column="2" Classes="primary" Height="30" Padding="13,0"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding RestartAsAdminCommand}">
+                                <TextBlock Text="以管理员身份重启" FontSize="{DynamicResource TypeCaption}"
+                                           Foreground="#FFFFFF" VerticalAlignment="Center" />
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <!-- ── 视图 A：端口监控 ── -->
+                    <ports:PortsView x:Name="PortsPage" Grid.Row="1" IsVisible="{Binding IsPortsViewVisible}" />
+
+                    <!-- ── 视图 B：内核诊断 ── -->
+                    <kernel:KernelDiagnosticsView x:Name="KernelPage" Grid.Row="1" IsVisible="{Binding IsKernelViewVisible}" />
+
+                    <!-- ── 视图 C：系统设置 · 优化版（顶部分组标签页，零滚动） ── -->
+                    <!-- 设计依据：画板「设置中心 · 优化版 · 外观与排版 · 深色/浅色」（Ardot 11:1 / 11:563）
+                         四组一屏一景：启动与特权 / 外观与排版 / 字体 / 监控引擎。
+                         标签态、开关态、分段态全部由 VM 驱动（原生 MVVM，零 code-behind 事件）。 -->
+                    <settings:SettingsView x:Name="SettingsPage" Grid.Row="1" IsVisible="{Binding IsSettingsViewVisible}" />
+                    <ContentControl Grid.Row="1" Content="{Binding Shell.ExtensionView}" IsVisible="{Binding Shell.IsExtensionSelected}" />
+                </Grid>
+
+                <!-- ═══ 2.3 右侧进程详情面板 · 320px ═══ -->
+                <Border Grid.Column="2" Width="320" Background="{DynamicResource BgSidebar}"
+                        BorderBrush="{DynamicResource BorderSoft}" BorderThickness="1,0,0,0"
+                        IsVisible="{Binding ShowInspector}">
+                    <Grid RowDefinitions="50,*">
+                        <Border Grid.Row="0" Padding="16,0,12,0"
+                                BorderBrush="{DynamicResource BorderSoft}" BorderThickness="0,0,0,1">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <TextBlock Grid.Column="0" Text="进程详情" FontSize="{DynamicResource TypeCard}" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
+                                <Button Grid.Column="1" Classes="bare" Width="26" Height="26" Padding="0"
+                                        Click="OnCloseInspector" VerticalAlignment="Center">
+                                    <Viewbox Width="14" Height="14">
+                                        <Canvas Width="24" Height="24">
+                                            <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource TextMuted}"
+                                                  Data="M7 7l10 10M17 7 7 17" />
+                                        </Canvas>
+                                    </Viewbox>
+                                </Button>
+                            </Grid>
+                        </Border>
+
+                        <Grid Grid.Row="1" RowDefinitions="*,Auto">
+                            <ScrollViewer>
+                                <StackPanel Margin="16" Spacing="14">
+                                    <!-- 进程卡片 -->
+                                    <Border Classes="card" Padding="12">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="11">
+                                            <Border Grid.Column="0" Width="38" Height="38" CornerRadius="9"
+                                                    Background="{DynamicResource BgHover}"
+                                                    BorderBrush="{DynamicResource BorderStrong}" BorderThickness="1">
+                                                <Viewbox Width="19" Height="19" HorizontalAlignment="Center"
+                                                         VerticalAlignment="Center">
+                                                    <Canvas Width="24" Height="24">
+                                                        <Path Classes="ic" StrokeThickness="1.9" Stroke="{DynamicResource AccentFg}"
+                                                              Data="M9 8.5 5.5 12 9 15.5" />
+                                                        <Path Classes="ic" StrokeThickness="1.9" Stroke="{DynamicResource AccentFg}"
+                                                              Data="M15 8.5 18.5 12 15 15.5" />
+                                                    </Canvas>
+                                                </Viewbox>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding InspName}" FontSize="{DynamicResource TypeCard}" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding InspMeta}" FontSize="{DynamicResource TypeMonoCaption}"
+                                                           FontFamily="{DynamicResource AppFontMono}"
+                                                           Foreground="{DynamicResource TextMuted}" />
+                                            </StackPanel>
+                                            <Border Grid.Column="2" Classes="pill" VerticalAlignment="Center"
+                                                    Classes.listen="{Binding InspPillListening}"
+                                                    Classes.est="{Binding InspPillEstablished}"
+                                                    Classes.wait="{Binding InspPillTimeWait}"
+                                                    Classes.kernel="{Binding InspPillKernel}"
+                                                    Classes.idle="{Binding InspPillIdle}">
+                                                <TextBlock Text="{Binding InspPillText}" FontFamily="{DynamicResource AppFontUi}"
+                                                           FontSize="{DynamicResource TypeTiny}" />
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+
+                                    <TextBlock Classes="sectionTitle" Text="进程信息" />
+                                    <Border Classes="card" Padding="4">
+                                        <StackPanel>
+                                            <StackPanel Margin="10" Spacing="4">
+                                                <TextBlock Classes="kvLabel" Text="可执行文件" />
+                                                <TextBlock Classes="kvValue copyable" Text="{Binding InspExePath}"
+                                                           PointerPressed="OnExePathPressed" />
+                                            </StackPanel>
+                                            <StackPanel Margin="10" Spacing="4">
+                                                <TextBlock Classes="kvLabel" Text="启动时间" />
+                                                <TextBlock Classes="kvValue" Text="{Binding InspStartTime}" />
+                                            </StackPanel>
+                                            <StackPanel Margin="10" Spacing="4">
+                                                <TextBlock Classes="kvLabel" Text="父进程" />
+                                                <TextBlock Classes="kvValue" Text="{Binding InspParent}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <TextBlock Classes="sectionTitle" Text="监听端口" />
+                                    <ItemsControl ItemsSource="{Binding InspPorts}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="m:PortChipItem">
+                                                <Border Classes="portChip" Margin="0,0,6,6"
+                                                        PointerPressed="OnPortChipPressed"
+                                                        ToolTip.Tip="按此端口筛选（再点一次取消）">
+                                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                                        <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                                                 Fill="{DynamicResource PillListenFg}"
+                                                                 IsVisible="{Binding IsListening}" />
+                                                        <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                                                 Fill="{DynamicResource PillEstFg}"
+                                                                 IsVisible="{Binding !IsListening}" />
+                                                        <TextBlock VerticalAlignment="Center">
+                                                            <Run Text="{Binding Port}" />
+                                                            <Run Text=" " />
+                                                            <Run Text="{Binding StateText}" />
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <TextBlock Classes="sectionTitle" Text="{Binding InspChildCountText}" />
+                                    <Border Classes="card" Padding="6">
+                                        <ItemsControl ItemsSource="{Binding InspChildren}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="m:ProcessTreeNodeViewModel">
+                                                    <Border Classes="treeRow" Classes.root="{Binding IsRoot}"
+                                                            Padding="{Binding RowPadding}">
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                                                     Fill="{DynamicResource PillListenFg}"
+                                                                     IsVisible="{Binding IsRoot}" />
+                                                            <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                                                     Fill="{DynamicResource TextDim}"
+                                                                     IsVisible="{Binding !IsRoot}" />
+                                                            <TextBlock Text="{Binding Display}" VerticalAlignment="Center"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                        </StackPanel>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <StackPanel Grid.Row="1" Margin="16" Spacing="8">
+                                <Button Classes="danger" Height="38" CornerRadius="6"
+                                        IsVisible="{Binding InspCanKill}" Click="OnKillTreeClick"
+                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                        Content="终止进程树（含全部子进程）" FontSize="{DynamicResource TypeBody}" />
+                                <Button Classes="primary" Height="38"
+                                        IsVisible="{Binding InspCanDiagnose}" Click="OnDiagnoseInspectorClick"
+                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                        Content="查看依赖服务与处置建议" FontSize="{DynamicResource TypeBody}" />
+                                <Button Classes="tool" Height="34"
+                                        Command="{Binding CopyInspectorCommand}"
+                                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                        Content="复制进程详情" FontSize="{DynamicResource TypeBody}" />
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+
+
+                    <!-- 列设置浮层（原 Popup 无 PlacementTarget，落点不可控；改为窗内浮层，浅深色同一套语义色） -->
+                    <Panel x:Name="ColumnMenuOverlay" Grid.Row="0" Grid.RowSpan="2" IsVisible="{Binding IsColumnMenuOpen}" ZIndex="80">
+                        <Border Background="Transparent" PointerPressed="OnDismissColumnMenu" />
+                        <Border x:Name="ColumnMenuPanel" Classes="colMenu" MinWidth="326" HorizontalAlignment="Right"
+                                VerticalAlignment="Top" Margin="0,0,127,0">
+                            <StackPanel>
+                            <TextBlock Text="列设置" FontSize="{DynamicResource TypeCard}" FontWeight="SemiBold"
+                            Foreground="{DynamicResource TextPrimary}" Margin="12,12,12,8" />
+                            <StackPanel Spacing="1">
+                            <Border Classes="colMenuItem" Tag="0" PointerPressed="OnToggleColMenuItem">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                            <CheckBox Grid.Column="0" Theme="{StaticResource AppCheckBox}" IsChecked="{Binding IsColVisible0, Mode=OneWay}" IsHitTestVisible="False" Focusable="False"
+                            VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="端口" />
+                            </Grid>
+                            </Border>
+                            <Border Classes="colMenuItem" Tag="1" PointerPressed="OnToggleColMenuItem">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                            <CheckBox Grid.Column="0" Theme="{StaticResource AppCheckBox}" IsChecked="{Binding IsColVisible1, Mode=OneWay}" IsHitTestVisible="False" Focusable="False"
+                            VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="状态" />
+                            </Grid>
+                            </Border>
+                            <Border Classes="colMenuItem" Tag="2" PointerPressed="OnToggleColMenuItem">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                            <CheckBox Grid.Column="0" Theme="{StaticResource AppCheckBox}" IsChecked="{Binding IsColVisible2, Mode=OneWay}" IsHitTestVisible="False" Focusable="False"
+                            VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="服务分类" />
+                            </Grid>
+                            </Border>
+                            <Border Classes="colMenuItem" Tag="3" PointerPressed="OnToggleColMenuItem">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                            <CheckBox Grid.Column="0" Theme="{StaticResource AppCheckBox}" IsChecked="{Binding IsColVisible3, Mode=OneWay}" IsHitTestVisible="False" Focusable="False"
+                            VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="进程名" />
+                            </Grid>
+                            </Border>
+                            <Border Classes="colMenuItem" Tag="4" PointerPressed="OnToggleColMenuItem">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                            <CheckBox Grid.Column="0" Theme="{StaticResource AppCheckBox}" IsChecked="{Binding IsColVisible4, Mode=OneWay}" IsHitTestVisible="False" Focusable="False"
+                            VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="PID" />
+                            </Grid>
+                            </Border>
+                            <Border Classes="colMenuItem" Tag="5" PointerPressed="OnToggleColMenuItem">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                            <CheckBox Grid.Column="0" Theme="{StaticResource AppCheckBox}" IsChecked="{Binding IsColVisible5, Mode=OneWay}" IsHitTestVisible="False" Focusable="False"
+                            VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="本地地址" />
+                            </Grid>
+                            </Border>
+                            <Border Classes="colMenuItem" Tag="6" PointerPressed="OnToggleColMenuItem">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                            <CheckBox Grid.Column="0" Theme="{StaticResource AppCheckBox}" IsChecked="{Binding IsColVisible6, Mode=OneWay}" IsHitTestVisible="False" Focusable="False"
+                            VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="操作" />
+                            </Grid>
+                            </Border>
+                            </StackPanel>
+                            <Border Height="1" Background="{DynamicResource BorderSoft}" Margin="0,6" />
+                            <Border Classes="colMenuItem" PointerPressed="OnResetColumns">
+                            <TextBlock Text="重置为默认列宽与顺序" Foreground="{DynamicResource TextTertiary}" />
+                            </Border>
+                            </StackPanel>
+                        </Border>
+                    </Panel>
+
+        <!-- ══════════════════════════════════════════════════════════
+             窗口缩放热区 · 8 向（覆盖在内容之上，透明可命中）
+             ══════════════════════════════════════════════════════════ -->
+        <Border Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Top" Background="Transparent"
+                chrome:WindowDecorationProperties.ElementRole="ResizeN"
+                PointerPressed="OnResizeGripPressed" Tag="N" />
+        <Border Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Background="Transparent"
+                chrome:WindowDecorationProperties.ElementRole="ResizeS"
+                PointerPressed="OnResizeGripPressed" Tag="S" />
+        <Border Width="5" HorizontalAlignment="Left" VerticalAlignment="Stretch" Background="Transparent"
+                chrome:WindowDecorationProperties.ElementRole="ResizeW"
+                PointerPressed="OnResizeGripPressed" Tag="W" />
+        <Border Width="5" HorizontalAlignment="Right" VerticalAlignment="Stretch" Background="Transparent"
+                chrome:WindowDecorationProperties.ElementRole="ResizeE"
+                PointerPressed="OnResizeGripPressed" Tag="E" />
+        <Border Width="11" Height="11" HorizontalAlignment="Left" VerticalAlignment="Top" Background="Transparent"
+                chrome:WindowDecorationProperties.ElementRole="ResizeNW"
+                PointerPressed="OnResizeGripPressed" Tag="NW" />
+        <Border Width="11" Height="11" HorizontalAlignment="Right" VerticalAlignment="Top" Background="Transparent"
+                chrome:WindowDecorationProperties.ElementRole="ResizeNE"
+                PointerPressed="OnResizeGripPressed" Tag="NE" />
+        <Border Width="11" Height="11" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="Transparent"
+                chrome:WindowDecorationProperties.ElementRole="ResizeSW"
+                PointerPressed="OnResizeGripPressed" Tag="SW" />
+        <Border Width="11" Height="11" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="Transparent"
+                chrome:WindowDecorationProperties.ElementRole="ResizeSE"
+                PointerPressed="OnResizeGripPressed" Tag="SE" />
+
+        <!-- Shell 确认层：公共模板与主题位于 Presentation/Styles/ConfirmationDialogs.axaml。 -->
+        <Panel x:Name="InterceptOverlay" IsVisible="{Binding IsInterceptVisible}" ZIndex="91">
+            <Border Background="{DynamicResource Scrim}" />
+            <ContentControl x:Name="InterceptCard" Width="720" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Classes="dialogCard" Theme="{StaticResource DialogCardTheme}" KeyboardNavigation.TabNavigation="Cycle">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <Border Classes="dialogHeader">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                            <Path Width="24" Height="24" Stretch="Uniform" Stroke="{DynamicResource DangerFg}" StrokeThickness="1.8"
+                                  VerticalAlignment="Center" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Data="M12 3 5 6v5.2C5 15.7 8 19.4 12 21c4-1.6 7-5.3 7-9.8V6l-7-3Z M12 8v4 M12 15h.01" />
+                            <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                                <TextBlock Classes="dialogTitle" Text="安全拦截 · 系统保护进程" />
+                                <TextBlock Classes="dialogCaption" Text="已阻止终止指令，请先确认目标与风险" />
+                            </StackPanel>
+                            <Button Grid.Column="2" Classes="dialogAction dialogClose" Click="OnCancelIntercept"
+                                    AutomationProperties.Name="关闭系统保护提示" ToolTip.Tip="关闭">
+                                <Path Width="12" Height="12" Stretch="Uniform" Stroke="{DynamicResource DialogSecondary}"
+                                      StrokeThickness="1.8" StrokeLineCap="Round" Data="M1 1 11 11 M11 1 1 11" />
+                            </Button>
+                        </Grid>
+                    </Border>
+                    <ScrollViewer Grid.Row="1" x:Name="InterceptBody" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="24" Spacing="16">
+                            <Border CornerRadius="8" Padding="16" Background="{DynamicResource DangerBg}"
+                                    BorderBrush="{DynamicResource DangerBd}" BorderThickness="1">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Classes="dialogBody" Text="已阻止强制终止操作" FontWeight="SemiBold" Foreground="{DynamicResource DangerFg}" />
+                                    <TextBlock Classes="dialogBody" Text="{Binding InterceptDesc}" />
+                                </StackPanel>
+                            </Border>
+                            <StackPanel Spacing="10">
+                                <TextBlock Classes="dialogBody" Text="本次被拦截的目标" FontWeight="SemiBold" />
+                                <ItemsControl ItemsSource="{Binding InterceptChips}">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Classes="dialogChip" Classes.hot="{Binding IsPrimary}">
+                                                <TextBlock Classes="dialogCaption" Text="{Binding Text}" FontFamily="{DynamicResource AppFontMono}"
+                                                           Foreground="{DynamicResource TextPrimary}" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                            <Border Classes="dialogNote" IsVisible="{Binding InterceptHasForceable}">
+                                <CheckBox x:Name="InterceptRiskCheckBox" Theme="{StaticResource AppCheckBox}"
+                                          IsChecked="{Binding InterceptRiskChecked, Mode=TwoWay}" HorizontalAlignment="Stretch"
+                                          AutomationProperties.Name="我已了解强制终止的风险">
+                                    <TextBlock Classes="dialogBody" Text="我已了解风险，仍要继续（不推荐，可能导致系统崩溃）" />
+                                </CheckBox>
+                            </Border>
+                            <Border Classes="dialogNote" IsVisible="{Binding !InterceptHasForceable}">
+                                <TextBlock Classes="dialogBody" Text="目标属于 Windows 内核绝对保护级，不提供强制终止选项。请改用「内核诊断」定位真实占用来源。" />
+                            </Border>
+                            <TextBlock Classes="dialogCaption" Text="建议使用「内核诊断」查找真实占用者；TIME_WAIT 状态的连接可使用对应释放功能。" />
+                        </StackPanel>
+                    </ScrollViewer>
+                    <Border Grid.Row="2" Classes="dialogFooter" x:Name="InterceptFooter">
+                        <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">
+                            <Button x:Name="InterceptCancelButton" Classes="dialogAction" Content="取消" Click="OnCancelIntercept" />
+                            <Button x:Name="InterceptConfirmButton" Classes="dialogAction destructive" Content="仍要终止" Click="OnConfirmIntercept"
+                                    IsVisible="{Binding InterceptHasForceable}" IsEnabled="{Binding InterceptRiskChecked}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </ContentControl>
+        </Panel>
+
+        <Panel x:Name="FamilyOverlay" IsVisible="{Binding IsFamilyConfirmVisible}" ZIndex="90">
+            <Border Background="{DynamicResource Scrim}" />
+            <ContentControl x:Name="FamilyCard" Width="640" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Classes="dialogCard" Theme="{StaticResource DialogCardTheme}" KeyboardNavigation.TabNavigation="Cycle">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <Border Classes="dialogHeader">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                            <Path Width="24" Height="24" Stretch="Uniform" Stroke="{DynamicResource WarnFg}" StrokeThickness="1.8"
+                                  VerticalAlignment="Center" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Data="M12 3 2 21h20L12 3Z M12 9v5 M12 17h.01" />
+                            <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                                <TextBlock Classes="dialogTitle" Text="家族终止 · 多实例守护软件" />
+                                <TextBlock Classes="dialogCaption" Text="请确认本次将终止的关联进程" />
+                            </StackPanel>
+                            <Button Grid.Column="2" Classes="dialogAction dialogClose" Click="OnCancelFamilyKill"
+                                    AutomationProperties.Name="关闭家族终止确认" ToolTip.Tip="关闭">
+                                <Path Width="12" Height="12" Stretch="Uniform" Stroke="{DynamicResource DialogSecondary}"
+                                      StrokeThickness="1.8" StrokeLineCap="Round" Data="M1 1 11 11 M11 1 1 11" />
+                            </Button>
+                        </Grid>
+                    </Border>
+                    <ScrollViewer Grid.Row="1" x:Name="FamilyBody" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="24" Spacing="16">
+                            <Border CornerRadius="8" Padding="16" Background="{DynamicResource WarnBg}"
+                                    BorderBrush="{DynamicResource WarnBd}" BorderThickness="1">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Classes="dialogBody" Text="此操作会终止全部关联实例" FontWeight="SemiBold" Foreground="{DynamicResource WarnFg}" />
+                                    <TextBlock Classes="dialogBody" Text="{Binding FamilyConfirmDesc}" />
+                                </StackPanel>
+                            </Border>
+                            <StackPanel Spacing="10">
+                                <TextBlock Classes="dialogBody" Text="将被终止的进程" FontWeight="SemiBold" />
+                                <ItemsControl ItemsSource="{Binding FamilyConfirmChips}">
+                                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Classes="dialogChip" Classes.hot="{Binding IsPrimary}">
+                                                <TextBlock Classes="dialogCaption" Text="{Binding Text}" FontFamily="{DynamicResource AppFontMono}"
+                                                           Foreground="{DynamicResource TextPrimary}" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                            <Border Classes="dialogNote">
+                                <TextBlock Classes="dialogCaption" Text="若由 Windows 服务托管，终止后仍可能自动重启。请在服务控制台停止对应服务。" />
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                    <Border Grid.Row="2" Classes="dialogFooter" x:Name="FamilyFooter">
+                        <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">
+                            <Button x:Name="FamilyCancelButton" Classes="dialogAction" Content="取消" Click="OnCancelFamilyKill" />
+                            <Button x:Name="FamilyConfirmButton" Classes="dialogAction destructive" Content="全部终止" Click="OnConfirmFamilyKill" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </ContentControl>
+        </Panel>
+
+        <Panel x:Name="ExitOverlay" IsVisible="{Binding IsExitConfirmVisible}" ZIndex="92">
+            <Border Background="{DynamicResource Scrim}" />
+            <ContentControl x:Name="ExitCard" Width="480" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Classes="dialogCard" Theme="{StaticResource DialogCardTheme}" KeyboardNavigation.TabNavigation="Cycle">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <Border Classes="dialogHeader">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                            <Path Width="24" Height="24" Stretch="Uniform" Stroke="{DynamicResource DialogSecondary}" StrokeThickness="1.8"
+                                  VerticalAlignment="Center" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Data="M9 4H4v16h5 M13 7l5 5-5 5 M8 12h10" />
+                            <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                                <TextBlock Classes="dialogTitle" Text="退出 PortKiller" />
+                                <TextBlock Classes="dialogCaption" Text="退出后将停止后台端口监控" />
+                            </StackPanel>
+                            <Button Grid.Column="2" Classes="dialogAction dialogClose" Click="OnCancelExit"
+                                    AutomationProperties.Name="关闭退出确认" ToolTip.Tip="关闭">
+                                <Path Width="12" Height="12" Stretch="Uniform" Stroke="{DynamicResource DialogSecondary}"
+                                      StrokeThickness="1.8" StrokeLineCap="Round" Data="M1 1 11 11 M11 1 1 11" />
+                            </Button>
+                        </Grid>
+                    </Border>
+                    <ScrollViewer Grid.Row="1" x:Name="ExitBody" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="24" Spacing="16">
+                            <TextBlock Classes="dialogBody" Text="{Binding ExitConfirmText}" />
+                            <Border Classes="dialogNote">
+                                <TextBlock Classes="dialogCaption" Text="只关闭主窗口会保留托盘监控；退出软件才会结束后台运行。" />
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                    <Border Grid.Row="2" Classes="dialogFooter" x:Name="ExitFooter">
+                        <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">
+                            <Button x:Name="ExitCancelButton" Classes="dialogAction" Content="继续运行" Click="OnCancelExit" />
+                            <Button x:Name="ExitConfirmButton" Classes="dialogAction emphasis" Content="退出 PortKiller" Click="OnConfirmExit" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </ContentControl>
+        </Panel>
+    </Grid>
+    </Border>
+</Window>

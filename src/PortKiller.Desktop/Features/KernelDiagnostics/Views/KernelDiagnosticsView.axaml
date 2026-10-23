@@ -1,0 +1,172 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PortKiller.ViewModels"
+             xmlns:m="using:PortKiller.Models"
+             xmlns:svc="using:PortKiller.Services"
+             xmlns:views="using:PortKiller.Views"
+             x:Class="PortKiller.Features.KernelDiagnostics.KernelDiagnosticsView"
+             x:DataType="vm:MainViewModel">
+<ScrollViewer >
+                        <StackPanel Margin="26" Spacing="18">
+                            <StackPanel Spacing="5">
+                                <TextBlock Classes="pageTitle" Text="内核诊断" />
+                                <TextBlock Classes="pageDesc"
+                                           Text="定位 PID 4 (System) 与 HTTP.sys 内核驱动背后的真实占用者。8 类 Web 依赖服务通过原生服务管理器毫秒级检索。" />
+                            </StackPanel>
+
+                            <!-- 无占用：正向结果 -->
+                            <Border Classes="card" Padding="28" IsVisible="{Binding KernelEmpty}">
+                                <StackPanel Spacing="11" HorizontalAlignment="Center">
+                                    <Border Width="48" Height="48" CornerRadius="24" HorizontalAlignment="Center"
+                                            Background="{DynamicResource SvcNetBg}">
+                                        <Viewbox Width="22" Height="22" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Canvas Width="24" Height="24">
+                                                <Path Classes="ic" StrokeThickness="1.9" Stroke="{DynamicResource SvcNetFg}"
+                                                      Data="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                                <Path Classes="ic" StrokeThickness="1.9" Stroke="{DynamicResource SvcNetFg}"
+                                                      Data="M8.2 12.2 11 15l5-6" />
+                                            </Canvas>
+                                        </Viewbox>
+                                    </Border>
+                                    <TextBlock Text="{Binding KernelHeading}" FontSize="{DynamicResource TypeCard}" FontWeight="Medium"
+                                               Foreground="{DynamicResource TextSecondary}"
+                                               HorizontalAlignment="Center" />
+                                    <TextBlock Text="{Binding KernelSubheading}" FontSize="{DynamicResource TypeCaption}"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- 有占用：告警 + 端口清单 -->
+                            <StackPanel Spacing="18" IsVisible="{Binding !KernelEmpty}">
+                                <Border Height="52" CornerRadius="6" Padding="14,0,12,0"
+                                        Background="{DynamicResource DangerBg}"
+                                        BorderBrush="{DynamicResource DangerBd}" BorderThickness="1">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="11">
+                                        <Viewbox Grid.Column="0" Width="16" Height="16" VerticalAlignment="Center">
+                                            <Canvas Width="24" Height="24">
+                                                <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource DangerFg}"
+                                                      Data="M12 3.6 21 19.6H3L12 3.6Z" />
+                                                <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource DangerFg}"
+                                                      Data="M12 10v4" />
+                                                <Path Classes="icf" Fill="{DynamicResource DangerFg}"
+                                                      Data="M13 16.8a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" />
+                                            </Canvas>
+                                        </Viewbox>
+                                        <TextBlock Grid.Column="1" Classes="bannerText" Text="{Binding KernelSubheading}" />
+                                        <Button Grid.Column="2" Classes="primary" Height="30" Padding="13,0"
+                                                Content="重新诊断" FontSize="{DynamicResource TypeCaption}"
+                                                Command="{Binding RunKernelDiagnosticCommand}" VerticalAlignment="Center" />
+                                    </Grid>
+                                </Border>
+
+                                <TextBlock Classes="sectionTitle" Text="内核占用端口" />
+                                <Border Classes="card" ClipToBounds="True">
+                                    <StackPanel>
+                                        <Border Height="34" Background="{DynamicResource BgTableHead}"
+                                                BorderBrush="{DynamicResource BorderSoft}" BorderThickness="0,0,0,1"
+                                                Padding="16,0">
+                                            <Grid ColumnDefinitions="92,124,122,*,72,160">
+                                                <TextBlock Grid.Column="0" Classes="th" Text="端口" />
+                                                <TextBlock Grid.Column="1" Classes="th" Text="状态" />
+                                                <TextBlock Grid.Column="2" Classes="th" Text="进程名" />
+                                                <TextBlock Grid.Column="3" Classes="th" Text="本地地址" />
+                                                <TextBlock Grid.Column="4" Classes="th" Text="PID" />
+                                                <TextBlock Grid.Column="5" Classes="th" Text="协议 / 版本" />
+                                            </Grid>
+                                        </Border>
+                                        <ItemsControl ItemsSource="{Binding KernelItems}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="m:PortConnectionItem">
+                                                    <Border Classes="svcRow" Padding="16,0">
+                                                        <Grid ColumnDefinitions="92,124,122,*,72,160">
+                                                            <TextBlock Grid.Column="0" Classes="port sys"
+                                                                       Text="{Binding LocalPort}" />
+                                                            <Border Grid.Column="1">
+                                                                <Border Classes="pill kernel">
+                                                                    <TextBlock Text="{Binding StatusBadge}"
+                                                                               FontFamily="{DynamicResource AppFontUi}" />
+                                                                </Border>
+                                                            </Border>
+                                                            <TextBlock Grid.Column="2" Classes="ellipsis" FontSize="{DynamicResource TypeBody}"
+                                                                       FontWeight="Medium"
+                                                                       Foreground="{DynamicResource TextSecondary}"
+                                                                       Text="{Binding ProcessName}" />
+                                                            <TextBlock Grid.Column="3" Classes="mono" FontSize="{DynamicResource TypeMonoCaption}"
+                                                                       Foreground="{DynamicResource TextMuted}"
+                                                                       Text="{Binding LocalEndpoint}" />
+                                                            <TextBlock Grid.Column="4" Classes="mono" FontSize="{DynamicResource TypeMono}"
+                                                                       Foreground="{DynamicResource TextTertiary}"
+                                                                       Text="{Binding Pid}" />
+                                                            <TextBlock Grid.Column="5" Classes="mono" FontSize="{DynamicResource TypeMonoCaption}"
+                                                                       Foreground="{DynamicResource TextMuted}">
+                                                                <Run Text="{Binding Protocol}" />
+                                                                <Run Text=" · " />
+                                                                <Run Text="{Binding IpVersion}" />
+                                                            </TextBlock>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Classes="sectionTitle" Text="关联的 Web 依赖服务（8 类已扫描）" />
+                                <Border Classes="card" ClipToBounds="True">
+                                    <StackPanel>
+                                        <Border Height="34" Background="{DynamicResource BgTableHead}"
+                                                BorderBrush="{DynamicResource BorderSoft}" BorderThickness="0,0,0,1"
+                                                Padding="16,0">
+                                            <Grid ColumnDefinitions="130,*,86">
+                                                <TextBlock Grid.Column="0" Classes="th" Text="服务名" />
+                                                <TextBlock Grid.Column="1" Classes="th" Text="显示名称" />
+                                                <TextBlock Grid.Column="2" Classes="th" Text="状态" />
+                                            </Grid>
+                                        </Border>
+                                        <ItemsControl ItemsSource="{Binding DependentServices}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="m:DependentServiceItem">
+                                                    <Border Classes="svcRow" Padding="16,0">
+                                                        <Grid ColumnDefinitions="130,*,86">
+                                                            <TextBlock Grid.Column="0" Classes="mono" FontSize="{DynamicResource TypeMono}"
+                                                                       Foreground="{DynamicResource TextSecondary}"
+                                                                       Text="{Binding ServiceName}" />
+                                                            <TextBlock Grid.Column="1" Classes="ellipsis" FontSize="{DynamicResource TypeCaption}"
+                                                                       Foreground="{DynamicResource TextTertiary}"
+                                                                       Text="{Binding DisplayName}" />
+                                                            <Border Grid.Column="2">
+                                                                <Border Classes="pill"
+                                                                        Classes.listen="{Binding IsRunning}"
+                                                                        Classes.idle="{Binding IsStopped}">
+                                                                    <TextBlock Text="{Binding StateText}" />
+                                                                </Border>
+                                                            </Border>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Classes="sectionTitle" Text="诊断报告 · URLACL 与处置建议" />
+                                <Border Classes="card" Padding="16">
+                                    <TextBox Text="{Binding DiagnosticReport}" IsReadOnly="True"
+                                             AcceptsReturn="True" TextWrapping="Wrap"
+                                             FontFamily="{DynamicResource AppFontMono}" FontSize="{DynamicResource TypeMonoCaption}"
+                                             Background="Transparent" BorderThickness="0"
+                                             Foreground="{DynamicResource TextTertiary}"
+                                             MinHeight="180" MaxHeight="320" />
+                                </Border>
+
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button Classes="primary" Height="34" Padding="14,0"
+                                            Content="打开 services.msc" Click="OnOpenServices" />
+                                    <Button Classes="tool" Height="34" Padding="14,0"
+                                            Content="复制诊断报告" Click="OnCopyReport" />
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,242 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PortKiller.Features.Updates"
+        x:Class="PortKiller.Features.Updates.UpdateWindow" x:DataType="vm:UpdateViewModel"
+        Title="PortKiller · 软件更新" Width="560" Height="400" CanResize="False"
+        WindowStartupLocation="CenterOwner" WindowDecorations="None"
+        TransparencyLevelHint="Transparent" Background="Transparent"
+        FontFamily="{DynamicResource AppFontUi}" FontSize="14" Foreground="{DynamicResource UpdateText}"
+        UseLayoutRounding="True" TextOptions.BaselinePixelAlignment="Aligned">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="UpdateSurface" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="UpdateCard" Color="#F6F7F9" />
+                    <SolidColorBrush x:Key="UpdateBorder" Color="#E2E5E9" />
+                    <SolidColorBrush x:Key="UpdateDivider" Color="#F0F1F3" />
+                    <SolidColorBrush x:Key="UpdateText" Color="#1B1B1F" />
+                    <SolidColorBrush x:Key="UpdateMuted" Color="#5C5F66" />
+                    <SolidColorBrush x:Key="UpdateAccent" Color="#0F6CBD" />
+                    <SolidColorBrush x:Key="UpdateAccentSoft" Color="#EAF4FC" />
+                    <SolidColorBrush x:Key="UpdateHover" Color="#F0F3F6" />
+                    <SolidColorBrush x:Key="UpdateTrack" Color="#E3E7EB" />
+                    <SolidColorBrush x:Key="UpdateSuccess" Color="#2FA24B" />
+                    <SolidColorBrush x:Key="UpdateSuccessSoft" Color="#E8F5EC" />
+                    <SolidColorBrush x:Key="UpdateError" Color="#C42B1C" />
+                    <SolidColorBrush x:Key="UpdateErrorSoft" Color="#FCECE9" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="UpdateSurface" Color="#202024" />
+                    <SolidColorBrush x:Key="UpdateCard" Color="#27272C" />
+                    <SolidColorBrush x:Key="UpdateBorder" Color="#3A3A42" />
+                    <SolidColorBrush x:Key="UpdateDivider" Color="#2C2C32" />
+                    <SolidColorBrush x:Key="UpdateText" Color="#F3F3F5" />
+                    <SolidColorBrush x:Key="UpdateMuted" Color="#BEC1C8" />
+                    <SolidColorBrush x:Key="UpdateAccent" Color="#60B5F5" />
+                    <SolidColorBrush x:Key="UpdateAccentSoft" Color="#183449" />
+                    <SolidColorBrush x:Key="UpdateHover" Color="#323239" />
+                    <SolidColorBrush x:Key="UpdateTrack" Color="#383840" />
+                    <SolidColorBrush x:Key="UpdateSuccess" Color="#6BD58A" />
+                    <SolidColorBrush x:Key="UpdateSuccessSoft" Color="#203C2B" />
+                    <SolidColorBrush x:Key="UpdateError" Color="#FF8C82" />
+                    <SolidColorBrush x:Key="UpdateErrorSoft" Color="#452824" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+            <LinearGradientBrush x:Key="UpdateIconGradient" StartPoint="0%,0%" EndPoint="100%,100%">
+                <GradientStop Offset="0" Color="#339DE0" /><GradientStop Offset="1" Color="#095A9F" />
+            </LinearGradientBrush>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Window.Styles>
+        <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource UpdateMuted}" /><Setter Property="FontSize" Value="13" /><Setter Property="LineHeight" Value="20" /></Style>
+        <Style Selector="TextBlock.body"><Setter Property="FontSize" Value="14" /><Setter Property="LineHeight" Value="22" /></Style>
+        <Style Selector="TextBlock.heading"><Setter Property="FontSize" Value="22" /><Setter Property="LineHeight" Value="30" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+        <Style Selector="Button">
+            <Setter Property="MinHeight" Value="36" /><Setter Property="Padding" Value="16,0" />
+            <Setter Property="FontSize" Value="14" /><Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="CornerRadius" Value="5" /><Setter Property="Foreground" Value="{DynamicResource UpdateText}" />
+            <Setter Property="Background" Value="{DynamicResource UpdateSurface}" /><Setter Property="BorderBrush" Value="{DynamicResource UpdateBorder}" />
+            <Setter Property="BorderThickness" Value="1" /><Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Template"><ControlTemplate><Border x:Name="PART_ButtonBorder" CornerRadius="{TemplateBinding CornerRadius}"
+                Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                Padding="{TemplateBinding Padding}"><ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" Foreground="{TemplateBinding Foreground}"
+                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" /></Border></ControlTemplate></Setter>
+        </Style>
+        <Style Selector="Button:pointerover"><Setter Property="Background" Value="{DynamicResource UpdateHover}" /></Style>
+        <Style Selector="Button:pressed"><Setter Property="Opacity" Value="0.8" /></Style>
+        <Style Selector="Button:disabled"><Setter Property="Opacity" Value="0.5" /></Style>
+        <Style Selector="Button:focus-visible /template/ Border#PART_ButtonBorder"><Setter Property="BoxShadow" Value="0 0 0 2 #660F6CBD" /></Style>
+        <Style Selector="Button.primary"><Setter Property="Background" Value="#0F6CBD" /><Setter Property="BorderBrush" Value="#0F6CBD" /><Setter Property="Foreground" Value="White" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+        <Style Selector="Button.primary:pointerover"><Setter Property="Background" Value="#115EA3" /></Style>
+        <!-- 标题栏独立模板与固定矢量图标，避免通用按钮动画和文字字形在首次显示时切换。 -->
+        <Style Selector="Button.caption">
+            <Setter Property="Width" Value="32" /><Setter Property="Height" Value="32" /><Setter Property="MinHeight" Value="32" />
+            <Setter Property="Padding" Value="0" /><Setter Property="BorderThickness" Value="0" /><Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Background" Value="Transparent" /><Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Transitions" Value="{x:Null}" />
+            <Setter Property="Template"><ControlTemplate>
+                <Border x:Name="PART_CaptionBorder" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}">
+                    <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+            </ControlTemplate></Setter>
+        </Style>
+        <Style Selector="Button.caption:pointerover"><Setter Property="Background" Value="{DynamicResource UpdateHover}" /></Style>
+        <Style Selector="Button.caption:pressed"><Setter Property="RenderTransform" Value="none" /><Setter Property="Opacity" Value="1" /></Style>
+        <Style Selector="Button.caption.close:pointerover"><Setter Property="Background" Value="{DynamicResource UpdateErrorSoft}" /></Style>
+        <Style Selector="Button.caption:focus-visible /template/ Border#PART_CaptionBorder"><Setter Property="BoxShadow" Value="0 0 0 2 #660F6CBD" /></Style>
+        <Style Selector="Path.captionIcon"><Setter Property="Stroke" Value="{DynamicResource UpdateMuted}" /><Setter Property="StrokeThickness" Value="1.4" /><Setter Property="StrokeLineCap" Value="Round" /></Style>
+        <Style Selector="Button.caption:pointerover Path.captionIcon"><Setter Property="Stroke" Value="{DynamicResource UpdateText}" /></Style>
+        <Style Selector="Button.caption.close:pointerover Path.captionIcon"><Setter Property="Stroke" Value="{DynamicResource UpdateError}" /></Style>
+        <Style Selector="Border.updateCard"><Setter Property="Background" Value="{DynamicResource UpdateCard}" /><Setter Property="CornerRadius" Value="10" /><Setter Property="Padding" Value="16" /></Style>
+        <Style Selector="ProgressBar"><Setter Property="MinHeight" Value="7" /><Setter Property="Height" Value="7" /><Setter Property="Foreground" Value="#0F6CBD" /><Setter Property="Background" Value="{DynamicResource UpdateTrack}" /></Style>
+        <Style Selector="TextBlock.step"><Setter Property="FontSize" Value="12" /><Setter Property="LineHeight" Value="18" /><Setter Property="Foreground" Value="{DynamicResource UpdateMuted}" /></Style>
+        <Style Selector="TextBlock.step.active"><Setter Property="Foreground" Value="{DynamicResource UpdateAccent}" /></Style>
+        <Style Selector="TextBlock.step.complete"><Setter Property="Foreground" Value="{DynamicResource UpdateSuccess}" /></Style>
+        <Style Selector="CheckBox"><Setter Property="Template"><ControlTemplate><Grid ColumnDefinitions="16,8,Auto" VerticalAlignment="Center">
+            <Border Width="16" Height="16" CornerRadius="4" BorderBrush="{DynamicResource UpdateBorder}" BorderThickness="1" Background="{DynamicResource UpdateSurface}" />
+            <Border Width="16" Height="16" CornerRadius="4" Background="#0F6CBD" IsVisible="{Binding IsChecked, RelativeSource={RelativeSource TemplatedParent}}">
+                <Path Data="M3 8l3 3 7-7" Width="12" Height="12" Stretch="Uniform" Stroke="White" StrokeThickness="1.6" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <ContentPresenter Grid.Column="2" Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" VerticalAlignment="Center" />
+        </Grid></ControlTemplate></Setter></Style>
+    </Window.Styles>
+    <Border x:Name="UpdateSurfaceRoot" CornerRadius="10" BorderThickness="1" BorderBrush="{DynamicResource UpdateBorder}"
+            Background="{DynamicResource UpdateSurface}" ClipToBounds="True">
+        <Panel>
+            <Grid RowDefinitions="40,*,64">
+                <!-- 透明背景使标题栏空白处也能命中鼠标，进入系统窗口拖动。 -->
+                <Border x:Name="UpdateTitleBar" Background="Transparent" BorderBrush="{DynamicResource UpdateDivider}"
+                        BorderThickness="0,0,0,1" PointerPressed="OnTitlePointerPressed">
+                    <Grid ColumnDefinitions="*,Auto" Margin="18,0,6,0">
+                        <TextBlock Text="软件更新" Classes="muted" FontSize="13" FontWeight="Medium" LineHeight="18" VerticalAlignment="Center" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+                            <Button x:Name="UpdateMinimizeButton" Classes="caption" Click="OnMinimize" IsEnabled="{Binding !IsInstalling}" ToolTip.Tip="最小化" AutomationProperties.Name="最小化更新窗口">
+                                <Path Classes="captionIcon" Data="M1 6H11" Width="12" Height="12" />
+                            </Button>
+                            <Button x:Name="UpdateCloseButton" Classes="caption close" Command="{Binding HideCommand}" IsEnabled="{Binding !IsInstalling}" ToolTip.Tip="关闭窗口，任务继续" AutomationProperties.Name="关闭更新窗口">
+                                <Path x:Name="UpdateCloseIcon" Classes="captionIcon" Data="M1 1L11 11M11 1L1 11" Width="12" Height="12" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Panel Grid.Row="1" Margin="24,20,24,16">
+                    <!-- 发现版本：56px 图标、版本信息、可滚动的纯文本更新说明。 -->
+                    <Grid IsVisible="{Binding IsAvailable}" RowDefinitions="56,16,*">
+                        <Grid ColumnDefinitions="56,14,*,Auto">
+                            <Border Background="{StaticResource UpdateIconGradient}" CornerRadius="12">
+                                <Path Data="M16 3v22 M7 16l9 9 9-9 M5 31h22" Width="32" Height="34" Stretch="Uniform" Stroke="White" StrokeThickness="2.2" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="2" Spacing="7" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Title}" Classes="heading" FontSize="20" LineHeight="28" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Subtitle}" Classes="muted" />
+                            </StackPanel>
+                            <Border Grid.Column="3" Background="{DynamicResource UpdateAccentSoft}" CornerRadius="10" Padding="8,4" VerticalAlignment="Center" Margin="8,0,0,0">
+                                <TextBlock Text="推荐更新" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource UpdateAccent}" />
+                            </Border>
+                        </Grid>
+                        <Border Grid.Row="2" Classes="updateCard">
+                            <Grid RowDefinitions="Auto,10,*">
+                                <Grid ColumnDefinitions="*,Auto"><TextBlock Text="本次更新内容" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="{Binding NotesCount}" Classes="muted" /></Grid>
+                                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                    <ItemsControl ItemsSource="{Binding ReleaseNotes}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="x:String">
+                                        <Grid ColumnDefinitions="10,*" Margin="0,0,0,9">
+                                            <Ellipse Width="5" Height="5" Fill="{DynamicResource UpdateAccent}" VerticalAlignment="Top" Margin="0,6,0,0" />
+                                            <TextBlock Grid.Column="1" Text="{Binding}" FontSize="14" TextWrapping="Wrap" LineHeight="22" />
+                                        </Grid>
+                                    </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                                </ScrollViewer>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <!-- 下载、暂停与校验采用同一块布局，保持进度位置稳定。 -->
+                    <StackPanel IsVisible="{Binding IsTransfer}" Spacing="20" VerticalAlignment="Center">
+                        <Grid ColumnDefinitions="56,14,*,Auto">
+                            <Border Background="{StaticResource UpdateIconGradient}" CornerRadius="12">
+                                <Path Data="M16 3v22 M7 16l9 9 9-9 M5 31h22" Width="32" Height="34" Stretch="Uniform" Stroke="White" StrokeThickness="2.2" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="2" Spacing="7" VerticalAlignment="Center"><TextBlock Text="{Binding Title}" Classes="heading" FontSize="20" LineHeight="28" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding Subtitle}" Classes="muted" /></StackPanel>
+                            <TextBlock Grid.Column="3" Text="{Binding PercentText}" FontFamily="{DynamicResource AppFontNumbers}" FontSize="22" LineHeight="28" FontWeight="SemiBold" Foreground="{DynamicResource UpdateAccent}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                        </Grid>
+                        <Border Classes="updateCard">
+                            <StackPanel Spacing="12">
+                                <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding DownloadedText}" Classes="muted" /><TextBlock Grid.Column="1" Text="{Binding SpeedText}" FontFamily="{DynamicResource AppFontNumbers}" FontWeight="Medium" FontSize="13" LineHeight="20" Foreground="{DynamicResource UpdateMuted}" /></Grid>
+                                <ProgressBar Value="{Binding Percent}" Maximum="100" IsIndeterminate="{Binding IsVerifying}" />
+                                <Grid ColumnDefinitions="Auto,*,Auto,*,Auto" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding DownloadStepText}" Classes="step" Classes.active="{Binding !IsVerifying}" Classes.complete="{Binding IsVerifying}" />
+                                    <Border Grid.Column="1" Height="1" Background="{DynamicResource UpdateBorder}" Margin="10,0" />
+                                    <TextBlock Grid.Column="2" Text="{Binding VerifyStepText}" Classes="step" Classes.active="{Binding IsVerifying}" />
+                                    <Border Grid.Column="3" Height="1" Background="{DynamicResource UpdateBorder}" Margin="10,0" />
+                                    <TextBlock Grid.Column="4" Text="● 重启生效" Classes="step" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel IsVisible="{Binding IsReady}" Spacing="13" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="450">
+                        <Border Width="64" Height="64" CornerRadius="32" Background="{DynamicResource UpdateSuccessSoft}">
+                            <Path Data="M4 17l9 9L30 7" Width="32" Height="32" Stretch="Uniform" Stroke="{DynamicResource UpdateSuccess}" StrokeThickness="2.8" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <TextBlock Text="{Binding Title}" Classes="heading" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding Subtitle}" Classes="muted" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding Body}" Classes="muted body" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360" />
+                        <Border Classes="updateCard" Padding="18,10" HorizontalAlignment="Stretch"><TextBlock Text="✓ 下载完成    ───    ✓ 校验通过    ───    ● 等待重启" FontSize="12" Foreground="{DynamicResource UpdateSuccess}" TextAlignment="Center" /></Border>
+                    </StackPanel>
+
+                    <StackPanel IsVisible="{Binding IsLatest}" Spacing="14" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <Border Width="68" Height="68" CornerRadius="34" Background="{DynamicResource UpdateAccentSoft}"><Path Data="M4 17l9 9L30 7" Width="32" Height="32" Stretch="Uniform" Stroke="{DynamicResource UpdateAccent}" StrokeThickness="2.8" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                        <TextBlock Text="{Binding Title}" Classes="heading" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding CurrentVersion}" Classes="muted" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding Body}" Classes="muted body" TextAlignment="Center" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <StackPanel IsVisible="{Binding IsFailed}" Spacing="12" VerticalAlignment="Center" HorizontalAlignment="Stretch">
+                        <Border Width="62" Height="62" CornerRadius="31" Background="{DynamicResource UpdateErrorSoft}"><Grid Width="30" Height="32" HorizontalAlignment="Center" VerticalAlignment="Center"><Border Width="3" Height="18" CornerRadius="1.5" Background="{DynamicResource UpdateError}" VerticalAlignment="Top" Margin="0,2,0,0" /><Ellipse Width="4" Height="4" Fill="{DynamicResource UpdateError}" VerticalAlignment="Bottom" Margin="0,0,0,3" /></Grid></Border>
+                        <TextBlock Text="{Binding Title}" Classes="heading" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding Body}" Classes="muted body" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360" HorizontalAlignment="Center" />
+                        <Border Classes="updateCard" Padding="12,9"><TextBlock Text="{Binding Snapshot.ErrorDetail}" FontSize="13" LineHeight="20" Foreground="{DynamicResource UpdateMuted}" TextWrapping="Wrap" MaxHeight="54" TextTrimming="CharacterEllipsis" /></Border>
+                    </StackPanel>
+
+                    <StackPanel IsVisible="{Binding IsNeutral}" Spacing="15" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="430">
+                        <Border Width="64" Height="64" CornerRadius="14" Background="{StaticResource UpdateIconGradient}"><Path Data="M16 3v22 M7 16l9 9 9-9 M5 31h22" Width="32" Height="34" Stretch="Uniform" Stroke="White" StrokeThickness="2.2" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+                        <TextBlock Text="{Binding Title}" Classes="heading" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding Body}" Classes="muted body" TextWrapping="Wrap" TextAlignment="Center" />
+                        <ProgressBar Width="180" IsIndeterminate="True" IsVisible="{Binding IsChecking}" />
+                    </StackPanel>
+                </Panel>
+
+                <Border Grid.Row="2" BorderBrush="{DynamicResource UpdateDivider}" BorderThickness="0,1,0,0" Padding="22,0">
+                    <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                        <CheckBox IsChecked="{Binding AutomaticCheck}" IsVisible="{Binding !ShowSecondary}" Content="启动时自动检查更新" FontSize="13" Foreground="{DynamicResource UpdateMuted}" VerticalAlignment="Center" />
+                        <CheckBox IsChecked="{Binding AutomaticCheck}" IsVisible="{Binding IsAvailable}" Content="启动时自动检查更新" FontSize="13" Foreground="{DynamicResource UpdateMuted}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding FooterHint}" IsVisible="{Binding !IsAvailable}" Classes="muted" FontSize="12" LineHeight="18" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="190" HorizontalAlignment="Left" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" IsEnabled="{Binding !IsInstalling}">
+                            <Button Content="暂停下载" Command="{Binding PauseCommand}" IsVisible="{Binding CanPause}" />
+                            <Button Content="{Binding SecondaryText}" Command="{Binding SecondaryCommand}" IsVisible="{Binding ShowSecondary}" />
+                            <Button Content="{Binding PrimaryText}" Classes="primary" Command="{Binding PrimaryCommand}" IsVisible="{Binding !IsTransfer}" IsEnabled="{Binding CanPrimary}" />
+                            <Button Content="继续下载" Classes="primary" Command="{Binding PrimaryCommand}" IsVisible="{Binding IsPaused}" IsEnabled="{Binding CanPrimary}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Border IsVisible="{Binding IsConfirming}" Background="#99000000" Padding="30">
+                <Border Background="{DynamicResource UpdateSurface}" CornerRadius="10" Padding="24" VerticalAlignment="Center">
+                    <StackPanel Spacing="16">
+                        <TextBlock Text="确认重启并安装" FontSize="20" FontWeight="SemiBold" />
+                        <TextBlock Text="将保存当前设置并重启。搜索词、勾选项和当前诊断视图不会恢复，请先完成当前排查。安装失败会恢复旧版本。" TextWrapping="Wrap" FontSize="14" LineHeight="22" Foreground="{DynamicResource UpdateMuted}" />
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+                            <Button Content="稍后" Command="{Binding CancelConfirmationCommand}" IsEnabled="{Binding !IsInstalling}" />
+                            <Button Content="{Binding ConfirmText}" Classes="primary" Command="{Binding ConfirmRestartCommand}" IsEnabled="{Binding !IsInstalling}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Border>
+            <Border Background="{DynamicResource UpdateErrorSoft}" Padding="12,8" Margin="20,44,20,0" VerticalAlignment="Top" IsVisible="{Binding HasNotice}">
+                <TextBlock Text="{Binding Notice}" Foreground="{DynamicResource UpdateError}" TextWrapping="Wrap" FontSize="13" LineHeight="20" />
+            </Border>
+        </Panel>
+    </Border>
+</Window>

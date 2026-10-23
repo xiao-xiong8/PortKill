@@ -1,0 +1,191 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:PortKiller.Features.Settings"
+        x:Class="PortKiller.Features.Settings.FontLicensesWindow"
+        x:DataType="local:FontLicensesViewModel"
+        Title="PortKiller · 字体来源与授权" Width="940" Height="700" MinWidth="800" MinHeight="580"
+        WindowStartupLocation="CenterOwner" WindowDecorations="None" CanResize="True"
+        TransparencyLevelHint="Transparent" Background="Transparent"
+        FontFamily="{DynamicResource AppFontUi}" FontSize="14" Foreground="{DynamicResource FontDocumentText}"
+        UseLayoutRounding="True" TextOptions.BaselinePixelAlignment="Aligned">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="FontDocumentSurface" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="FontDocumentCanvas" Color="#F6F8FA" />
+                    <SolidColorBrush x:Key="FontDocumentText" Color="#242932" />
+                    <SolidColorBrush x:Key="FontDocumentMuted" Color="#606A78" />
+                    <SolidColorBrush x:Key="FontDocumentBorder" Color="#E1E6EC" />
+                    <SolidColorBrush x:Key="FontDocumentAccent" Color="#0F6CBD" />
+                    <SolidColorBrush x:Key="FontDocumentSelected" Color="#EAF3FC" />
+                    <SolidColorBrush x:Key="FontDocumentHover" Color="#F0F4F8" />
+                    <SolidColorBrush x:Key="FontDocumentCloseHover" Color="#FCECE9" />
+                    <SolidColorBrush x:Key="FontDocumentCloseIcon" Color="#B52B22" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="FontDocumentSurface" Color="#23252A" />
+                    <SolidColorBrush x:Key="FontDocumentCanvas" Color="#1C1E22" />
+                    <SolidColorBrush x:Key="FontDocumentText" Color="#ECEEF2" />
+                    <SolidColorBrush x:Key="FontDocumentMuted" Color="#B1B8C4" />
+                    <SolidColorBrush x:Key="FontDocumentBorder" Color="#3A3E46" />
+                    <SolidColorBrush x:Key="FontDocumentAccent" Color="#84C3F5" />
+                    <SolidColorBrush x:Key="FontDocumentSelected" Color="#203C55" />
+                    <SolidColorBrush x:Key="FontDocumentHover" Color="#2D323A" />
+                    <SolidColorBrush x:Key="FontDocumentCloseHover" Color="#452824" />
+                    <SolidColorBrush x:Key="FontDocumentCloseIcon" Color="#FF9D94" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Window.Styles>
+        <Style Selector="TextBlock.documentMuted">
+            <Setter Property="Foreground" Value="{DynamicResource FontDocumentMuted}" />
+            <Setter Property="FontSize" Value="13" /><Setter Property="LineHeight" Value="20" />
+        </Style>
+        <Style Selector="Button">
+            <Setter Property="MinHeight" Value="38" /><Setter Property="MinWidth" Value="96" />
+            <Setter Property="Padding" Value="16,0" /><Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{DynamicResource FontDocumentText}" />
+            <Setter Property="Background" Value="{DynamicResource FontDocumentSurface}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FontDocumentBorder}" />
+            <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="7" />
+            <Setter Property="Transitions" Value="{x:Null}" />
+            <Setter Property="Template"><ControlTemplate>
+                <Border x:Name="DocumentButtonBorder" CornerRadius="{TemplateBinding CornerRadius}"
+                        Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+            </ControlTemplate></Setter>
+        </Style>
+        <Style Selector="Button:pointerover">
+            <Setter Property="Background" Value="{DynamicResource FontDocumentHover}" />
+            <Setter Property="Foreground" Value="{DynamicResource FontDocumentAccent}" />
+        </Style>
+        <Style Selector="Button:pressed"><Setter Property="RenderTransform" Value="none" /><Setter Property="Opacity" Value="0.92" /></Style>
+        <Style Selector="Button:focus-visible /template/ Border#DocumentButtonBorder"><Setter Property="BoxShadow" Value="0 0 0 2 #660F6CBD" /></Style>
+        <Style Selector="Button.documentPrimary">
+            <Setter Property="Background" Value="#0F6CBD" /><Setter Property="BorderBrush" Value="#0F6CBD" />
+            <Setter Property="Foreground" Value="White" /><Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Button.documentPrimary:pointerover"><Setter Property="Background" Value="#1265AC" /><Setter Property="Foreground" Value="#F5F9FF" /></Style>
+        <Style Selector="Button.documentCaption">
+            <Setter Property="Width" Value="34" /><Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="0" /><Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" /><Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" /><Setter Property="CornerRadius" Value="4" />
+        </Style>
+        <Style Selector="Button.documentCaption.close:pointerover">
+            <Setter Property="Background" Value="{DynamicResource FontDocumentCloseHover}" />
+        </Style>
+        <Style Selector="Path.documentCaptionIcon">
+            <Setter Property="Stroke" Value="{DynamicResource FontDocumentMuted}" /><Setter Property="StrokeThickness" Value="1.3" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+        </Style>
+        <Style Selector="Button.documentCaption.close:pointerover Path.documentCaptionIcon"><Setter Property="Stroke" Value="{DynamicResource FontDocumentCloseIcon}" /></Style>
+        <Style Selector="ListBoxItem">
+            <Setter Property="Padding" Value="12,13" /><Setter Property="Margin" Value="0,0,0,6" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template"><ControlTemplate>
+                <Border x:Name="FontNavigationItem" Background="{TemplateBinding Background}" CornerRadius="7" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" />
+                </Border>
+            </ControlTemplate></Setter>
+        </Style>
+        <Style Selector="ListBoxItem:pointerover"><Setter Property="Background" Value="{DynamicResource FontDocumentHover}" /></Style>
+        <Style Selector="ListBoxItem:selected"><Setter Property="Background" Value="{DynamicResource FontDocumentSelected}" /></Style>
+        <Style Selector="ListBoxItem:focus-visible /template/ Border#FontNavigationItem"><Setter Property="BoxShadow" Value="0 0 0 2 #660F6CBD" /></Style>
+    </Window.Styles>
+    <Border x:Name="FontLicensesSurface" CornerRadius="10" BorderThickness="1" BorderBrush="{DynamicResource FontDocumentBorder}"
+            Background="{DynamicResource FontDocumentSurface}" ClipToBounds="True">
+        <Grid RowDefinitions="44,Auto,*,66">
+            <Border Background="Transparent" BorderBrush="{DynamicResource FontDocumentBorder}" BorderThickness="0,0,0,1"
+                    PointerPressed="OnTitlePointerPressed">
+                <Grid ColumnDefinitions="*,Auto" Margin="20,0,8,0">
+                    <TextBlock Text="字体来源与授权" Classes="documentMuted" FontWeight="Medium" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+                        <Button Classes="documentCaption" Click="OnMinimize" ToolTip.Tip="最小化" AutomationProperties.Name="最小化字体授权窗口">
+                            <Path Classes="documentCaptionIcon" Data="M1 6H11" Width="12" Height="12" />
+                        </Button>
+                        <Button Classes="documentCaption" Click="OnToggleMaximize" ToolTip.Tip="最大化 / 还原" AutomationProperties.Name="最大化或还原字体授权窗口">
+                            <Path Classes="documentCaptionIcon" Data="M1 1H11V11H1Z" Width="12" Height="12" />
+                        </Button>
+                        <Button Classes="documentCaption close" Click="OnClose" ToolTip.Tip="关闭" AutomationProperties.Name="关闭字体授权窗口">
+                            <Path Classes="documentCaptionIcon" Data="M1 1L11 11M11 1L1 11" Width="12" Height="12" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+            <StackPanel Grid.Row="1" Margin="24,20,24,20" Spacing="6">
+                <TextBlock Text="字体来源与授权" FontSize="23" FontWeight="SemiBold" />
+                <TextBlock Text="查阅应用内嵌字体的来源、使用字重与完整授权原文。" Classes="documentMuted" />
+            </StackPanel>
+            <Grid Grid.Row="2" ColumnDefinitions="196,20,*" Margin="24,0,24,20">
+                <Border Background="{DynamicResource FontDocumentCanvas}" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource FontDocumentBorder}">
+                    <Grid RowDefinitions="Auto,*,Auto">
+                        <TextBlock Text="内嵌字体 · 2" Classes="documentMuted" FontSize="12" Margin="16,16,16,12" />
+                        <ListBox x:Name="FontDocuments" Grid.Row="1" ItemsSource="{Binding Documents}" SelectedItem="{Binding SelectedDocument, Mode=TwoWay}"
+                                 SelectionMode="AlwaysSelected" Background="Transparent" BorderThickness="0" Padding="8,0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 AutomationProperties.Name="选择字体授权文档">
+                            <ListBox.ItemTemplate><DataTemplate x:DataType="local:FontLicenseDocument">
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="{Binding Family}" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource FontDocumentText}" />
+                                    <TextBlock Text="{Binding Usage}" Classes="documentMuted" FontSize="12" />
+                                </StackPanel>
+                            </DataTemplate></ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock Grid.Row="2" Text="这里只展示随应用附带的字体，其他系统字体不在此列表中。"
+                                   Classes="documentMuted" FontSize="12" TextWrapping="Wrap" Margin="16,12,16,18" />
+                    </Grid>
+                </Border>
+                <Grid Grid.Column="2" RowDefinitions="Auto,16,*">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="{Binding SelectedDocument.Family}" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Border Grid.Column="1" Background="{DynamicResource FontDocumentSelected}" CornerRadius="5" Padding="9,5" VerticalAlignment="Center">
+                                <TextBlock Text="OFL 1.1" FontSize="12" FontWeight="Medium" Foreground="{DynamicResource FontDocumentAccent}" />
+                            </Border>
+                        </Grid>
+                        <TextBlock Text="{Binding SelectedDocument.Weights}" Classes="documentMuted" FontSize="12" TextWrapping="Wrap" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <StackPanel Spacing="4" VerticalAlignment="Center">
+                                <TextBlock Text="官方来源" Classes="documentMuted" FontSize="12" />
+                                <SelectableTextBlock x:Name="FontSourceUrl" Text="{Binding SelectedDocument.SourceUrl}" FontSize="12" LineHeight="18"
+                                                     Foreground="{DynamicResource FontDocumentAccent}" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button Grid.Column="1" Content="打开来源" Click="OnOpenSource" VerticalAlignment="Center" AutomationProperties.Name="在浏览器打开所选字体官方来源" />
+                        </Grid>
+                    </StackPanel>
+                    <Border Grid.Row="2" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource FontDocumentBorder}" ClipToBounds="True">
+                        <Grid RowDefinitions="42,*">
+                            <Border Background="{DynamicResource FontDocumentCanvas}" BorderBrush="{DynamicResource FontDocumentBorder}" BorderThickness="0,0,0,1" Padding="16,0">
+                                <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                                    <TextBlock Text="授权原文" FontSize="13" FontWeight="Medium" />
+                                    <TextBlock Grid.Column="1" Text="English · 完整文本" Classes="documentMuted" FontSize="12" />
+                                </Grid>
+                            </Border>
+                            <ScrollViewer x:Name="LicenseReader" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <SelectableTextBlock x:Name="LicenseText" Text="{Binding SelectedDocument.Text}" Margin="20,16,20,20"
+                                                     FontSize="14" LineHeight="23" TextWrapping="Wrap" Foreground="{DynamicResource FontDocumentText}"
+                                                     SelectionBrush="{DynamicResource FontDocumentSelected}" AutomationProperties.Name="完整字体授权原文" />
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Grid>
+            <Border Grid.Row="3" BorderBrush="{DynamicResource FontDocumentBorder}" BorderThickness="0,1,0,0" Padding="24,0">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Status}" Classes="documentMuted" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                        <Button x:Name="CopyFontLicenseButton" Content="复制授权原文" Click="OnCopyLicense" />
+                        <Button Content="关闭" Classes="documentPrimary" Click="OnClose" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

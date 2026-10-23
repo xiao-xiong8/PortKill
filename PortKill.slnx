@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PortKiller.Core/PortKiller.Core.csproj" />
+    <Project Path="src/PortKiller.Infrastructure.Windows/PortKiller.Infrastructure.Windows.csproj" />
+    <Project Path="src/PortKiller.Desktop/PortKiller.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/">
+    <Project Path="src/Modules/PortKiller.Modules.Ports/PortKiller.Modules.Ports.csproj" />
+    <Project Path="src/Modules/PortKiller.Updates/PortKiller.Updates.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PortKiller.Regression/PortKiller.Regression.csproj" />
+  </Folder>
+</Solution>

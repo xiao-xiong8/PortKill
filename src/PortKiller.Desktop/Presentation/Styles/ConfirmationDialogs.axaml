@@ -1,0 +1,210 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Styles.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="DialogSurface" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="DialogSectionSurface" Color="#F5F7FA" />
+                    <SolidColorBrush x:Key="DialogOutline" Color="#94A3B8" />
+                    <SolidColorBrush x:Key="DialogDivider" Color="#DCE2EA" />
+                    <SolidColorBrush x:Key="DialogSecondary" Color="#526071" />
+                    <SolidColorBrush x:Key="DialogHover" Color="#DCE7F5" />
+                    <SolidColorBrush x:Key="DialogCloseRest" Color="#00DCE7F5" />
+                    <SolidColorBrush x:Key="DialogPressed" Color="#CDDCEF" />
+                    <SolidColorBrush x:Key="DialogFocus" Color="#0F6CBD" />
+                    <SolidColorBrush x:Key="DialogActionFill" Color="#245E89" />
+                    <SolidColorBrush x:Key="DialogActionHover" Color="#1F537A" />
+                    <SolidColorBrush x:Key="DialogActionPressed" Color="#1C496B" />
+                    <SolidColorBrush x:Key="DialogDangerFill" Color="#AD263A" />
+                    <SolidColorBrush x:Key="DialogDangerHover" Color="#9D2335" />
+                    <SolidColorBrush x:Key="DialogDangerPressed" Color="#8D2030" />
+                    <BoxShadows x:Key="DialogShadow">0 16 48 -8 #26000000</BoxShadows>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="DialogSurface" Color="#24272E" />
+                    <SolidColorBrush x:Key="DialogSectionSurface" Color="#20232A" />
+                    <SolidColorBrush x:Key="DialogOutline" Color="#64748B" />
+                    <SolidColorBrush x:Key="DialogDivider" Color="#414956" />
+                    <SolidColorBrush x:Key="DialogSecondary" Color="#BDC7D5" />
+                    <SolidColorBrush x:Key="DialogHover" Color="#40506A" />
+                    <SolidColorBrush x:Key="DialogCloseRest" Color="#0040506A" />
+                    <SolidColorBrush x:Key="DialogPressed" Color="#394759" />
+                    <SolidColorBrush x:Key="DialogFocus" Color="#8AC9FF" />
+                    <SolidColorBrush x:Key="DialogActionFill" Color="#285F8D" />
+                    <SolidColorBrush x:Key="DialogActionHover" Color="#2D6A9C" />
+                    <SolidColorBrush x:Key="DialogActionPressed" Color="#265B86" />
+                    <SolidColorBrush x:Key="DialogDangerFill" Color="#A52B40" />
+                    <SolidColorBrush x:Key="DialogDangerHover" Color="#B22F46" />
+                    <SolidColorBrush x:Key="DialogDangerPressed" Color="#98283B" />
+                    <BoxShadows x:Key="DialogShadow">0 20 56 -8 #99000000</BoxShadows>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <ControlTheme x:Key="DialogCardTheme" TargetType="ContentControl">
+                <Setter Property="CornerRadius" Value="12" />
+                <Setter Property="BorderThickness" Value="2" />
+                <Setter Property="BorderBrush" Value="{DynamicResource DialogOutline}" />
+                <Setter Property="Background" Value="{DynamicResource DialogSurface}" />
+                <Setter Property="ClipToBounds" Value="False" />
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Grid>
+                            <Border CornerRadius="{TemplateBinding CornerRadius}"
+                                    Background="{TemplateBinding Background}" BoxShadow="{DynamicResource DialogShadow}"
+                                    IsHitTestVisible="False" />
+                            <!-- 内容沿描边内沿裁剪，矩形标题/底栏不会覆盖外圆角。 -->
+                            <Border x:Name="DialogClip" Margin="2" CornerRadius="10" ClipToBounds="True"
+                                    Background="{TemplateBinding Background}">
+                                <ContentPresenter Name="PART_ContentPresenter"
+                                                  Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+                            </Border>
+                            <Border x:Name="DialogOutlineLayer" CornerRadius="{TemplateBinding CornerRadius}"
+                                    BorderThickness="{TemplateBinding BorderThickness}" BorderBrush="{TemplateBinding BorderBrush}"
+                                    UseLayoutRounding="False" IsHitTestVisible="False" />
+                        </Grid>
+                    </ControlTemplate>
+                </Setter>
+            </ControlTheme>
+        </ResourceDictionary>
+    </Styles.Resources>
+
+    <Style Selector="Border.dialogHeader">
+        <Setter Property="Background" Value="{DynamicResource DialogSectionSurface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DialogDivider}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+        <Setter Property="Padding" Value="24,20" />
+    </Style>
+    <Style Selector="Border.dialogFooter">
+        <Setter Property="Background" Value="{DynamicResource DialogSectionSurface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DialogDivider}" />
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+        <Setter Property="Padding" Value="24,18" />
+    </Style>
+    <Style Selector="Border.dialogNote">
+        <Setter Property="Background" Value="{DynamicResource DialogSectionSurface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DialogDivider}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="14,12" />
+    </Style>
+    <Style Selector="TextBlock.dialogTitle">
+        <Setter Property="FontSize" Value="{DynamicResource TypeDialogTitle}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.dialogBody">
+        <Setter Property="FontSize" Value="{DynamicResource TypeDialogBody}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="LineSpacing" Value="5" />
+    </Style>
+    <Style Selector="TextBlock.dialogCaption">
+        <Setter Property="FontSize" Value="{DynamicResource TypeDialogCaption}" />
+        <Setter Property="Foreground" Value="{DynamicResource DialogSecondary}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="LineSpacing" Value="4" />
+    </Style>
+    <Style Selector="Border.dialogChip">
+        <Setter Property="Background" Value="{DynamicResource DialogSectionSurface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DialogDivider}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="10,7" />
+        <Setter Property="Margin" Value="0,0,8,8" />
+        <Setter Property="MaxWidth" Value="540" />
+    </Style>
+    <Style Selector="Border.dialogChip.hot">
+        <Setter Property="Background" Value="{DynamicResource DangerBg}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DangerBd}" />
+    </Style>
+
+    <!-- 独立模板隔离 Fluent / 全局 PART_ContentPresenter 的悬停颜色覆盖。 -->
+    <Style Selector="Button.dialogAction">
+        <Setter Property="Width" Value="{DynamicResource DialogActionWidth}" />
+        <Setter Property="MinWidth" Value="144" />
+        <Setter Property="MinHeight" Value="42" />
+        <Setter Property="Padding" Value="16,10" />
+        <Setter Property="FontSize" Value="{DynamicResource TypeDialogBody}" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        <Setter Property="Background" Value="{DynamicResource DialogSurface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DialogOutline}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FocusAdorner" Value="{x:Null}" />
+        <Setter Property="Transitions" Value="{x:Null}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid>
+                    <Border x:Name="DialogButtonSurface" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter x:Name="DialogButtonContent" Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}" Foreground="{TemplateBinding Foreground}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <Border x:Name="DialogButtonFocus" BorderBrush="{DynamicResource DialogFocus}" BorderThickness="2"
+                            CornerRadius="10" Margin="-3" IsVisible="False" IsHitTestVisible="False" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="Button.dialogAction /template/ Border#DialogButtonSurface">
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.12" />
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.12" />
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Button.dialogAction:pointerover /template/ Border#DialogButtonSurface">
+        <Setter Property="Background" Value="{DynamicResource DialogHover}" />
+    </Style>
+    <Style Selector="Button.dialogAction:pressed /template/ Border#DialogButtonSurface">
+        <Setter Property="Background" Value="{DynamicResource DialogPressed}" />
+    </Style>
+    <Style Selector="Button.dialogAction.emphasis">
+        <Setter Property="Background" Value="{DynamicResource DialogActionFill}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.dialogAction.emphasis:pointerover /template/ Border#DialogButtonSurface">
+        <Setter Property="Background" Value="{DynamicResource DialogActionHover}" />
+    </Style>
+    <Style Selector="Button.dialogAction.emphasis:pressed /template/ Border#DialogButtonSurface">
+        <Setter Property="Background" Value="{DynamicResource DialogActionPressed}" />
+    </Style>
+    <Style Selector="Button.dialogAction.destructive">
+        <Setter Property="Background" Value="{DynamicResource DialogDangerFill}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="White" />
+    </Style>
+    <Style Selector="Button.dialogAction.destructive:pointerover /template/ Border#DialogButtonSurface">
+        <Setter Property="Background" Value="{DynamicResource DialogDangerHover}" />
+    </Style>
+    <Style Selector="Button.dialogAction.destructive:pressed /template/ Border#DialogButtonSurface">
+        <Setter Property="Background" Value="{DynamicResource DialogDangerPressed}" />
+    </Style>
+    <Style Selector="Button.dialogAction:disabled">
+        <Setter Property="Opacity" Value="0.45" />
+    </Style>
+    <Style Selector="Button.dialogAction:focus-visible /template/ Border#DialogButtonFocus">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="Button.dialogAction.dialogClose">
+        <Setter Property="MinWidth" Value="36" />
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="Width" Value="36" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="Padding" Value="0" />
+        <!-- Transparent 的 RGB 为白色；透明端点沿用悬停色，避免 BrushTransition 中途泛白。 -->
+        <Setter Property="Background" Value="{DynamicResource DialogCloseRest}" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Window.nomotion Button.dialogAction /template/ Border#DialogButtonSurface">
+        <Setter Property="Transitions" Value="{x:Null}" />
+    </Style>
+</Styles>

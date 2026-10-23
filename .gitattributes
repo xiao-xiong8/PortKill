@@ -1,0 +1,7 @@
+* text=auto
+*.sh text eol=lf
+*.py text eol=lf
+*.ttf binary
+*.ico binary
+# Preserve upstream license text, including its original trailing spaces.
+src/PortKiller.Desktop/Assets/Fonts/*-OFL.txt text whitespace=-blank-at-eol

@@ -1,0 +1,824 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PortKiller.ViewModels"
+             xmlns:m="using:PortKiller.Models"
+             xmlns:svc="using:PortKiller.Services"
+             xmlns:views="using:PortKiller.Views"
+             x:Class="PortKiller.Features.Settings.SettingsView"
+             x:DataType="vm:MainViewModel">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="UpdateActionHoverText" Color="#245C8A" />
+                    <SolidColorBrush x:Key="UpdateActionHoverBackground" Color="#F3F7FB" />
+                    <SolidColorBrush x:Key="UpdateActionPressedBackground" Color="#EAF2FA" />
+                    <SolidColorBrush x:Key="UpdateActionHoverBorder" Color="#C4D4E4" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="UpdateActionHoverText" Color="#CEE3F7" />
+                    <SolidColorBrush x:Key="UpdateActionHoverBackground" Color="#1C2834" />
+                    <SolidColorBrush x:Key="UpdateActionPressedBackground" Color="#233345" />
+                    <SolidColorBrush x:Key="UpdateActionHoverBorder" Color="#435A70" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <UserControl.Styles>
+        <Style Selector="Button.updateAction">
+            <Setter Property="MinHeight" Value="42" />
+            <Setter Property="Width" Value="144" />
+            <Setter Property="MinWidth" Value="144" />
+            <Setter Property="Padding" Value="20,9" />
+            <Setter Property="Margin" Value="0,0,12,12" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="Transitions" Value="{x:Null}" />
+        </Style>
+        <Style Selector="Button.updateAction /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="{DynamicResource BgInput}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.14" />
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.14" />
+                    <BrushTransition Property="Foreground" Duration="0:0:0.14" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Button.updateAction:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource UpdateActionHoverBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource UpdateActionHoverBorder}" />
+            <Setter Property="Foreground" Value="{DynamicResource UpdateActionHoverText}" />
+        </Style>
+        <Style Selector="Button.updateAction:pressed">
+            <Setter Property="RenderTransform" Value="none" />
+        </Style>
+        <Style Selector="Button.updateAction:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource UpdateActionPressedBackground}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource UpdateActionHoverBorder}" />
+            <Setter Property="Foreground" Value="{DynamicResource UpdateActionHoverText}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="Button.updateAction.primary">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.updateAction.primary /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#0F6CBD" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.updateAction.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#1265AC" />
+            <Setter Property="Foreground" Value="#F5F9FF" />
+        </Style>
+        <Style Selector="Button.updateAction.primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#105E9F" />
+            <Setter Property="Foreground" Value="#F5F9FF" />
+        </Style>
+    </UserControl.Styles>
+<Grid
+                          RowDefinitions="Auto,Auto,*,Auto" Margin="26">
+
+                        <!-- ═══ 页头 ═══ -->
+                        <StackPanel Grid.Row="0" Spacing="5" Margin="0,0,0,16">
+                            <TextBlock Classes="pageTitle" Text="系统设置" />
+                            <TextBlock Classes="pageDesc"
+                                       Text="配置启动特权、外观排版与后台监控引擎 · 所有改动即时写入本地 config.json，无需重启即可生效。" />
+                        </StackPanel>
+
+                        <!-- ═══ 分组标签栏（34px 标签 + 底线，与设计稿一致） ═══ -->
+                        <StackPanel Grid.Row="1" Spacing="0" Margin="0,0,0,16">
+                            <StackPanel Orientation="Horizontal" Spacing="4" Height="34">
+                                <Button Classes="tab" Classes.active="{Binding IsSettingsTabStartup}"
+                                        Command="{Binding SetSettingsTabCommand}" CommandParameter="startup"
+                                        ToolTip.Tip="开机静默驻留与系统级权限">
+                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                        <Viewbox Width="14" Height="14" VerticalAlignment="Center">
+                                            <Canvas Width="24" Height="24">
+                                                <Path Classes="tabIc" Data="M12 3.2v8.3" />
+                                                <Path Classes="tabIc" Data="M8.2 7.4a5.6 5.6 0 1 0 7.6 0" />
+                                            </Canvas>
+                                        </Viewbox>
+                                        <TextBlock Text="启动与特权" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Button Classes="tab" Classes.active="{Binding IsSettingsTabAppearance}"
+                                        Command="{Binding SetSettingsTabCommand}" CommandParameter="appearance"
+                                        ToolTip.Tip="主题配色、字号与标题缩放">
+                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                        <Viewbox Width="14" Height="14" VerticalAlignment="Center">
+                                            <Canvas Width="24" Height="24">
+                                                <Path Classes="tabIc"
+                                                      Data="M12 3.6c0 0 5.6 5.5 5.6 9.2a5.6 5.6 0 0 1-11.2 0C6.4 9.1 12 3.6 12 3.6z" />
+                                            </Canvas>
+                                        </Viewbox>
+                                        <TextBlock Text="外观与排版" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Button Classes="tab" Classes.active="{Binding IsSettingsTabFonts}"
+                                        Command="{Binding SetSettingsTabCommand}" CommandParameter="fonts"
+                                        ToolTip.Tip="界面字体与数据字体">
+                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                        <Viewbox Width="14" Height="14" VerticalAlignment="Center">
+                                            <Canvas Width="24" Height="24">
+                                                <Path Classes="tabIc" Data="M4.2 19L10 5.2h1.9L17.6 19" />
+                                                <Path Classes="tabIc" Data="M6.9 13.8h8.2" />
+                                            </Canvas>
+                                        </Viewbox>
+                                        <TextBlock Text="字体" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+
+                                <Button Classes="tab" Classes.active="{Binding IsSettingsTabEngine}"
+                                        Command="{Binding SetSettingsTabCommand}" CommandParameter="engine"
+                                        ToolTip.Tip="后台实时监听与探测刷新频率">
+                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                        <Viewbox Width="14" Height="14" VerticalAlignment="Center">
+                                            <Canvas Width="24" Height="24">
+                                                <Path Classes="tabIc"
+                                                      Data="M3.4 12.6h3.9l2.4-6.1 3.6 12.1 2.6-6h4.7" />
+                                            </Canvas>
+                                        </Viewbox>
+                                        <TextBlock Text="监控引擎" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                            <Border Height="1" Background="{DynamicResource BorderSoft}" />
+                        </StackPanel>
+
+                        <!-- ═══ 分组内容（每组一屏；窗口过矮时由 ScrollViewer 兜底，而非裁切） ═══ -->
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <Grid RowDefinitions="Auto,Auto">
+
+                                <Border x:Name="ApplicationUpdateCard" Grid.Row="1" Classes="card" Margin="0,12,0,0" Padding="20,18"
+                                        IsVisible="{Binding IsSettingsTabEngine}">
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Text="应用更新" FontSize="{DynamicResource TypeCard}"
+                                                   FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
+                                        <TextBlock Text="{Binding ApplicationVersion}" Foreground="{DynamicResource TextSecondary}" />
+                                        <TextBlock Text="{Binding UpdateStatus}" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource TextMuted}" />
+                                        <WrapPanel Margin="0,6,-12,-12">
+                                            <Button Classes="updateAction primary" Content="打开更新窗口" Command="{Binding OpenUpdatesCommand}" />
+                                            <Button Classes="updateAction" Content="检查更新" Command="{Binding CheckForUpdatesCommand}" />
+                                            <Button Classes="updateAction" Content="重启并安装…" Command="{Binding RequestInstallUpdateCommand}"
+                                                    IsVisible="{Binding IsUpdateReady}" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- ───────── 分组 1 · 启动与特权 ───────── -->
+                                <Border Classes="card" ClipToBounds="True" VerticalAlignment="Top"
+                                        IsVisible="{Binding IsSettingsTabStartup}">
+                                    <StackPanel>
+                                        <StackPanel Margin="18,14,18,12" Spacing="3">
+                                            <TextBlock Text="启动与特权" FontSize="{DynamicResource TypeCard}"
+                                                       FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="开机静默驻留与系统级权限控制 · 两项均写入注册表与启动参数"
+                                                       FontSize="{DynamicResource TypeCaption}"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                        <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                        <Grid Height="64" Margin="18,0" ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                                                <TextBlock Text="开机自动启动" FontSize="{DynamicResource TypeBody}"
+                                                           FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
+                                                <TextBlock Text="写入注册表 Run 键 · 登录后静默启动到托盘"
+                                                           FontSize="{DynamicResource TypeCaption}"
+                                                           Foreground="{DynamicResource TextMuted}" />
+                                            </StackPanel>
+                                            <ToggleButton Grid.Column="1" Theme="{StaticResource AppSwitch}"
+                                                          VerticalAlignment="Center"
+                                                          IsChecked="{Binding IsAutoStart, Mode=TwoWay}"
+                                                          ToolTip.Tip="开机自动启动（写入 HKCU Run 键）" />
+                                        </Grid>
+
+                                        <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                        <Grid Height="64" Margin="18,0" ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                                                <TextBlock Text="始终以管理员权限启动" FontSize="{DynamicResource TypeBody}"
+                                                           FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
+                                                <TextBlock Text="每次启动自动请求 UAC 提权 · 获得对特权端口的抹杀控制权"
+                                                           FontSize="{DynamicResource TypeCaption}"
+                                                           Foreground="{DynamicResource TextMuted}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10"
+                                                        VerticalAlignment="Center">
+                                                <Button Classes="soft" Height="24" Padding="9,0"
+                                                        Content="了解两种模式差异"
+                                                        Command="{Binding ExplainAdminModesCommand}"
+                                                        ToolTip.Tip="并排对比管理员与普通用户的能力边界" />
+                                                <ToggleButton Theme="{StaticResource AppSwitch}"
+                                                              IsChecked="{Binding AlwaysRunAsAdmin, Mode=TwoWay}"
+                                                              ToolTip.Tip="始终以管理员权限启动（每次启动请求 UAC 提权）" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                        <StackPanel Margin="18,14" Spacing="10">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <StackPanel Grid.Column="0" Spacing="3" Margin="0,0,16,0">
+                                                    <TextBlock Text="当前权限状态" FontSize="{DynamicResource TypeBody}"
+                                                               FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
+                                                    <TextBlock Text="{Binding PrivilegeStatusDetail}"
+                                                               FontSize="{DynamicResource TypeCaption}"
+                                                               Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <Border Grid.Column="1" Classes="pill" VerticalAlignment="Center"
+                                                        Classes.listen="{Binding PrivilegeStatusIsAdmin}"
+                                                        Classes.idle="{Binding !PrivilegeStatusIsAdmin}">
+                                                    <TextBlock Text="{Binding PrivilegeStatusText}"
+                                                               FontFamily="{DynamicResource AppFontUi}"
+                                                               FontSize="{DynamicResource TypeCaption}" />
+                                                </Border>
+                                            </Grid>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- ───────── 分组 2 · 外观与排版（设置列 + 实时预览卡） ───────── -->
+                                <Grid ColumnDefinitions="*,300" ColumnSpacing="16"
+                                      IsVisible="{Binding IsSettingsTabAppearance}">
+
+                                    <!-- 左：设置卡 -->
+                                    <Border Grid.Column="0" Classes="card" ClipToBounds="True"
+                                            MinHeight="560" VerticalAlignment="Top">
+                                        <StackPanel>
+                                            <StackPanel Margin="18,14,18,12" Spacing="3">
+                                                <TextBlock Text="外观与排版" FontSize="{DynamicResource TypeCard}"
+                                                           FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
+                                                <TextBlock Text="主题配色、界面字号与标题缩放 · 全部实时生效并写入 config.json"
+                                                           FontSize="{DynamicResource TypeCaption}"
+                                                           Foreground="{DynamicResource TextMuted}" />
+                                            </StackPanel>
+                                            <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                            <!-- 主题配色方案 -->
+                                            <Grid Height="64" Margin="18,0" ColumnDefinitions="*,Auto">
+                                                <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                                                    <TextBlock Text="主题配色方案" FontSize="{DynamicResource TypeBody}"
+                                                               FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
+                                                    <TextBlock Text="默认跟随系统 / 主机实时切换，也可锁定纯深色或纯浅色"
+                                                               FontSize="{DynamicResource TypeCaption}"
+                                                               Foreground="{DynamicResource TextMuted}" />
+                                                </StackPanel>
+                                                <Border Grid.Column="1" Classes="segment tall" Width="246"
+                                                        VerticalAlignment="Center">
+                                                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="2">
+                                                        <Button Grid.Column="0" Classes="segChip"
+                                                                Classes.active="{Binding IsThemeSystem}"
+                                                                Command="{Binding SetThemeCommand}" CommandParameter="跟随系统"
+                                                                Content="跟随系统" />
+                                                        <Button Grid.Column="1" Classes="segChip"
+                                                                Classes.active="{Binding IsThemeDark}"
+                                                                Command="{Binding SetThemeCommand}" CommandParameter="深色模式"
+                                                                Content="深色" />
+                                                        <Button Grid.Column="2" Classes="segChip"
+                                                                Classes.active="{Binding IsThemeLight}"
+                                                                Command="{Binding SetThemeCommand}" CommandParameter="浅色模式"
+                                                                Content="浅色" />
+                                                    </Grid>
+                                                </Border>
+                                            </Grid>
+
+                                            <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                            <!-- 界面字号：连续轴 + 预设吸附 -->
+                                            <StackPanel Margin="18,14,18,16" Spacing="12">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <StackPanel Grid.Column="0" Spacing="3" Margin="0,0,16,0">
+                                                        <TextBlock Text="界面字号" FontSize="{DynamicResource TypeBody}"
+                                                                   FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
+                                                        <TextBlock Text="拖动即时预览 · 作用于标题 / 正文 / 辅助说明；数据等宽字体走独立轴，表格列宽保持稳定"
+                                                                   FontSize="{DynamicResource TypeCaption}"
+                                                                   Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                                                                VerticalAlignment="Center">
+                                                        <Border Classes="badge">
+                                                            <TextBlock Text="{Binding UiFontSizeText}"
+                                                                       FontFamily="{DynamicResource AppFontMono}" />
+                                                        </Border>
+                                                        <Border Classes="badge ok"
+                                                                IsVisible="{Binding TypographyWithinBudget}">
+                                                            <TextBlock Text="{Binding TypographyCostText}"
+                                                                       FontFamily="{DynamicResource AppFontMono}" />
+                                                        </Border>
+                                                        <Border Classes="badge alert"
+                                                                IsVisible="{Binding !TypographyWithinBudget}">
+                                                            <TextBlock Text="{Binding TypographyCostText}"
+                                                                       FontFamily="{DynamicResource AppFontMono}" />
+                                                        </Border>
+                                                    </StackPanel>
+                                                </Grid>
+
+                                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                                    <TextBlock Grid.Column="0" Text="10"
+                                                               FontFamily="{DynamicResource AppFontMono}"
+                                                               FontSize="{DynamicResource TypeTiny}"
+                                                               Foreground="{DynamicResource TextDim}"
+                                                               VerticalAlignment="Center" />
+                                                    <Slider Grid.Column="1" Classes="typescale"
+                                                            Minimum="10" Maximum="16" TickFrequency="0.5"
+                                                            IsSnapToTickEnabled="True"
+                                                            Value="{Binding UiFontSize, Mode=TwoWay}"
+                                                            ToolTip.Tip="界面字号 10 – 16 px · 0.5 步进" />
+                                                    <TextBlock Grid.Column="2" Text="16"
+                                                               FontFamily="{DynamicResource AppFontMono}"
+                                                               FontSize="{DynamicResource TypeTiny}"
+                                                               Foreground="{DynamicResource TextDim}"
+                                                               VerticalAlignment="Center" />
+                                                </Grid>
+
+                                                <!-- 预设吸附：解决「纯连续滑块不知道该停哪」 -->
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <Button Classes="chip" Classes.active="{Binding IsUiPresetCompact}"
+                                                            Command="{Binding SetUiFontSizePresetCommand}" CommandParameter="11">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <TextBlock Text="紧凑" FontSize="{DynamicResource TypeCaption}" />
+                                                            <TextBlock Text="11" FontFamily="{DynamicResource AppFontMono}"
+                                                                       FontSize="{DynamicResource TypeMicro}" Opacity="0.7" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Classes="chip" Classes.active="{Binding IsUiPresetStandard}"
+                                                            Command="{Binding SetUiFontSizePresetCommand}" CommandParameter="12">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <TextBlock Text="标准" FontSize="{DynamicResource TypeCaption}" />
+                                                            <TextBlock Text="12" FontFamily="{DynamicResource AppFontMono}"
+                                                                       FontSize="{DynamicResource TypeMicro}" Opacity="0.7" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Classes="chip" Classes.active="{Binding IsUiPresetComfort}"
+                                                            Command="{Binding SetUiFontSizePresetCommand}" CommandParameter="13">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <TextBlock Text="舒适" FontSize="{DynamicResource TypeCaption}" />
+                                                            <TextBlock Text="13" FontFamily="{DynamicResource AppFontMono}"
+                                                                       FontSize="{DynamicResource TypeMicro}" Opacity="0.7" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Classes="chip" Classes.active="{Binding IsUiPresetLarge}"
+                                                            Command="{Binding SetUiFontSizePresetCommand}" CommandParameter="14">
+                                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                                            <TextBlock Text="大号" FontSize="{DynamicResource TypeCaption}" />
+                                                            <TextBlock Text="14" FontFamily="{DynamicResource AppFontMono}"
+                                                                       FontSize="{DynamicResource TypeMicro}" Opacity="0.7" />
+                                                        </StackPanel>
+                                                    </Button>
+                                                </StackPanel>
+                                            </StackPanel>
+
+                                            <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                            <!-- 数据字号：与界面字号解耦的第二条轴 -->
+                                            <StackPanel Margin="18,14,18,16" Spacing="12">
+                                                <Grid ColumnDefinitions="*,Auto">
+                                                    <StackPanel Grid.Column="0" Spacing="3" Margin="0,0,16,0">
+                                                        <TextBlock Text="数据字号" FontSize="{DynamicResource TypeBody}"
+                                                                   FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
+                                                        <TextBlock Text="仅作用于数据文字（端口号 / PID / 本地地址），默认 Inter 等宽数字，与界面字号互不干扰"
+                                                                   FontSize="{DynamicResource TypeCaption}"
+                                                                   Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                    <Border Grid.Column="1" Classes="badge" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding MonoFontSizeText}"
+                                                                   FontFamily="{DynamicResource AppFontMono}" />
+                                                    </Border>
+                                                </Grid>
+
+                                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                                    <TextBlock Grid.Column="0" Text="10"
+                                                               FontFamily="{DynamicResource AppFontMono}"
+                                                               FontSize="{DynamicResource TypeTiny}"
+                                                               Foreground="{DynamicResource TextDim}"
+                                                               VerticalAlignment="Center" />
+                                                    <Slider Grid.Column="1" Classes="typescale"
+                                                            Minimum="10" Maximum="14" TickFrequency="0.5"
+                                                            IsSnapToTickEnabled="True"
+                                                            Value="{Binding MonoFontSize, Mode=TwoWay}"
+                                                            ToolTip.Tip="数据字号 10 – 14 px · 0.5 步进" />
+                                                    <TextBlock Grid.Column="2" Text="14"
+                                                               FontFamily="{DynamicResource AppFontMono}"
+                                                               FontSize="{DynamicResource TypeTiny}"
+                                                               Foreground="{DynamicResource TextDim}"
+                                                               VerticalAlignment="Center" />
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                            <!-- 标题跟随正文缩放 -->
+                                            <Grid Height="64" Margin="18,0" ColumnDefinitions="*,Auto">
+                                                <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center"
+                                                            Margin="0,0,16,0">
+                                                    <TextBlock Text="标题跟随正文缩放" FontSize="{DynamicResource TypeBody}"
+                                                               FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
+                                                    <TextBlock Text="关闭后页面主标题与统计数字锁定设计稿原始档位（20 / 19），正文仍可自由缩放"
+                                                               FontSize="{DynamicResource TypeCaption}"
+                                                               Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <ToggleButton Grid.Column="1" Theme="{StaticResource AppSwitch}"
+                                                              VerticalAlignment="Center"
+                                                              IsChecked="{Binding ScaleHeadings, Mode=TwoWay}"
+                                                              ToolTip.Tip="标题与统计数字是否跟随界面字号缩放" />
+                                            </Grid>
+
+                                            <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                            <!-- 减少界面动效（WCAG 2.3：尊重动态效果偏好） -->
+                                            <Grid Height="64" Margin="18,0" ColumnDefinitions="*,Auto">
+                                                <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center"
+                                                            Margin="0,0,16,0">
+                                                    <TextBlock Text="减少界面动效" FontSize="{DynamicResource TypeBody}"
+                                                               FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
+                                                    <TextBlock Text="关闭悬浮过渡、开关滑块位移与 Toast 淡入；默认沿用系统「显示动画」偏好"
+                                                               FontSize="{DynamicResource TypeCaption}"
+                                                               Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <ToggleButton Grid.Column="1" Theme="{StaticResource AppSwitch}"
+                                                              VerticalAlignment="Center"
+                                                              IsChecked="{Binding ReduceMotion, Mode=TwoWay}"
+                                                              ToolTip.Tip="关闭界面过渡动画" />
+                                            </Grid>
+
+                                            <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                            <!-- 仅重排版的局部复位（全局复位在页脚） -->
+                                            <Grid Height="56" Margin="18,0" ColumnDefinitions="*,Auto">
+                                                <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center"
+                                                            Margin="0,0,16,0">
+                                                    <TextBlock Text="恢复设计稿默认字号" FontSize="{DynamicResource TypeBody}"
+                                                               FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
+                                                    <TextBlock Text="界面 12 / 数据 12 · 标题跟随正文 · 内置字体栈"
+                                                               FontSize="{DynamicResource TypeCaption}"
+                                                               Foreground="{DynamicResource TextMuted}" />
+                                                </StackPanel>
+                                                <Button Grid.Column="1" Classes="soft" Height="28" Padding="11,0"
+                                                        Content="恢复字号与字体"
+                                                        Command="{Binding ResetTypographyCommand}" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- 右：实时预览卡（本轮新增的关键结构） -->
+                                    <Border Grid.Column="1" Classes="card" ClipToBounds="True"
+                                            MinHeight="560" VerticalAlignment="Top">
+                                        <StackPanel>
+                                            <Grid Margin="16,14,16,12" ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0" Text="实时预览"
+                                                           FontSize="{DynamicResource TypeCard}"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextPrimary}"
+                                                           VerticalAlignment="Center" />
+                                                <Border Grid.Column="1" Classes="pill listen">
+                                                    <TextBlock Text="实时" FontFamily="{DynamicResource AppFontUi}"
+                                                               FontSize="{DynamicResource TypeMicro}" />
+                                                </Border>
+                                            </Grid>
+                                            <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                            <StackPanel Margin="16" Spacing="14">
+                                                <!-- 排版三段：标题 / 正文 / 辅助（跟随令牌即时变化） -->
+                                                <StackPanel Spacing="8">
+                                                    <TextBlock Text="标题 / 正文 / 辅助"
+                                                               FontSize="{DynamicResource TypeMicro}"
+                                                               FontWeight="Medium"
+                                                               Foreground="{DynamicResource TextDim}" />
+                                                    <StackPanel Spacing="6">
+                                                        <TextBlock Text="系统设置"
+                                                                   FontSize="{DynamicResource TypeTitle}"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource TextPrimary}" />
+                                                        <TextBlock Text="端口监控 · 共 717 个连接"
+                                                                   FontSize="{DynamicResource TypeSection}"
+                                                                   Foreground="{DynamicResource TextTertiary}" />
+                                                        <TextBlock Text="拖动左侧滑块，此处即时变化"
+                                                                   FontSize="{DynamicResource TypeCaption}"
+                                                                   Foreground="{DynamicResource TextMuted}" />
+                                                    </StackPanel>
+                                                </StackPanel>
+
+                                                <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                                <!-- 等宽数据：只受数据字号轴驱动 -->
+                                                <StackPanel Spacing="8">
+                                                    <TextBlock Text="数据文字"
+                                                               FontSize="{DynamicResource TypeMicro}"
+                                                               FontWeight="Medium"
+                                                               Foreground="{DynamicResource TextDim}" />
+                                                    <StackPanel Spacing="6">
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <TextBlock Text="8080"
+                                                                       FontSize="{DynamicResource TypeMonoPort}"
+                                                                       FontFamily="{DynamicResource AppFontMono}"
+                                                                       Foreground="{DynamicResource SvcWebFg}" />
+                                                            <TextBlock Text="·" FontSize="{DynamicResource TypeMono}"
+                                                                       Foreground="{DynamicResource TextFaint}"
+                                                                       VerticalAlignment="Center" />
+                                                            <TextBlock Text="PID 23380"
+                                                                       FontSize="{DynamicResource TypeMono}"
+                                                                       FontFamily="{DynamicResource AppFontMono}"
+                                                                       Foreground="{DynamicResource TextTertiary}"
+                                                                       VerticalAlignment="Center" />
+                                                        </StackPanel>
+                                                        <TextBlock Text="127.0.0.1:8080"
+                                                                   FontSize="{DynamicResource TypeMono}"
+                                                                   FontFamily="{DynamicResource AppFontMono}"
+                                                                   Foreground="{DynamicResource TextMuted}" />
+                                                    </StackPanel>
+                                                </StackPanel>
+
+                                                <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                                <!-- 语义色：服务分类（随主题自动降阶） -->
+                                                <StackPanel Spacing="8">
+                                                    <TextBlock Text="语义色 · 服务分类"
+                                                               FontSize="{DynamicResource TypeMicro}"
+                                                               FontWeight="Medium"
+                                                               Foreground="{DynamicResource TextDim}" />
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <Border Width="26" Height="18" CornerRadius="4"
+                                                                Background="{DynamicResource SvcWebFg}" />
+                                                        <Border Width="26" Height="18" CornerRadius="4"
+                                                                Background="{DynamicResource SvcDbFg}" />
+                                                        <Border Width="26" Height="18" CornerRadius="4"
+                                                                Background="{DynamicResource SvcDevFg}" />
+                                                        <Border Width="26" Height="18" CornerRadius="4"
+                                                                Background="{DynamicResource SvcNetFg}" />
+                                                        <Border Width="26" Height="18" CornerRadius="4"
+                                                                Background="{DynamicResource SvcSysFg}" />
+                                                        <Border Width="26" Height="18" CornerRadius="4"
+                                                                Background="{DynamicResource SvcAppFg}" />
+                                                    </StackPanel>
+                                                </StackPanel>
+
+                                                <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                                <!-- 当前生效值 -->
+                                                <StackPanel Spacing="8">
+                                                    <TextBlock Text="当前生效值"
+                                                               FontSize="{DynamicResource TypeMicro}"
+                                                               FontWeight="Medium"
+                                                               Foreground="{DynamicResource TextDim}" />
+                                                    <WrapPanel Orientation="Horizontal">
+                                                        <Border Classes="badge" Margin="0,0,6,6">
+                                                            <TextBlock Text="{Binding SelectedTheme, StringFormat='主题 {0}'}" />
+                                                        </Border>
+                                                        <Border Classes="badge" Margin="0,0,6,6">
+                                                            <TextBlock Text="{Binding UiFontSizeText, StringFormat='界面 {0}'}" />
+                                                        </Border>
+                                                        <Border Classes="badge" Margin="0,0,6,6">
+                                                            <TextBlock Text="{Binding MonoFontSizeText, StringFormat='数据 {0}'}" />
+                                                        </Border>
+                                                        <Border Classes="badge" Margin="0,0,6,6">
+                                                            <TextBlock Text="{Binding HeadingScaleText}" />
+                                                        </Border>
+                                                    </WrapPanel>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+
+                                <!-- ───────── 分组 3 · 字体（独立成组，双列各自带搜索与实时预览） ───────── -->
+                                <Border Classes="card" ClipToBounds="True" VerticalAlignment="Top"
+                                        IsVisible="{Binding IsSettingsTabFonts}">
+                                    <StackPanel>
+                                        <StackPanel Margin="18,14,18,12" Spacing="3">
+                                            <TextBlock Text="字体" FontSize="{DynamicResource TypeCard}"
+                                                       FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="默认中文 Noto Sans SC、英文与数字 Inter · 字体已随应用内嵌，选中其他字体即刻生效"
+                                                       FontSize="{DynamicResource TypeCaption}"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                        <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                        <Grid Margin="18,14,18,16" ColumnDefinitions="*,*" ColumnSpacing="18">
+                                            <!-- 界面字体 -->
+                                            <StackPanel Grid.Column="0" Spacing="8">
+                                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="界面字体"
+                                                               FontSize="{DynamicResource TypeBody}"
+                                                               FontWeight="Medium"
+                                                               Foreground="{DynamicResource TextSecondary}"
+                                                               VerticalAlignment="Center" />
+                                                    <TextBlock Grid.Column="2" Text="{Binding UiFontDisplay}"
+                                                               FontSize="{DynamicResource TypeCaption}"
+                                                               Foreground="{DynamicResource AccentFg}"
+                                                               VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis" MaxWidth="220" />
+                                                </Grid>
+                                                <TextBox Text="{Binding UiFontSearchText, Mode=TwoWay}" Height="32"
+                                                         PlaceholderText="搜索字体…"
+                                                         FontSize="{DynamicResource TypeCaption}" />
+                                                <Border Classes="fontList" Height="300">
+                                                    <Grid>
+                                                        <ListBox Classes="fontPick"
+                                                                 IsVisible="{Binding !IsFontListLoading}"
+                                                                 ItemsSource="{Binding FilteredUiFonts}"
+                                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                                 SelectedItem="{Binding SelectedUiFontOption, Mode=TwoWay}">
+                                                            <ListBox.ItemTemplate>
+                                                                <DataTemplate x:DataType="svc:FontOption">
+                                                                    <TextBlock Text="{Binding DisplayName}"
+                                                                               FontFamily="{Binding Preview}"
+                                                                               FontSize="{DynamicResource TypeBody}"
+                                                                               Foreground="{DynamicResource TextSecondary}"
+                                                                               VerticalAlignment="Center"
+                                                                               TextTrimming="CharacterEllipsis" />
+                                                                </DataTemplate>
+                                                            </ListBox.ItemTemplate>
+                                                        </ListBox>
+                                                        <TextBlock Text="正在枚举本机字体…"
+                                                                   IsVisible="{Binding IsFontListLoading}"
+                                                                   FontSize="{DynamicResource TypeCaption}"
+                                                                   Foreground="{DynamicResource TextMuted}"
+                                                                   HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Border>
+                                            </StackPanel>
+
+                                            <!-- 数据等宽字体 -->
+                                            <StackPanel Grid.Column="1" Spacing="8">
+                                                <Grid ColumnDefinitions="Auto,*,Auto">
+                                                    <TextBlock Grid.Column="0" Text="数据字体"
+                                                               FontSize="{DynamicResource TypeBody}"
+                                                               FontWeight="Medium"
+                                                               Foreground="{DynamicResource TextSecondary}"
+                                                               VerticalAlignment="Center" />
+                                                    <TextBlock Grid.Column="2" Text="{Binding MonoFontDisplay}"
+                                                               FontSize="{DynamicResource TypeCaption}"
+                                                               Foreground="{DynamicResource AccentFg}"
+                                                               VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis" MaxWidth="220" />
+                                                </Grid>
+                                                <TextBox Text="{Binding MonoFontSearchText, Mode=TwoWay}" Height="32"
+                                                         PlaceholderText="搜索数据字体…"
+                                                         FontSize="{DynamicResource TypeCaption}" />
+                                                <Border Classes="fontList" Height="300">
+                                                    <Grid>
+                                                        <ListBox Classes="fontPick"
+                                                                 IsVisible="{Binding !IsFontListLoading}"
+                                                                 ItemsSource="{Binding FilteredMonoFonts}"
+                                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                                 SelectedItem="{Binding SelectedMonoFontOption, Mode=TwoWay}">
+                                                            <ListBox.ItemTemplate>
+                                                                <DataTemplate x:DataType="svc:FontOption">
+                                                                    <TextBlock Text="{Binding DisplayName}"
+                                                                               FontFamily="{Binding Preview}"
+                                                                               FontSize="{DynamicResource TypeMono}"
+                                                                               Foreground="{DynamicResource TextSecondary}"
+                                                                               VerticalAlignment="Center"
+                                                                               TextTrimming="CharacterEllipsis" />
+                                                                </DataTemplate>
+                                                            </ListBox.ItemTemplate>
+                                                        </ListBox>
+                                                        <TextBlock Text="正在枚举本机字体…"
+                                                                   IsVisible="{Binding IsFontListLoading}"
+                                                                   FontSize="{DynamicResource TypeCaption}"
+                                                                   Foreground="{DynamicResource TextMuted}"
+                                                                   HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </Border>
+                                            </StackPanel>
+                                        </Grid>
+                                        <Border x:Name="FontLicenseInfo" BorderBrush="{DynamicResource BorderSoft}" BorderThickness="0,1,0,0" Padding="18,16">
+                                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="20">
+                                                <StackPanel Spacing="5" VerticalAlignment="Center">
+                                                    <TextBlock Text="内嵌字体说明" FontSize="14" FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
+                                                    <TextBlock Text="查看 Noto Sans SC 与 Inter 的官方来源及完整授权原文。" FontSize="12"
+                                                               Foreground="{DynamicResource TextTertiary}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                                <Button x:Name="FontLicensesButton" Grid.Column="1" Classes="updateAction" Content="查看字体来源与授权" Click="OnShowFontLicenses"
+                                                        Width="208" MinWidth="208" Margin="0" Padding="18,9" VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- ───────── 分组 4 · 监控引擎 ───────── -->
+                                <Border Classes="card" ClipToBounds="True" VerticalAlignment="Top"
+                                        IsVisible="{Binding IsSettingsTabEngine}">
+                                    <StackPanel>
+                                        <StackPanel Margin="18,14,18,12" Spacing="3">
+                                            <TextBlock Text="监控引擎" FontSize="{DynamicResource TypeCard}"
+                                                       FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="后台实时监听策略与探测刷新频率 · 并附最近一次扫描结果"
+                                                       FontSize="{DynamicResource TypeCaption}"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                        <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                        <Grid Height="64" Margin="18,0" ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center"
+                                                        Margin="0,0,16,0">
+                                                <TextBlock Text="后台实时监听" FontSize="{DynamicResource TypeBody}"
+                                                           FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
+                                                <TextBlock Text="FNV-1a 拓扑指纹侦测 · 无变动时保持零开销、零重绘"
+                                                           FontSize="{DynamicResource TypeCaption}"
+                                                           Foreground="{DynamicResource TextMuted}" />
+                                            </StackPanel>
+                                            <ToggleButton Grid.Column="1" Theme="{StaticResource AppSwitch}"
+                                                          VerticalAlignment="Center"
+                                                          IsChecked="{Binding IsAutoRefresh, Mode=TwoWay}"
+                                                          ToolTip.Tip="后台实时监听网络表变动" />
+                                        </Grid>
+
+                                        <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                        <Grid Height="64" Margin="18,0" ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center"
+                                                        Margin="0,0,16,0">
+                                                <TextBlock Text="探测刷新频率" FontSize="{DynamicResource TypeBody}"
+                                                           FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
+                                                <TextBlock Text="后台轮询线程间隔 · 越低越灵敏，CPU 占用略微上升"
+                                                           FontSize="{DynamicResource TypeCaption}"
+                                                           Foreground="{DynamicResource TextMuted}" />
+                                            </StackPanel>
+                                            <Border Grid.Column="1" Classes="segment tall" Width="206"
+                                                    VerticalAlignment="Center">
+                                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="2">
+                                                    <Button Grid.Column="0" Classes="segChip"
+                                                            Classes.active="{Binding IsInterval1}"
+                                                            Command="{Binding SetIntervalCommand}" CommandParameter="1 秒"
+                                                            Content="1 秒" />
+                                                    <Button Grid.Column="1" Classes="segChip"
+                                                            Classes.active="{Binding IsInterval2}"
+                                                            Command="{Binding SetIntervalCommand}" CommandParameter="2 秒"
+                                                            Content="2 秒" />
+                                                    <Button Grid.Column="2" Classes="segChip"
+                                                            Classes.active="{Binding IsInterval3}"
+                                                            Command="{Binding SetIntervalCommand}" CommandParameter="3 秒"
+                                                            Content="3 秒" />
+                                                </Grid>
+                                            </Border>
+                                        </Grid>
+
+                                        <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                                        <Grid Height="64" Margin="18,0" ColumnDefinitions="*,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center"
+                                                        Margin="0,0,16,0">
+                                                <TextBlock Text="最近一次扫描" FontSize="{DynamicResource TypeBody}"
+                                                           FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
+                                                <TextBlock Text="调整刷新频率前，先看这里的耗时是否稳定"
+                                                           FontSize="{DynamicResource TypeCaption}"
+                                                           Foreground="{DynamicResource TextMuted}" />
+                                            </StackPanel>
+                                            <Border Grid.Column="1" Classes="pill listen" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding LastScanSummary}"
+                                                           FontFamily="{DynamicResource AppFontMono}"
+                                                           FontSize="{DynamicResource TypeCaption}" />
+                                            </Border>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </ScrollViewer>
+
+                        <!-- ═══ 页脚：配置路径 + 自动保存状态 + 全局复位 ═══ -->
+                        <StackPanel Grid.Row="3" Spacing="16" Margin="0,16,0,0">
+                            <Border Height="1" Background="{DynamicResource BorderSoft}" />
+
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="配置文件（零反射 · Native AOT 兼容）"
+                                               FontSize="{DynamicResource TypeCaption}"
+                                               Foreground="{DynamicResource TextMuted}" />
+                                    <TextBlock Text="%LocalAppData%\PortKiller\config.json"
+                                               FontSize="{DynamicResource TypeMonoCaption}"
+                                               FontFamily="{DynamicResource AppFontMono}"
+                                               Foreground="{DynamicResource TextTertiary}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"
+                                            VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                        <Ellipse Width="6" Height="6" Fill="{DynamicResource OkFg}"
+                                                 VerticalAlignment="Center" />
+                                        <TextBlock Text="已自动保存" FontSize="{DynamicResource TypeCaption}"
+                                                   Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <Button Classes="tool" Height="30" Padding="12,0" Content="恢复默认设置"
+                                            Command="{Binding RestoreDefaultsCommand}"
+                                            ToolTip.Tip="主题跟随系统 · 字号 12 · 探测间隔 2 秒" />
+                                    <Button Classes="tool" Height="30" Padding="12,0" Content="打开配置文件"
+                                            Command="{Binding OpenConfigFolderCommand}"
+                                            ToolTip.Tip="在资源管理器中定位 config.json" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+</UserControl>

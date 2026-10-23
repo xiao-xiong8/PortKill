@@ -1,0 +1,778 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:PortKiller.ViewModels"
+             xmlns:m="using:PortKiller.Models"
+             xmlns:svc="using:PortKiller.Services"
+             xmlns:views="using:PortKiller.Views"
+             x:Class="PortKiller.Features.Ports.PortsView"
+             x:DataType="vm:MainViewModel">
+<Grid RowDefinitions="Auto,*" >
+
+                        <!-- 工具栏 + 统计 + 表格（批量条已移入表格卡片顶部） -->
+                        <Grid Grid.Row="0" RowDefinitions="Auto" Margin="18,14,18,0">
+                            <Grid Grid.Row="0" RowDefinitions="Auto,Auto" RowSpacing="14">
+
+                                <!-- ① 工具栏 -->
+                                <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="9">
+                                    <Border Grid.Column="0" Classes="search" Width="330">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                            <Viewbox Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center">
+                                                <Canvas Width="24" Height="24">
+                                                    <Path Classes="ic" StrokeThickness="2"
+                                                          Stroke="{DynamicResource AccentFill}"
+                                                          Data="M17.3 10.5a6.8 6.8 0 1 1-13.6 0 6.8 6.8 0 0 1 13.6 0Z" />
+                                                    <Path Classes="ic" StrokeThickness="2"
+                                                          Stroke="{DynamicResource AccentFill}"
+                                                          Data="M15.6 15.6 20.5 20.5" />
+                                                </Canvas>
+                                            </Viewbox>
+                                            <TextBox Grid.Column="1" Classes="flat" x:Name="SearchBox"
+                                                     Text="{Binding SearchText, Mode=TwoWay}"
+                                                     PlaceholderText="搜索端口 / 进程名 / PID"
+                                                     VerticalContentAlignment="Center" />
+                                            <Button Grid.Column="2" Classes="bare" Width="16" Height="16"
+                                                    Click="OnClearSearch"
+                                                    IsVisible="{Binding SearchText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                                    VerticalAlignment="Center" Padding="0">
+                                                <Viewbox Width="14" Height="14">
+                                                    <Canvas Width="24" Height="24">
+                                                        <Path Classes="icf" Fill="{DynamicResource TextFaint}"
+                                                              Data="M12 3.6a8.4 8.4 0 1 1 0 16.8 8.4 8.4 0 0 1 0-16.8Z" />
+                                                        <Path Classes="ic" Stroke="{DynamicResource TextTertiary}" StrokeThickness="2"
+                                                              Data="M9.4 9.4l5.2 5.2M14.6 9.4l-5.2 5.2" />
+                                                    </Canvas>
+                                                </Viewbox>
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+
+                                    <ComboBox Grid.Column="1" Width="134" Height="36" CornerRadius="6"
+                                              FontSize="{DynamicResource TypeBody}"
+                                              ItemsSource="{Binding CategoryOptions}"
+                                              SelectedItem="{Binding SelectedCategory, Mode=TwoWay}" />
+
+                                    <ComboBox Grid.Column="2" Width="126" Height="36" CornerRadius="6"
+                                              FontSize="{DynamicResource TypeBody}"
+                                              ItemsSource="{Binding StateOptions}"
+                                              SelectedItem="{Binding SelectedState, Mode=TwoWay}" />
+
+                                    <Button Grid.Column="4" Classes="tool" Width="80" Height="36"
+                                            Command="{Binding RefreshCommand}">
+                                        <StackPanel Orientation="Horizontal" Spacing="7">
+                                            <Viewbox Width="13" Height="13" VerticalAlignment="Center">
+                                                <Canvas Width="24" Height="24">
+                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource TextTertiary}"
+                                                          Data="M20.5 12a8.5 8.5 0 1 1-2.6-6.1" />
+                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource TextTertiary}"
+                                                          Data="M20.5 4.2v5.4h-5.4" />
+                                                </Canvas>
+                                            </Viewbox>
+                                            <TextBlock Text="刷新" FontSize="{DynamicResource TypeBody}" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="5" Classes="tool" Width="40" Height="36"
+                                            Click="OnColumnSettingsClick" ToolTip.Tip="列设置">
+                                        <Viewbox Width="14" Height="14">
+                                            <Canvas Width="24" Height="24">
+                                                <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource TextTertiary}"
+                                                      Data="M6 4.5h12A2.5 2.5 0 0 1 20.5 7v10a2.5 2.5 0 0 1-2.5 2.5H6A2.5 2.5 0 0 1 3.5 17V7A2.5 2.5 0 0 1 6 4.5Z" />
+                                                <Path Classes="ic" StrokeThickness="1.6" Stroke="{DynamicResource TextTertiary}"
+                                                      Data="M9.5 4.5v15M15 4.5v15" />
+                                            </Canvas>
+                                        </Viewbox>
+                                    </Button>
+
+
+                                    <Button Grid.Column="6" Classes="primary" Height="36" Padding="14,0"
+                                            Command="{Binding ReleaseAllTimeWaitCommand}"
+                                            ToolTip.Tip="清理 IPv4 TCP TIME_WAIT；监听端口请使用终止或诊断">
+                                        <StackPanel Orientation="Horizontal" Spacing="7">
+                                            <Viewbox Width="13" Height="13" VerticalAlignment="Center">
+                                                <Canvas Width="24" Height="24">
+                                                    <Path Classes="ic" StrokeThickness="2" Stroke="#FFFFFF"
+                                                          Data="M13.5 2 4 13.5h6.5L9.5 22 20 10.5h-6.5L13.5 2Z" />
+                                                </Canvas>
+                                            </Viewbox>
+                                            <TextBlock Text="一键释放" FontSize="{DynamicResource TypeBody}" Foreground="#FFFFFF" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+
+                                <!-- ② 统计条（点击卡片快速筛选，再点回到全部） -->
+                                <Grid Grid.Row="1" ColumnDefinitions="*,*,*,*,*" ColumnSpacing="10">
+                                    <Border Grid.Column="0" Classes="stat" Tag="listen"
+                                            Classes.active="{Binding IsStatListenActive}"
+                                            PointerPressed="OnStatCardPressed"
+                                            ToolTip.Tip="只看 LISTENING（再点一次取消）">
+                                        <StackPanel Spacing="3">
+                                            <TextBlock Classes="statLabel" Text="监听中" />
+                                            <TextBlock Classes="statValue" Text="{Binding ListeningCount}"
+                                                       Foreground="{DynamicResource StatListen}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="1" Classes="stat" Tag="established"
+                                            Classes.active="{Binding IsStatEstablishedActive}"
+                                            PointerPressed="OnStatCardPressed"
+                                            ToolTip.Tip="只看 ESTABLISHED（再点一次取消）">
+                                        <StackPanel Spacing="3">
+                                            <TextBlock Classes="statLabel" Text="已连接" />
+                                            <TextBlock Classes="statValue" Text="{Binding EstablishedCount}"
+                                                       Foreground="{DynamicResource StatConnected}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="2" Classes="stat" Tag="timewait"
+                                            Classes.active="{Binding IsStatTimeWaitActive}"
+                                            PointerPressed="OnStatCardPressed"
+                                            ToolTip.Tip="只看 TIME_WAIT（再点一次取消）">
+                                        <StackPanel Spacing="3">
+                                            <TextBlock Classes="statLabel" Text="等待释放" />
+                                            <TextBlock Classes="statValue" Text="{Binding TimeWaitCount}"
+                                                       Foreground="{DynamicResource StatWait}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="3" Classes="stat" Tag="kernel"
+                                            Classes.active="{Binding IsStatKernelActive}"
+                                            PointerPressed="OnStatCardPressed"
+                                            ToolTip.Tip="只看内核服务（再点一次取消）">
+                                        <StackPanel Spacing="3">
+                                            <TextBlock Classes="statLabel" Text="内核占用" />
+                                            <TextBlock Classes="statValue" Text="{Binding KernelCount}"
+                                                       Foreground="{DynamicResource StatKernel}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="4" Classes="stat" Tag="all"
+                                            Classes.active="{Binding IsStatAllActive}"
+                                            PointerPressed="OnStatCardPressed"
+                                            ToolTip.Tip="清除状态与分类筛选">
+                                        <StackPanel Spacing="3">
+                                            <TextBlock Classes="statLabel" Text="活跃端口总数" />
+                                            <TextBlock Classes="statValue" Text="{Binding TotalCount}"
+                                                       Foreground="{DynamicResource StatTotal}" />
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+
+                                <!-- ③ 批量操作条（已移入表格卡片顶部，与设计稿一致） -->
+                            </Grid>
+                        </Grid>
+
+                        <!-- ④ 数据表格（设计稿：卡片 8px 圆角 + 1px 描边，贴合页面 18px 内边距） -->
+                        <Border Grid.Row="1" Classes="card" Margin="18,14,18,18" ClipToBounds="True">
+                            <Grid RowDefinitions="Auto,*,Auto">
+
+                                <!-- 表头区：批量条（选中时出现，设计稿 50px） + 36px 表头 -->
+                                <StackPanel Grid.Row="0">
+
+                                <!-- ③ 批量操作条 -->
+                                <Border Height="50" Padding="16,0,12,0"
+                                        IsVisible="{Binding HasSelection}"
+                                        Background="{DynamicResource AccentSurface}"
+                                        BorderBrush="{DynamicResource AccentBorder}" BorderThickness="0,0,0,1">
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+                                        <Viewbox Grid.Column="0" Width="15" Height="15" VerticalAlignment="Center">
+                                            <Canvas Width="24" Height="24">
+                                                <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource AccentFg}"
+                                                      Data="M7.5 3h9A4.5 4.5 0 0 1 21 7.5v9a4.5 4.5 0 0 1-4.5 4.5h-9A4.5 4.5 0 0 1 3 16.5v-9A4.5 4.5 0 0 1 7.5 3Z" />
+                                                <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource AccentFg}"
+                                                      Data="M7.8 12.4 10.8 15.4 16.4 9" />
+                                            </Canvas>
+                                        </Viewbox>
+                                        <TextBlock Grid.Column="1" Text="{Binding SelectionSummary}" FontSize="{DynamicResource TypeBody}"
+                                                   FontWeight="Medium" Foreground="{DynamicResource AccentSoft}"
+                                                   VerticalAlignment="Center" />
+                                        <Button Grid.Column="2" Classes="batch-danger" Height="30" Padding="13,0"
+                                                Content="终止所选" FontSize="{DynamicResource TypeCaption}"
+                                                Command="{Binding KillCheckedCommand}" />
+                                        <Button Grid.Column="3" Classes="tool" Height="30" Padding="13,0"
+                                                Content="取消选择" FontSize="{DynamicResource TypeCaption}"
+                                                Command="{Binding ClearSelectionCommand}" />
+                                    </Grid>
+                                </Border>
+
+                                <!-- 表头 · 36px（列宽拖拽手柄 + 排序三态指示器 + 列顺序拖拽落位线） -->
+                                <Border Height="36" Background="{DynamicResource BgTableHead}"
+                                        BorderBrush="{DynamicResource BorderSoft}" BorderThickness="0,0,0,1"
+                                        ClipToBounds="False">
+                                    <Panel>
+                                        <Grid x:Name="HeaderGrid" Margin="0,0,16,0" Background="Transparent">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="44" />
+                                                <ColumnDefinition Width="{Binding ColWidth0}" />
+                                                <ColumnDefinition Width="{Binding ColWidth1}" />
+                                                <ColumnDefinition Width="{Binding ColWidth2}" />
+                                                <ColumnDefinition Width="{Binding ColWidth3}" />
+                                                <ColumnDefinition Width="{Binding ColWidth4}" />
+                                                <ColumnDefinition Width="{Binding ColWidth5}" />
+                                                <ColumnDefinition Width="{Binding ColWidth6}" />
+                                            </Grid.ColumnDefinitions>
+                                            <!-- 勾选列整格都是点击热区（44×36），不必瞄准 15px 小方块 -->
+                                            <Border Grid.Column="0" Padding="16,0,0,0" Background="Transparent"
+                                                    Cursor="Hand" PointerPressed="OnHeaderPressed">
+                                                <CheckBox Theme="{StaticResource AppCheckBox}"
+                                                          IsChecked="{Binding HeaderCheckState, Mode=OneWay}" IsThreeState="True"
+                                                          IsHitTestVisible="False" Focusable="False"
+                                                          VerticalAlignment="Center" HorizontalAlignment="Left" />
+                                            </Border>
+
+                                            <!-- 端口 · 逻辑列 0 -->
+                                            <Border Grid.Column="{Binding ColIdx0}" Classes="thCell" Tag="0"
+                                                    IsVisible="{Binding IsColVisible0}"
+                                                    PointerPressed="OnHeaderSortPressed">
+                                                <Grid>
+                                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                        <TextBlock Classes="th" Text="端口" />
+                                                        <Viewbox Width="12" Height="12" VerticalAlignment="Center">
+                                                            <Panel Width="24" Height="24">
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort0None}">
+                                                                    <Path Classes="ic thIdleArrow" StrokeThickness="2" Stroke="{DynamicResource SortIdle}" Data="M6.5 10 12 5.5 17.5 10" />
+                                                                    <Path Classes="ic thIdleArrow" StrokeThickness="2" Stroke="{DynamicResource SortIdle}" Data="M6.5 14 12 18.5 17.5 14" />
+                                                                </Canvas>
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort0Asc}">
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M12 19V6" />
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M6.5 11.5 12 6l5.5 5.5" />
+                                                                </Canvas>
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort0Desc}">
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M12 5v13" />
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M6.5 12.5 12 18l5.5-5.5" />
+                                                                </Canvas>
+                                                            </Panel>
+                                                        </Viewbox>
+                                                    </StackPanel>
+                                                    <Border Classes="colHandle" Tag="0" PointerPressed="OnColHandlePressed"
+                                                            VerticalAlignment="Stretch" HorizontalAlignment="Right" Width="7"
+                                                            Background="Transparent" Cursor="SizeWestEast">
+                                                        <Border Classes="colHandleBar" Width="1" Height="14" CornerRadius="2"
+                                                                Background="{DynamicResource HandleBar}" VerticalAlignment="Center" />
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+
+                                            <!-- 状态 · 逻辑列 1 -->
+                                            <Border Grid.Column="{Binding ColIdx1}" Classes="thCell" Tag="1"
+                                                    IsVisible="{Binding IsColVisible1}"
+                                                    PointerPressed="OnHeaderSortPressed">
+                                                <Grid>
+                                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                        <TextBlock Classes="th" Text="状态" />
+                                                        <Viewbox Width="12" Height="12" VerticalAlignment="Center">
+                                                            <Panel Width="24" Height="24">
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort1None}">
+                                                                    <Path Classes="ic thIdleArrow" StrokeThickness="2" Stroke="{DynamicResource SortIdle}" Data="M6.5 10 12 5.5 17.5 10" />
+                                                                    <Path Classes="ic thIdleArrow" StrokeThickness="2" Stroke="{DynamicResource SortIdle}" Data="M6.5 14 12 18.5 17.5 14" />
+                                                                </Canvas>
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort1Asc}">
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M12 19V6" />
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M6.5 11.5 12 6l5.5 5.5" />
+                                                                </Canvas>
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort1Desc}">
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M12 5v13" />
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M6.5 12.5 12 18l5.5-5.5" />
+                                                                </Canvas>
+                                                            </Panel>
+                                                        </Viewbox>
+                                                    </StackPanel>
+                                                    <Border Classes="colHandle" Tag="1" PointerPressed="OnColHandlePressed"
+                                                            VerticalAlignment="Stretch" HorizontalAlignment="Right" Width="7"
+                                                            Background="Transparent" Cursor="SizeWestEast">
+                                                        <Border Classes="colHandleBar" Width="1" Height="14" CornerRadius="2"
+                                                                Background="{DynamicResource HandleBar}" VerticalAlignment="Center" />
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+
+                                            <!-- 服务分类 · 逻辑列 2 -->
+                                            <Border Grid.Column="{Binding ColIdx2}" Classes="thCell" Tag="2"
+                                                    IsVisible="{Binding IsColVisible2}"
+                                                    PointerPressed="OnHeaderSortPressed">
+                                                <Grid>
+                                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                        <TextBlock Classes="th" Text="服务分类" />
+                                                        <Viewbox Width="12" Height="12" VerticalAlignment="Center">
+                                                            <Panel Width="24" Height="24">
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort2None}">
+                                                                    <Path Classes="ic thIdleArrow" StrokeThickness="2" Stroke="{DynamicResource SortIdle}" Data="M6.5 10 12 5.5 17.5 10" />
+                                                                    <Path Classes="ic thIdleArrow" StrokeThickness="2" Stroke="{DynamicResource SortIdle}" Data="M6.5 14 12 18.5 17.5 14" />
+                                                                </Canvas>
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort2Asc}">
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M12 19V6" />
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M6.5 11.5 12 6l5.5 5.5" />
+                                                                </Canvas>
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort2Desc}">
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M12 5v13" />
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M6.5 12.5 12 18l5.5-5.5" />
+                                                                </Canvas>
+                                                            </Panel>
+                                                        </Viewbox>
+                                                    </StackPanel>
+                                                    <Border Classes="colHandle" Tag="2" PointerPressed="OnColHandlePressed"
+                                                            VerticalAlignment="Stretch" HorizontalAlignment="Right" Width="7"
+                                                            Background="Transparent" Cursor="SizeWestEast">
+                                                        <Border Classes="colHandleBar" Width="1" Height="14" CornerRadius="2"
+                                                                Background="{DynamicResource HandleBar}" VerticalAlignment="Center" />
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+
+                                            <!-- 进程名 · 逻辑列 3（星号列，不参与列宽拖拽） -->
+                                            <Border Grid.Column="{Binding ColIdx3}" Classes="thCell" Tag="3"
+                                                    IsVisible="{Binding IsColVisible3}"
+                                                    PointerPressed="OnHeaderSortPressed">
+                                                <Grid>
+                                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                        <TextBlock Classes="th" Text="进程名" />
+                                                        <Viewbox Width="12" Height="12" VerticalAlignment="Center">
+                                                            <Panel Width="24" Height="24">
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort3None}">
+                                                                    <Path Classes="ic thIdleArrow" StrokeThickness="2" Stroke="{DynamicResource SortIdle}" Data="M6.5 10 12 5.5 17.5 10" />
+                                                                    <Path Classes="ic thIdleArrow" StrokeThickness="2" Stroke="{DynamicResource SortIdle}" Data="M6.5 14 12 18.5 17.5 14" />
+                                                                </Canvas>
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort3Asc}">
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M12 19V6" />
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M6.5 11.5 12 6l5.5 5.5" />
+                                                                </Canvas>
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort3Desc}">
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M12 5v13" />
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M6.5 12.5 12 18l5.5-5.5" />
+                                                                </Canvas>
+                                                            </Panel>
+                                                        </Viewbox>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+
+                                            <!-- PID · 逻辑列 4 -->
+                                            <Border Grid.Column="{Binding ColIdx4}" Classes="thCell" Tag="4"
+                                                    IsVisible="{Binding IsColVisible4}"
+                                                    PointerPressed="OnHeaderSortPressed">
+                                                <Grid>
+                                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                        <TextBlock Classes="th" Text="PID" FontFamily="{DynamicResource AppFontUi}" />
+                                                        <Viewbox Width="12" Height="12" VerticalAlignment="Center">
+                                                            <Panel Width="24" Height="24">
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort4None}">
+                                                                    <Path Classes="ic thIdleArrow" StrokeThickness="2" Stroke="{DynamicResource SortIdle}" Data="M6.5 10 12 5.5 17.5 10" />
+                                                                    <Path Classes="ic thIdleArrow" StrokeThickness="2" Stroke="{DynamicResource SortIdle}" Data="M6.5 14 12 18.5 17.5 14" />
+                                                                </Canvas>
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort4Asc}">
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M12 19V6" />
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M6.5 11.5 12 6l5.5 5.5" />
+                                                                </Canvas>
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort4Desc}">
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M12 5v13" />
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M6.5 12.5 12 18l5.5-5.5" />
+                                                                </Canvas>
+                                                            </Panel>
+                                                        </Viewbox>
+                                                    </StackPanel>
+                                                    <Border Classes="colHandle" Tag="4" PointerPressed="OnColHandlePressed"
+                                                            VerticalAlignment="Stretch" HorizontalAlignment="Right" Width="7"
+                                                            Background="Transparent" Cursor="SizeWestEast">
+                                                        <Border Classes="colHandleBar" Width="1" Height="14" CornerRadius="2"
+                                                                Background="{DynamicResource HandleBar}" VerticalAlignment="Center" />
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+
+                                            <!-- 本地地址 · 逻辑列 5 -->
+                                            <Border Grid.Column="{Binding ColIdx5}" Classes="thCell" Tag="5"
+                                                    IsVisible="{Binding IsColVisible5}"
+                                                    PointerPressed="OnHeaderSortPressed">
+                                                <Grid>
+                                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                        <TextBlock Classes="th" Text="本地地址" />
+                                                        <Viewbox Width="12" Height="12" VerticalAlignment="Center">
+                                                            <Panel Width="24" Height="24">
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort5None}">
+                                                                    <Path Classes="ic thIdleArrow" StrokeThickness="2" Stroke="{DynamicResource SortIdle}" Data="M6.5 10 12 5.5 17.5 10" />
+                                                                    <Path Classes="ic thIdleArrow" StrokeThickness="2" Stroke="{DynamicResource SortIdle}" Data="M6.5 14 12 18.5 17.5 14" />
+                                                                </Canvas>
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort5Asc}">
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M12 19V6" />
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M6.5 11.5 12 6l5.5 5.5" />
+                                                                </Canvas>
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort5Desc}">
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M12 5v13" />
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M6.5 12.5 12 18l5.5-5.5" />
+                                                                </Canvas>
+                                                            </Panel>
+                                                        </Viewbox>
+                                                    </StackPanel>
+                                                    <Border Classes="colHandle" Tag="5" PointerPressed="OnColHandlePressed"
+                                                            VerticalAlignment="Stretch" HorizontalAlignment="Right" Width="7"
+                                                            Background="Transparent" Cursor="SizeWestEast">
+                                                        <Border Classes="colHandleBar" Width="1" Height="14" CornerRadius="2"
+                                                                Background="{DynamicResource HandleBar}" VerticalAlignment="Center" />
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+
+                                            <!-- 操作 · 逻辑列 6（不可排序） -->
+                                            <Border Grid.Column="{Binding ColIdx6}" Classes="thCell" Tag="6"
+                                                    IsVisible="{Binding IsColVisible6}">
+                                                <Grid>
+                                                    <TextBlock Classes="th" Text="操作" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                                    <Border Classes="colHandle" Tag="6" PointerPressed="OnColHandlePressed"
+                                                            VerticalAlignment="Stretch" HorizontalAlignment="Right" Width="7"
+                                                            Background="Transparent" Cursor="SizeWestEast">
+                                                        <Border Classes="colHandleBar" Width="1" Height="14" CornerRadius="2"
+                                                                Background="{DynamicResource HandleBar}" VerticalAlignment="Center" />
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+                                        </Grid>
+
+                                        <!-- 拖拽覆盖层：宽度提示 / 列顺序落位线 / 拖动中的列 chip -->
+                                        <Canvas x:Name="HeaderOverlay" IsHitTestVisible="False">
+                                            <Border x:Name="WidthTip" Classes="widthTip" IsVisible="False">
+                                                <TextBlock x:Name="WidthTipText" FontFamily="{DynamicResource AppFontMono}"
+                                                           FontSize="{DynamicResource TypeTiny}" Foreground="#FFFFFF" />
+                                            </Border>
+                                            <Border x:Name="InsertLine" Width="2" Height="30" CornerRadius="2"
+                                                    Background="{DynamicResource AccentFill}" IsVisible="False" />
+                                            <Border x:Name="DragChip" Classes="dragChip" IsVisible="False">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <Canvas Width="13" Height="13">
+                                                        <Ellipse Canvas.Left="4.1" Canvas.Top="2.5" Width="1.5" Height="1.5" Fill="{DynamicResource AccentFg}" />
+                                                        <Ellipse Canvas.Left="7.4" Canvas.Top="2.5" Width="1.5" Height="1.5" Fill="{DynamicResource AccentFg}" />
+                                                        <Ellipse Canvas.Left="4.1" Canvas.Top="5.7" Width="1.5" Height="1.5" Fill="{DynamicResource AccentFg}" />
+                                                        <Ellipse Canvas.Left="7.4" Canvas.Top="5.7" Width="1.5" Height="1.5" Fill="{DynamicResource AccentFg}" />
+                                                        <Ellipse Canvas.Left="4.1" Canvas.Top="9" Width="1.5" Height="1.5" Fill="{DynamicResource AccentFg}" />
+                                                        <Ellipse Canvas.Left="7.4" Canvas.Top="9" Width="1.5" Height="1.5" Fill="{DynamicResource AccentFg}" />
+                                                    </Canvas>
+                                                    <TextBlock x:Name="DragChipText" FontSize="{DynamicResource TypeBody}" FontWeight="Medium"
+                                                               Foreground="{DynamicResource TextPrimary}" />
+                                                </StackPanel>
+                                            </Border>
+                                        </Canvas>
+                                    </Panel>
+                                </Border>
+                                </StackPanel>
+
+                                <!-- 数据行 -->
+                                <ScrollViewer x:Name="PortListScroller" Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                              VerticalScrollBarVisibility="Auto"
+                                              IsDeferredScrollingEnabled="False"
+                                              IsScrollInertiaEnabled="True">
+                                    <views:ConnectionItemsControl ItemsSource="{Binding FilteredItems}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <views:ConnectionViewportPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="m:PortConnectionItem">
+                                                <Border Classes="row"
+                                                        Classes.checked="{Binding IsChecked}"
+                                                        PointerPressed="OnRowPressed">
+                                                    <Grid>
+                                                        <Border Width="2" HorizontalAlignment="Left"
+                                                                Background="{DynamicResource AccentFill}"
+                                                                IsVisible="{Binding IsFocused}" />
+                                                        <Grid Margin="0,0,16,0">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="44" />
+                                                                <ColumnDefinition Width="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColWidth0}" />
+                                                                <ColumnDefinition Width="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColWidth1}" />
+                                                                <ColumnDefinition Width="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColWidth2}" />
+                                                                <ColumnDefinition Width="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColWidth3}" />
+                                                                <ColumnDefinition Width="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColWidth4}" />
+                                                                <ColumnDefinition Width="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColWidth5}" />
+                                                                <ColumnDefinition Width="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColWidth6}" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <!-- 勾选列整格都是点击热区 -->
+                                                            <Border Grid.Column="0" Padding="16,0,0,0"
+                                                                    Background="Transparent" Cursor="Hand">
+                                                                <CheckBox Theme="{StaticResource AppCheckBox}"
+                                                                          IsChecked="{Binding IsChecked, Mode=OneWay}"
+                                                                          IsHitTestVisible="False" Focusable="False"
+                                                                          VerticalAlignment="Center" HorizontalAlignment="Left" />
+                                                            </Border>
+
+                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx0}" Classes="port"
+                                                                       IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible0}"
+                                                                       Classes.web="{Binding IsCatWeb}"
+                                                                       Classes.db="{Binding IsCatDb}"
+                                                                       Classes.dev="{Binding IsCatDev}"
+                                                                       Classes.net="{Binding IsCatNet}"
+                                                                       Classes.sys="{Binding IsCatSys}"
+                                                                       Classes.app="{Binding IsCatApp}"
+                                                                       Text="{Binding LocalPort}" Margin="8,0,0,0" />
+
+                                                            <Border Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx1}" Padding="8,0"
+                                                                    IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible1}">
+                                                                <Border Classes="pill"
+                                                                        Classes.listen="{Binding IsPillListen}"
+                                                                        Classes.est="{Binding IsPillEstablished}"
+                                                                        Classes.wait="{Binding IsPillTimeWait}"
+                                                                        Classes.kernel="{Binding IsPillKernel}"
+                                                                        Classes.idle="{Binding IsPillIdle}">
+                                                                    <TextBlock Text="{Binding StatusBadge}"
+                                                                               FontFamily="{DynamicResource AppFontUi}" />
+                                                                </Border>
+                                                            </Border>
+
+                                                            <Border Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx2}" Padding="8,0"
+                                                                    IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible2}">
+                                                                <Border Classes="tag"
+                                                                        Classes.web="{Binding IsCatWeb}"
+                                                                        Classes.db="{Binding IsCatDb}"
+                                                                        Classes.dev="{Binding IsCatDev}"
+                                                                        Classes.net="{Binding IsCatNet}"
+                                                                        Classes.sys="{Binding IsCatSys}"
+                                                                        Classes.app="{Binding IsCatApp}">
+                                                                    <TextBlock Text="{Binding ServiceCategory}" />
+                                                                </Border>
+                                                            </Border>
+
+                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx3}" Classes="ellipsis" Margin="8,0"
+                                                                       IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible3}"
+                                                                       Text="{Binding ProcessDisplay}" FontSize="{DynamicResource TypeBody}"
+                                                                       FontWeight="Medium"
+                                                                       Foreground="{DynamicResource TextPrimary}" />
+
+                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx4}" Classes="mono" Margin="8,0"
+                                                                       IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible4}"
+                                                                       Text="{Binding Pid}" FontSize="{DynamicResource TypeMono}"
+                                                                       Foreground="{DynamicResource TextTertiary}" />
+
+                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx5}" Classes="mono" Margin="8,0"
+                                                                       IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible5}"
+                                                                       Text="{Binding LocalEndpoint}" FontSize="{DynamicResource TypeMonoCaption}"
+                                                                       Foreground="{DynamicResource TextMuted}" />
+
+                                                            <Grid Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx6}" Margin="8,0,0,0"
+                                                                  IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible6}">
+                                                                <Button Classes="danger" Width="76" Height="26"
+                                                                        Content="终止" FontSize="{DynamicResource TypeCaption}" Padding="0"
+                                                                        HorizontalAlignment="Left"
+                                                                        IsVisible="{Binding ShowKillAction}"
+                                                                        Click="OnKillRowClick" />
+                                                                <Button Classes="warn" Width="76" Height="26"
+                                                                        Content="释放" FontSize="{DynamicResource TypeCaption}" Padding="0"
+                                                                        HorizontalAlignment="Left"
+                                                                        IsVisible="{Binding ShowReleaseAction}"
+                                                                        Click="OnReleaseRowClick" />
+                                                                <Button Classes="soft" Width="76" Height="26"
+                                                                        Content="诊断" FontSize="{DynamicResource TypeCaption}" Padding="0"
+                                                                        HorizontalAlignment="Left"
+                                                                        IsVisible="{Binding ShowDiagnoseAction}"
+                                                                        Click="OnDiagnoseRowClick" />
+                                                            </Grid>
+                                                        </Grid>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </views:ConnectionItemsControl>
+                                </ScrollViewer>
+
+                                <!-- 底部渐隐：视口高度一般不是行高的整数倍，
+                                     最后一行常被裁掉一截（动作按钮被切成两半），
+                                     用 26px 渐隐收尾，读起来是「下面还有内容」而不是「画错了」 -->
+                                <Border Grid.Row="1" Height="26" VerticalAlignment="Bottom"
+                                        IsHitTestVisible="False"
+                                        Background="{DynamicResource ScrollFade}" />
+
+                                <!-- 空状态 -->
+                                <Border Grid.Row="1" IsVisible="{Binding ShowEmptyState}"
+                                        Background="{DynamicResource BgCard}">
+                                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                                                Spacing="11" MaxWidth="380">
+                                        <Border Width="48" Height="48" CornerRadius="24"
+                                                HorizontalAlignment="Center"
+                                                Background="{DynamicResource BgHover}"
+                                                BorderBrush="{DynamicResource BorderStrong}" BorderThickness="1">
+                                            <Viewbox Width="22" Height="22" HorizontalAlignment="Center"
+                                                     VerticalAlignment="Center">
+                                                <Canvas Width="24" Height="24">
+                                                    <Path Classes="ic" StrokeThickness="1.9" Stroke="{DynamicResource TextMuted}"
+                                                          Data="M17.3 10.5a6.8 6.8 0 1 1-13.6 0 6.8 6.8 0 0 1 13.6 0Z" />
+                                                    <Path Classes="ic" StrokeThickness="1.9" Stroke="{DynamicResource TextMuted}"
+                                                          Data="M15.6 15.6 20.5 20.5" />
+                                                    <Path Classes="ic" StrokeThickness="1.9" Stroke="{DynamicResource TextMuted}"
+                                                          Data="M8 10.5h5" />
+                                                </Canvas>
+                                            </Viewbox>
+                                        </Border>
+                                        <TextBlock Text="没有找到匹配的端口" FontSize="{DynamicResource TypeCard}" FontWeight="Medium"
+                                                   Foreground="{DynamicResource TextSecondary}"
+                                                   HorizontalAlignment="Center" />
+                                        <TextBlock Text="试试减少关键词，或清除「服务分类 / 状态」筛选条件后重试"
+                                                   FontSize="{DynamicResource TypeCaption}" Foreground="{DynamicResource TextMuted}"
+                                                   TextAlignment="Center" TextWrapping="Wrap" />
+                                        <Button Classes="tool" Height="32" Padding="14,0" HorizontalAlignment="Center"
+                                                Content="清除筛选条件" FontSize="{DynamicResource TypeBody}" Click="OnClearAllFilters" />
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 空状态 · 全清无占用（系统状态规范 02：正向空态，不用灰色告警语气） -->
+                                <Border Grid.Row="1" IsVisible="{Binding ShowAllClearState}"
+                                        Background="{DynamicResource BgCard}">
+                                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center"
+                                                Spacing="11" MaxWidth="380">
+                                        <Border Width="48" Height="48" CornerRadius="24" HorizontalAlignment="Center"
+                                                Background="{DynamicResource OkBadgeBg}">
+                                            <Viewbox Width="22" Height="22" HorizontalAlignment="Center"
+                                                     VerticalAlignment="Center">
+                                                <Canvas Width="24" Height="24">
+                                                    <Path Classes="ic" StrokeThickness="1.9" Stroke="{DynamicResource OkFg}"
+                                                          Data="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                                    <Path Classes="ic" StrokeThickness="1.9" Stroke="{DynamicResource OkFg}"
+                                                          Data="M8 12.4 10.8 15.2 16.2 9.2" />
+                                                </Canvas>
+                                            </Viewbox>
+                                        </Border>
+                                        <TextBlock Text="当前没有活跃端口占用" FontSize="{DynamicResource TypeCard}"
+                                                   FontWeight="Medium" Foreground="{DynamicResource TextSecondary}"
+                                                   HorizontalAlignment="Center" />
+                                        <TextBlock Text="系统很干净 — 所有端口均可自由绑定"
+                                                   FontSize="{DynamicResource TypeCaption}" Foreground="{DynamicResource TextMuted}"
+                                                   TextAlignment="Center" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 加载中 · 骨架屏（系统状态规范 03：任何数据界面都不得「空白无解释」） -->
+                                <Border Grid.Row="1" IsVisible="{Binding ShowSkeleton}"
+                                        Background="{DynamicResource BgCard}">
+                                    <StackPanel Margin="24" Spacing="12" VerticalAlignment="Top">
+                                        <TextBlock Text="正在并发捕获系统端口…"
+                                                   FontSize="{DynamicResource TypeBody}" FontWeight="Medium"
+                                                   Foreground="{DynamicResource TextSecondary}" />
+                                        <TextBlock Text="{Binding SkeletonSubText}"
+                                                   FontSize="{DynamicResource TypeMicro}"
+                                                   FontFamily="{DynamicResource AppFontMono}"
+                                                   Foreground="{DynamicResource TextDim}" />
+                                        <Grid ColumnDefinitions="76,*" ColumnSpacing="12" Height="26">
+                                            <Border Grid.Column="0" Classes="sk" />
+                                            <Border Grid.Column="1" Classes="sk faint" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="76,*" ColumnSpacing="12" Height="26">
+                                            <Border Grid.Column="0" Classes="sk" />
+                                            <Border Grid.Column="1" Classes="sk faint" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="76,*" ColumnSpacing="12" Height="26">
+                                            <Border Grid.Column="0" Classes="sk" />
+                                            <Border Grid.Column="1" Classes="sk faint" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 错误态（系统状态规范 04：内核 API 调用失败 + 明确出路） -->
+                                <Border Grid.Row="1" IsVisible="{Binding HasScanError}"
+                                        Background="{DynamicResource BgCard}">
+                                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="470">
+                                        <Border Classes="errCard">
+                                            <StackPanel Spacing="12">
+                                                <StackPanel Orientation="Horizontal" Spacing="11">
+                                                    <Viewbox Width="16" Height="16" VerticalAlignment="Top">
+                                                        <Canvas Width="24" Height="24">
+                                                            <Path Classes="ic" StrokeThickness="1.9"
+                                                                  Stroke="{DynamicResource DangerFgSoft}"
+                                                                  Data="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                                            <Path Classes="ic" StrokeThickness="1.9"
+                                                                  Stroke="{DynamicResource DangerFgSoft}"
+                                                                  Data="M12 7.4v5.6" />
+                                                            <Path Classes="icf" Fill="{DynamicResource DangerFgSoft}"
+                                                                  Data="M13 16.6a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" />
+                                                        </Canvas>
+                                                    </Viewbox>
+                                                    <TextBlock Text="{Binding ScanErrorTitle}" TextWrapping="Wrap"
+                                                               FontSize="{DynamicResource TypeBody}" FontWeight="Medium"
+                                                               Foreground="{DynamicResource DangerFgSoft}" />
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding ScanErrorDescription}" TextWrapping="Wrap"
+                                                           FontSize="{DynamicResource TypeCaption}"
+                                                           Foreground="{DynamicResource TextMuted}" />
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <Button Classes="primary" Height="32" Padding="14,0"
+                                                            Content="重试" FontSize="{DynamicResource TypeBody}"
+                                                            Click="OnRetryScan" />
+                                                    <Button Classes="tool" Height="32" Padding="14,0"
+                                                            Content="以管理员身份重启" FontSize="{DynamicResource TypeBody}"
+                                                            Command="{Binding RestartAsAdminCommand}" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 表尾 · 38px -->
+                                <Border Grid.Row="2" Height="38" Background="{DynamicResource BgTableHead}"
+                                        BorderBrush="{DynamicResource BorderSoft}" BorderThickness="0,1,0,0"
+                                        Padding="16,0">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" FontSize="{DynamicResource TypeCaption}"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis">
+                                            <Run Text="共" />
+                                            <Run Text="{Binding TotalCount}" />
+                                            <Run Text="个端口 · 并发快照" />
+                                            <Run Text="{Binding ScanDurationText}" />
+                                            <Run Text="· FNV-1a 拓扑指纹" />
+                                        </TextBlock>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                                                    VerticalAlignment="Center">
+                                            <Border Classes="key"><TextBlock Text="F5 刷新" /></Border>
+                                            <Border Classes="key"><TextBlock Text="Delete 终止" /></Border>
+                                            <Border Classes="key"><TextBlock Text="Ctrl+C 复制" /></Border>
+                                            <Border Classes="key"><TextBlock Text="Esc 关闭" /></Border>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <!-- Toast 浮层 -->
+                        <Border Grid.Row="1" IsVisible="{Binding IsToastVisible}"
+                                Classes="toast" Classes.err="{Binding ToastIsError}"
+                                HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                Margin="0,0,32,54" Width="420" Height="54" CornerRadius="8"
+                                Padding="14,0,12,0" Background="{DynamicResource BgCard}"
+                                BorderThickness="1" BoxShadow="0 10 28 -4 #8C000000">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="10">
+                                <Viewbox Grid.Column="0" Width="17" Height="17" VerticalAlignment="Center"
+                                         IsVisible="{Binding !ToastIsError}">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource OkFg}"
+                                              Data="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                        <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource OkFg}"
+                                              Data="M8.2 12.2 11 15l5-6" />
+                                    </Canvas>
+                                </Viewbox>
+                                <Viewbox Grid.Column="0" Width="17" Height="17" VerticalAlignment="Center"
+                                         IsVisible="{Binding ToastIsError}">
+                                    <Canvas Width="24" Height="24">
+                                        <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource DangerFg}"
+                                              Data="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                                        <Path Classes="ic" StrokeThickness="1.8" Stroke="{DynamicResource DangerFg}"
+                                              Data="M12 7.6v5" />
+                                        <Path Classes="icf" Fill="{DynamicResource DangerFg}"
+                                              Data="M13 16.2a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z" />
+                                    </Canvas>
+                                </Viewbox>
+                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding ToastTitle}" FontSize="{DynamicResource TypeBody}" FontWeight="Medium"
+                                               Foreground="{DynamicResource TextSecondary}"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding ToastDescription}" ToolTip.Tip="{Binding ToastDescription}" FontSize="{DynamicResource TypeMicro}"
+                                               Foreground="{DynamicResource TextMuted}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <Button Grid.Column="2" Classes="bare" Padding="6,4" FontSize="{DynamicResource TypeBody}"
+                                        Foreground="{DynamicResource AccentFg}" Content="复制报告"
+                                        Command="{Binding CopyOperationReportCommand}" VerticalAlignment="Center" />
+                                <Button Grid.Column="3" Classes="bare" Width="20" Height="20" Padding="0"
+                                        Click="OnDismissToast" VerticalAlignment="Center">
+                                    <Viewbox Width="14" Height="14">
+                                        <Canvas Width="24" Height="24">
+                                            <Path Classes="ic" StrokeThickness="2" Stroke="{DynamicResource TextMuted}"
+                                                  Data="M6.5 6.5l11 11M17.5 6.5l-11 11" />
+                                        </Canvas>
+                                    </Viewbox>
+                                </Button>
+                            </Grid>
+                        </Border>
+                    </Grid>
+</UserControl>

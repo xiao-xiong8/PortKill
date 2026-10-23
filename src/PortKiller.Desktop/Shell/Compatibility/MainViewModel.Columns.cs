@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -26,25 +26,25 @@ public partial class MainViewModel
     //  （设计稿「列宽拖拽与列顺序」「表格交互增强」画板）
     // ══════════════════════════════════════════════════════════════════
 
-    public static readonly string[] ColTitles = { "端口", "状态", "服务分类", "进程名", "PID", "本地地址", "操作" };
+    public static readonly string[] ColTitles = { "端口", "状态", "服务分类", "进程名", "PID", "本地地址", "操作", "应用名称" };
 
     /// <summary>列设置浮层是否展开（窗内浮层，替代原先落点不可控的 Popup）。</summary>
     [ObservableProperty]
     private bool _isColumnMenuOpen;
 
     /// <summary>MinWidth 保护规格（拖到底手柄停住并转琥珀色）。操作列不可拖。</summary>
-    public static readonly double[] ColMinWidths = { 88, 120, 118, 0, 72, 150, 116 };
+    public static readonly double[] ColMinWidths = { 88, 120, 118, 140, 72, 150, 116, 104 };
 
-    private double[] _colWidths = { 96, 132, 132, 0, 78, 180, 132 }; // 0 = 星号列（进程名）
-    private int[] _colOrder = { 0, 1, 2, 3, 4, 5, 6 };
-    private bool[] _colVisible = { true, true, true, true, true, true, true };
+    private double[] _colWidths = { 96, 132, 132, 0, 78, 180, 132, 144 }; // 0 = 星号列（进程名）
+    private int[] _colOrder = { 0, 1, 2, 7, 3, 4, 5, 6 };
+    private bool[] _colVisible = { true, true, true, true, true, true, true, true };
     private int _sortCol;
     private bool _sortAsc = true;
 
     /// <summary>
     /// 表头与数据行共享的列宽（按「显示位置」索引）。
-    /// Avalonia 的 Grid.ColumnDefinitions 不支持整体绑定，因此逐列暴露 ColWidth0..6，
-    /// 由 XAML 显式声明 8 个 ColumnDefinition 后分别绑定。
+    /// Avalonia 的 Grid.ColumnDefinitions 不支持整体绑定，因此逐列暴露 ColWidth0..7，
+    /// 由 XAML 显式声明 9 个 ColumnDefinition 后分别绑定。
     /// </summary>
     public GridLength ColWidth0 => ColWidthAt(0);
     public GridLength ColWidth1 => ColWidthAt(1);
@@ -53,6 +53,10 @@ public partial class MainViewModel
     public GridLength ColWidth4 => ColWidthAt(4);
     public GridLength ColWidth5 => ColWidthAt(5);
     public GridLength ColWidth6 => ColWidthAt(6);
+
+    public GridLength ColWidth7 => ColWidthAt(7);
+    public double TableMinWidth => 60 + Enumerable.Range(0, ColumnSettingsMigrator.Count)
+        .Where(i => _colVisible[i]).Sum(i => i == 3 ? Math.Max(140, _colWidths[i]) : Math.Max(ColMinWidths[i], _colWidths[i]));
 
     private GridLength ColWidthAt(int position)
     {
@@ -64,7 +68,8 @@ public partial class MainViewModel
 
     private void RebuildColumns()
     {
-        for (int i = 0; i < 7; i++)
+        OnPropertyChanged(nameof(TableMinWidth));
+        for (int i = 0; i < ColumnSettingsMigrator.Count; i++)
         {
             OnPropertyChanged($"ColWidth{i}");
             OnPropertyChanged($"ColIdx{i}");
@@ -74,19 +79,12 @@ public partial class MainViewModel
     /// <summary>校验旧配置，拒绝非有限宽度和重复列索引以防布局异常。</summary>
     private void InitColumnsFromSettings(AppSettings settings)
     {
-        var widths = settings.ColWidths.Split(',');
-        var parsedWidths = new double[7];
-        bool validWidths = widths.Length == 7;
-        for (int i = 0; validWidths && i < widths.Length; i++)
-            validWidths = double.TryParse(widths[i], System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out parsedWidths[i])
-                && double.IsFinite(parsedWidths[i]) && parsedWidths[i] >= 0;
-        if (validWidths) _colWidths = parsedWidths;
-        else App.WriteLog("ColumnSettings", new FormatException("列宽配置无效，已使用默认列宽。"));
-        var order = settings.ColOrder.Split(',').Select(x => int.TryParse(x, out int index) ? index : -1).ToArray();
-        if (order.Length == 7 && order.Distinct().Count() == 7 && order.All(x => x is >= 0 and <= 6)) _colOrder = order;
-        var visible = settings.ColVisible.Split(',');
-        if (visible.Length == 7 && visible.All(x => bool.TryParse(x, out _))) _colVisible = visible.Select(bool.Parse).ToArray();
+        ColumnSettingsMigrator.Migrate(settings);
+        _colWidths = settings.ColWidths.Split(',').Select(x => double.Parse(x, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+        _colOrder = settings.ColOrder.Split(',').Select(int.Parse).ToArray();
+        _colVisible = settings.ColVisible.Split(',').Select(bool.Parse).ToArray();
+        for (int i = 0; i < _colWidths.Length; i++)
+            if (i != 3 || _colWidths[i] > 0) _colWidths[i] = Math.Max(ColMinWidths[i], _colWidths[i]);
         RebuildColumns();
         NotifyColVisible();
     }
@@ -116,6 +114,7 @@ public partial class MainViewModel
     public int ColIdx4 => 1 + PositionOf(4);
     public int ColIdx5 => 1 + PositionOf(5);
     public int ColIdx6 => 1 + PositionOf(6);
+    public int ColIdx7 => 1 + PositionOf(7);
 
     public double GetColWidth(int logical) => _colWidths[logical];
     public double GetColMin(int logical) => ColMinWidths[logical];
@@ -128,12 +127,14 @@ public partial class MainViewModel
     public bool IsColVisible4 => _colVisible[4];
     public bool IsColVisible5 => _colVisible[5];
     public bool IsColVisible6 => _colVisible[6];
+    public bool IsColVisible7 => _colVisible[7];
 
     /// <summary>拖拽过程中实时写入列宽（不落盘）；松手时由视图调用 SaveColumnState() 持久化。</summary>
     public void SetColumnWidth(int logical, double width)
     {
         if (logical == 3) return; // 星号列宽度由窗口分配
-        _colWidths[logical] = Math.Max(ColMinWidths[logical], Math.Round(width));
+        if (!double.IsFinite(width)) return;
+        _colWidths[logical] = Math.Clamp(Math.Round(width), ColMinWidths[logical], ColumnSettingsMigrator.MaximumWidth);
         RebuildColumns();
     }
 
@@ -145,7 +146,7 @@ public partial class MainViewModel
     {
         var list = _colOrder.ToList();
         list.Remove(logical);
-        list.Insert(Math.Clamp(targetPos, 0, 6), logical);
+        list.Insert(Math.Clamp(targetPos, 0, ColumnSettingsMigrator.Count - 1), logical);
         _colOrder = list.ToArray();
         RebuildColumns();
         PersistColumns();
@@ -163,7 +164,7 @@ public partial class MainViewModel
 
     private void NotifySortState()
     {
-        for (int i = 0; i < 7; i++)
+        for (int i = 0; i < ColumnSettingsMigrator.Count; i++)
         {
             OnPropertyChanged($"IsSort{i}Asc");
             OnPropertyChanged($"IsSort{i}Desc");
@@ -178,10 +179,11 @@ public partial class MainViewModel
     public bool IsSort4None => _sortCol != 4;
     public bool IsSort5None => _sortCol != 5;
     public bool IsSort6None => _sortCol != 6;
+    public bool IsSort7None => _sortCol != 7;
 
     private void NotifyColVisible()
     {
-        for (int i = 0; i < 7; i++) OnPropertyChanged($"IsColVisible{i}");
+        for (int i = 0; i < ColumnSettingsMigrator.Count; i++) OnPropertyChanged($"IsColVisible{i}");
     }
 
     public bool IsSort0Asc => _sortCol == 0 && _sortAsc;
@@ -198,23 +200,31 @@ public partial class MainViewModel
     public bool IsSort5Desc => _sortCol == 5 && !_sortAsc;
     public bool IsSort6Asc => _sortCol == 6 && _sortAsc;
     public bool IsSort6Desc => _sortCol == 6 && !_sortAsc;
+    public bool IsSort7Asc => _sortCol == 7 && _sortAsc;
+    public bool IsSort7Desc => _sortCol == 7 && !_sortAsc;
 
     [RelayCommand]
     public void ToggleColVisible(string index)
     {
-        if (!int.TryParse(index, out int i) || i < 0 || i > 6) return;
+        if (!int.TryParse(index, out int i) || i < 0 || i >= ColumnSettingsMigrator.Count) return;
+        ToggleColumnVisibility(i, persist: true);
+    }
+
+    internal void ToggleColumnVisibility(int i, bool persist)
+    {
+        if (i < 0 || i >= ColumnSettingsMigrator.Count) return;
         _colVisible[i] = !_colVisible[i];
         RebuildColumns();
         NotifyColVisible();
-        PersistColumns();
+        if (persist) PersistColumns();
     }
 
     [RelayCommand]
     public void ResetColumns()
     {
-        _colWidths = new double[] { 96, 132, 132, 0, 78, 180, 132 };
-        _colOrder = new[] { 0, 1, 2, 3, 4, 5, 6 };
-        _colVisible = new[] { true, true, true, true, true, true, true };
+        _colWidths = new double[] { 96, 132, 132, 0, 78, 180, 132, 144 };
+        _colOrder = new[] { 0, 1, 2, 7, 3, 4, 5, 6 };
+        _colVisible = new[] { true, true, true, true, true, true, true, true };
         RebuildColumns();
         NotifyColVisible();
         PersistColumns();
@@ -233,6 +243,6 @@ public partial class MainViewModel
         PersistColumns();
         ShowToast(
             target ? "已切换为完整列" : "已切换为精简列",
-            target ? "已展开全部 8 列（设计稿默认布局）" : "已折叠「服务分类」与「本地地址」，为进程名让出更多宽度");
+            target ? "已展开服务分类与本地地址列" : "已折叠「服务分类」与「本地地址」，为进程名让出更多宽度");
     }
 }

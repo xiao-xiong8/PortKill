@@ -191,6 +191,7 @@ public partial class MainViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ShowInspector))]
     private bool _inspectorVisible;
     [ObservableProperty] private string _inspName = "—";
+    [ObservableProperty] private string _inspApplicationName = "—";
     [ObservableProperty] private string _inspMeta = "未选中任何进程";
     [ObservableProperty] private string _inspPillText = "—";
     [ObservableProperty] private bool _inspPillListening;
@@ -317,6 +318,8 @@ public partial class MainViewModel : ViewModelBase
 
     public MainViewModel(PortKiller.Modules.Ports.PortToolServices services)
     {
+        _portServices = services;
+        InitializeProcessMetadata();
         Shell = new PortKiller.Shell.ShellViewModel(Bootstrap.ApplicationComposition.CreateToolCatalog());
         Shell.SelectionChanged += OnToolSelected;
         Shell.UpdatePortCount(0);
@@ -348,6 +351,7 @@ public partial class MainViewModel : ViewModelBase
             TypographyService.Applied += OnTypographyApplied;
             ApplyTypography();
             _suppressSettingsSave = false;
+            _backgroundQueriesEnabled = true;
             await RefreshCoreAsync(true);
             if (!_shuttingDown) InitLiveWatcher();
             if (!_shuttingDown)

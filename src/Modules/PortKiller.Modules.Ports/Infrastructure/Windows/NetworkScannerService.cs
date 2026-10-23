@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using PortKiller.Models;
@@ -13,6 +14,8 @@ namespace PortKiller.Services;
 
 public class NetworkScannerService : PortKiller.Modules.Ports.Abstractions.IPortScanner
 {
+    private IProcessMetadataSession? _metadataSession;
+    internal void SetMetadataSession(IProcessMetadataSession session) => _metadataSession = session;
     public ScanResult ScanAllPorts(ulong previousFingerprint = 0)
     {
         var sw = Stopwatch.StartNew();
@@ -37,12 +40,19 @@ public class NetworkScannerService : PortKiller.Modules.Ports.Abstractions.IPort
     }
 
     /// <summary>合并四类表并计算全量指纹；保留采集阶段的完整耗时。</summary>
-    private static ScanResult AssembleSnapshot(List<PortConnection>[] sources,
+    private ScanResult AssembleSnapshot(List<PortConnection>[] sources,
         Dictionary<int, ProcessSnapshotItem> processMap, ulong previousFingerprint, Stopwatch clock)
     {
         int capacity = 0;
         foreach (var source in sources) capacity += source.Count;
         var allItems = new List<PortConnection>(capacity);
+        var references = new Dictionary<int, ProcessReference>();
+        if (_metadataSession != null)
+            foreach (var source in sources)
+                foreach (var item in source)
+                    if (item.Pid > 4 && !item.IsTimeWait && processMap.TryGetValue(item.Pid, out var process))
+                        references.TryAdd(item.Pid, new ProcessReference(item.Pid, process.ProcessName));
+        var observations = _metadataSession?.Observe(references.Values.ToArray());
         int listeningCount = 0;
         ulong fingerprint = 14695981039346656037UL;
         foreach (var source in sources)
@@ -50,6 +60,8 @@ public class NetworkScannerService : PortKiller.Modules.Ports.Abstractions.IPort
             foreach (var item in source)
             {
                 AttachProcess(item, processMap);
+                if (!item.IsTimeWait && observations != null && observations.TryGetValue(item.Pid, out var observation))
+                { item.ProcessCreationTime = observation.Identity.CreationTime; item.ProcessPath = observation.ProcessPath; }
                 if (item.IsListening) listeningCount++;
                 fingerprint += CalculateRowHash(item);
                 allItems.Add(item);
@@ -87,6 +99,7 @@ public class NetworkScannerService : PortKiller.Modules.Ports.Abstractions.IPort
         hash = (hash ^ (uint)item.LocalPort) * prime;
         hash = (hash ^ (uint)item.RemotePort) * prime;
         hash = (hash ^ (uint)item.Pid) * prime;
+        hash = (hash ^ (ulong)item.ProcessCreationTime) * prime;
         hash = (hash ^ (uint)item.RawState) * prime;
         FoldChars(ref hash, item.LocalAddress, prime);
         FoldChars(ref hash, item.RemoteAddress, prime);

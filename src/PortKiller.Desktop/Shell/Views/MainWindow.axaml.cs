@@ -684,7 +684,7 @@ public partial class MainWindow : Window
                     }
                     insertAt = boundaries - (boundaries > draggedPos ? 1 : 0);
                 }
-                Vm.ReorderColumn(_sortLogical, Math.Clamp(insertAt, 0, 6));
+                Vm.ReorderColumn(_sortLogical, Math.Clamp(insertAt, 0, MainViewModel.ColTitles.Length - 1));
             }
             else if (_sortLogical >= 0)
             {

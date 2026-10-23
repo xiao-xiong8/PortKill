@@ -21,6 +21,8 @@ public class PortConnection
     public uint RawRemotePort { get; set; }
 
     public int Pid { get; set; }
+    public long ProcessCreationTime { get; set; }
+    public ProcessIdentity ProcessIdentity => new(Pid, ProcessCreationTime);
     public string ProcessName { get; set; } = string.Empty;
     public int ParentPid { get; set; }
     public string? ProcessPath { get; set; }
@@ -48,12 +50,38 @@ public class PortConnection
     private string FormatEndpoint(string address, int port)
         => IpVersion == "IPv6" ? $"[{address}]:{port}" : $"{address}:{port}";
 
-    // 不含状态的连接身份用于跨快照复用；名称参与匹配可识别不同名的 PID 复用，同名实例仍无法区分。
-    internal readonly record struct ConnectionIdentity(string Protocol, string IpVersion,
-        string LocalAddress, int LocalPort, string RemoteAddress, int RemotePort, int Pid, string ProcessName);
+    // 不含状态的连接身份用于跨快照复用；进程创建时间可用时区分同名 PID 复用；未验证实例仍保留原有名称匹配。
+    internal readonly record struct ConnectionIdentity
+    {
+        private readonly string _protocol, _ipVersion, _localAddress, _remoteAddress, _processName;
+        private readonly int _localPort, _remotePort, _pid, _hash;
+        private readonly long _creationTime;
+        internal ConnectionIdentity(PortConnection row)
+        {
+            _protocol = row.Protocol; _ipVersion = row.IpVersion;
+            _localAddress = row.LocalAddress; _localPort = row.LocalPort;
+            _remoteAddress = row.RemoteAddress; _remotePort = row.RemotePort;
+            _pid = row.Pid; _processName = row.ProcessName; _creationTime = row.ProcessCreationTime;
+            _hash = HashCode.Combine(HashCode.Combine(_protocol, _ipVersion, _localAddress, _localPort,
+                _remoteAddress, _remotePort, _pid, _processName), _creationTime);
+        }
+        internal bool Matches(PortConnection row) => _pid == row.Pid && _creationTime == row.ProcessCreationTime
+            && _localPort == row.LocalPort && _remotePort == row.RemotePort && _protocol == row.Protocol
+            && _ipVersion == row.IpVersion && _localAddress == row.LocalAddress
+            && _remoteAddress == row.RemoteAddress && _processName == row.ProcessName;
+        public override int GetHashCode() => _hash;
+    }
 
-    internal ConnectionIdentity Identity => new(Protocol, IpVersion, LocalAddress, LocalPort,
-        RemoteAddress, RemotePort, Pid, ProcessName);
+    private ConnectionIdentity _identityCache;
+    internal ConnectionIdentity Identity
+    {
+        get
+        {
+            // 筛选往返反复查询同一行时复用字符串哈希；兼容旧调用方直接修改身份字段。
+            if (!_identityCache.Matches(this)) _identityCache = new ConnectionIdentity(this);
+            return _identityCache;
+        }
+    }
 
     private string? _serviceCategoryCache;
 

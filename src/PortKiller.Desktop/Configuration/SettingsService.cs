@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text.Json;
 using PortKiller.Native;
@@ -58,14 +58,14 @@ public class AppSettings
     public string SettingsTab { get; set; } = "startup";
 
     // ── 表格列状态（列宽拖拽与列顺序 · 持久化） ────────────────────────
-    /// <summary>7 个数据列的宽度，CSV；0 表示星号列（进程名）。默认 92,124,122,0,72,160,116。</summary>
-    public string ColWidths { get; set; } = "96,132,132,0,78,180,132";
+    /// <summary>8 个数据列的宽度，CSV；0 表示星号列（进程名）。默认 96,132,132,0,78,180,132,144。</summary>
+    public string ColWidths { get; set; } = ColumnSettingsMigrator.Widths;
 
-    /// <summary>7 个数据列的视觉顺序（逻辑列下标排列），CSV；默认 0,1,2,3,4,5,6。</summary>
-    public string ColOrder { get; set; } = "0,1,2,3,4,5,6";
+    /// <summary>8 个数据列的视觉顺序（逻辑列下标排列），CSV；默认 0,1,2,7,3,4,5,6（应用名称 ID 7 位于进程名之前）。</summary>
+    public string ColOrder { get; set; } = ColumnSettingsMigrator.Order;
 
-    /// <summary>7 个数据列的可见性，CSV（bool.Parse 格式）；默认全可见。旧版配置无此字段，由 Normalize 兜底。</summary>
-    public string ColVisible { get; set; } = "True,True,True,True,True,True,True";
+    /// <summary>8 个数据列的可见性，CSV（bool.Parse 格式）；默认全可见。旧版配置无此字段，由 Normalize 兜底。</summary>
+    public string ColVisible { get; set; } = ColumnSettingsMigrator.Visible;
 
     // ── 桌面悬浮窗 HUD ─────────────────────────────────────────────────
     public bool IsHudVisible { get; set; } = false;
@@ -140,9 +140,7 @@ public static class SettingsService
         // 旧的系统默认字体迁移到内嵌原型字体；其他显式自选字体继续保留。
         if (IsLegacyDefaultFont(s.UiFontFamily)) s.UiFontFamily = string.Empty;
         if (IsLegacyDefaultFont(s.MonoFontFamily)) s.MonoFontFamily = string.Empty;
-        if (string.IsNullOrWhiteSpace(s.ColWidths)) s.ColWidths = "96,132,132,0,78,180,132";
-        if (string.IsNullOrWhiteSpace(s.ColOrder)) s.ColOrder = "0,1,2,3,4,5,6";
-        if (string.IsNullOrWhiteSpace(s.ColVisible)) s.ColVisible = "True,True,True,True,True,True,True";
+        ColumnSettingsMigrator.Migrate(s);
     }
 
     private static double Clamp(double value, double min, double max)

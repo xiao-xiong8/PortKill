@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using PortKiller.Native;
 
@@ -28,6 +29,7 @@ public partial class PortConnectionItem : PortConnection
             RawRemoteAddr = snapshot.RawRemoteAddr,
             RawRemotePort = snapshot.RawRemotePort,
             Pid = snapshot.Pid,
+            ProcessCreationTime = snapshot.ProcessCreationTime,
             ProcessName = snapshot.ProcessName,
             ParentPid = snapshot.ParentPid,
             ProcessPath = snapshot.ProcessPath,
@@ -41,6 +43,22 @@ public partial class PortConnectionItem : PortConnection
     /// 列表归并使用类型化 Identity，避免每秒拼接全表字符串。
     /// </summary>
     private string? _rowKeyCache;
+    private ProcessMetadata? _metadata;
+    private static readonly PropertyChangedEventArgs ApplicationNameChanged = new(nameof(ApplicationName));
+    private static readonly PropertyChangedEventArgs ApplicationDisplayChanged = new(nameof(ApplicationNameDisplay));
+    private static readonly PropertyChangedEventArgs ApplicationTipChanged = new(nameof(ApplicationNameTip));
+    public string ApplicationName => !IsTimeWait ? _metadata?.ApplicationName ?? "" : "";
+    public string ApplicationNameDisplay => ApplicationName.Length > 0 ? ApplicationName : "—";
+    public string ApplicationNameTip => ApplicationName.Length > 0 ? ApplicationName :
+        !IsTimeWait && _metadata?.State == ProcessMetadataState.Pending ? "应用名称读取中" : "应用名称不可用";
+    internal void ApplyMetadata(ProcessMetadata? metadata)
+    {
+        if (_metadata == metadata) return;
+        _metadata = metadata;
+        OnPropertyChanged(ApplicationNameChanged);
+        OnPropertyChanged(ApplicationDisplayChanged);
+        OnPropertyChanged(ApplicationTipChanged);
+    }
     public string RowKey => _rowKeyCache ??=
         $"{Protocol}|{IpVersion}|{LocalAddress}|{LocalPort}|{RemoteAddress}|{RemotePort}|{State}|{Pid}|{ProcessName}";
 
@@ -77,6 +95,7 @@ public partial class PortConnectionItem : PortConnection
     private static readonly string[] SnapshotProperties =
     {
         nameof(RowKey), nameof(IsTimeWait), nameof(IsListening), nameof(IsEstablished), nameof(IsKernelHeld),
+        nameof(ApplicationName), nameof(ApplicationNameDisplay), nameof(ApplicationNameTip),
         nameof(ServiceCategory), nameof(IsCatWeb), nameof(IsCatDb), nameof(IsCatDev), nameof(IsCatNet),
         nameof(IsCatSys), nameof(IsCatApp), nameof(IsPillListen), nameof(IsPillEstablished), nameof(IsPillTimeWait),
         nameof(IsPillKernel), nameof(IsPillIdle), nameof(StatusBadge), nameof(ProcessDisplay),

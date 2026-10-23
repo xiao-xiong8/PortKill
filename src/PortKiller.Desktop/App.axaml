@@ -1114,15 +1114,24 @@
             <Setter Property="Background" Value="{DynamicResource BgInput}" />
         </Style>
         <Style Selector="Button.nav.active">
-            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentFg}" />
         </Style>
         <Style Selector="Button.nav.active /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource BgHover}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="BorderBrush" Value="{DynamicResource BorderStrong}" />
         </Style>
-        <Style Selector="Button.nav.active /template/ ContentPresenter#PART_ContentPresenter TextBlock">
+        <Style Selector="Button.nav TextBlock.navTitle">
             <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+        <Style Selector="Button.nav Path.navIcon">
+            <Setter Property="Stroke" Value="{DynamicResource TextMuted}" />
+        </Style>
+        <Style Selector="Button.nav.active TextBlock.navTitle">
+            <Setter Property="Foreground" Value="{DynamicResource AccentFg}" />
+        </Style>
+        <Style Selector="Button.nav.active Path.navIcon">
+            <Setter Property="Stroke" Value="{DynamicResource AccentFg}" />
         </Style>
 
         <!-- 窗口控制按钮（最小化/最大化/关闭） -->

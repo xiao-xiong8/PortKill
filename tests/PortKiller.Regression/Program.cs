@@ -36,7 +36,23 @@ internal static class Program
         }
         try
         {
+            int probeIndex = Array.IndexOf(args, "--application-name-probe");
+            if (probeIndex >= 0)
+            { ApplicationNameProbe.Run(int.Parse(args[probeIndex + 1]), args[probeIndex + 2]).GetAwaiter().GetResult(); return 0; }
+            if (args.Contains("--application-name-ui"))
+            {
+                ApplicationNameChecks.WindowsIntegration().GetAwaiter().GetResult();
+                Console.WriteLine("PASS 应用名称宿主的 Win32 身份、路径与文件版本信息");
+                UiChecks.Run(true); return 0;
+            }
             if (args.Contains("--ui-only")) { UiChecks.Run(); Console.WriteLine("窗口验证通过。"); return 0; }
+            Run("应用名称列配置迁移、幂等与异常修复", ApplicationNameChecks.ColumnMigration);
+            Run("应用名称搜索、独立排序、字段与进程实例", ApplicationNameChecks.SearchAndSorting);
+            Run("同端口连接排序不受无关增删和采集顺序影响", ApplicationNameChecks.SortingRemainsStableAcrossSnapshots);
+            Run("筛选往返复用行且连接退出清理缓存", ApplicationNameChecks.RowsSurviveFilteringButNotExit);
+            RunAsync("共享名称缓存、退避、PID 复用、溢出与释放", ApplicationNameChecks.CacheAndLifetime).GetAwaiter().GetResult();
+            RunAsync("后台搜索只发布最新请求", ApplicationNameChecks.LatestQueryWins).GetAwaiter().GetResult();
+            RunAsync("Win32 应用名称身份与路径集成", ApplicationNameChecks.WindowsIntegration).GetAwaiter().GetResult();
             Run("317 明确提示管理员权限", ResetFailure_NonElevated_ExplainsPermission);
             Run("精确匹配 URL 端口", MatchPort_SimilarPorts_DoesNotCrossMatch);
             Run("连接释放能力边界", CanRelease_UnsupportedRecords_ReturnsFalse);

@@ -434,6 +434,8 @@ public partial class MainViewModel
     partial void OnCurrentViewChanged(int value)
     {
         Shell.SelectLegacy(value);
+        if (value == 0) ResumePortQueries();
+        else PausePortQueries();
         if (value == 2) EnsureFontList();
         if (value == 1) _ = LoadServiceStatesAsync();
         if (value == 1 && _kernelViewDirty)

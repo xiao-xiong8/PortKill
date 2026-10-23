@@ -14,7 +14,9 @@ internal static class ApplicationComposition
     ];
 
     internal static PortToolServices CreatePortServices(
-        HttpSysDiagnosticService? diagnostics = null, NetworkScannerService? scanner = null)
+        HttpSysDiagnosticService? diagnostics = null, NetworkScannerService? scanner = null,
+        PortKiller.Models.IProcessMetadataProvider? metadata = null)
         => new(scanner ?? new NetworkScannerService(), new ProcessManagerService(),
-            new ProcessDetailService(), diagnostics ?? new HttpSysDiagnosticService());
+            new ProcessDetailService(), diagnostics ?? new HttpSysDiagnosticService(),
+            metadata ?? new PortKiller.Processes.WindowsProcessMetadataProvider(), ownsMetadata: metadata == null);
 }

@@ -16,10 +16,10 @@ namespace PortKiller.Regression;
 internal static class UiChecks
 {
     /// <summary>整个窗口验证的时限，超时返回失败。</summary>
-    private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(60);
 
     /// <summary>沿用正式程序渲染配置，在 STA 线程运行消息循环。</summary>
-    public static void Run()
+    public static void Run(bool applicationNamesOnly = false)
     {
         global::PortKiller.Program.BuildAvaloniaApp().SetupWithoutStarting();
         using var stop = new CancellationTokenSource(Deadline);
@@ -35,6 +35,8 @@ internal static class UiChecks
         {
             try
             {
+                if (applicationNamesOnly)
+                { await ApplicationNameUiChecks.Run(); completed = true; return; }
                 ShellChecks.NavigationAndExtensionLifetime();
                 FontChecks.EmbeddedFacesAndFallback();
                 await FontLicenseChecks.ViewerAndDocuments();
@@ -44,6 +46,7 @@ internal static class UiChecks
                 CheckTemplates();
                 await CheckFontLoadingAsync(stop.Token);
                 CheckListScrollingContract();
+                await ApplicationNameUiChecks.Run();
                 await CheckInspectorAccuracyAsync(stop.Token);
                 await CheckDiagnosticOrderingAsync();
                 await CheckOperationPreparationAsync(stop.Token);

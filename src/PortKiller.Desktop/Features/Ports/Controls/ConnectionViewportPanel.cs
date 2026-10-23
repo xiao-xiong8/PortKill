@@ -29,6 +29,8 @@ public sealed class ConnectionViewportPanel : VirtualizingPanel
 
     protected override Size MeasureOverride(Size availableSize)
     {
+        double width = double.IsFinite(availableSize.Width) ? availableSize.Width
+            : Math.Max(MinWidth, double.IsFinite(_viewport.Width) ? _viewport.Width : 0);
         int itemCount = Items.Count;
         double viewHeight = double.IsFinite(_viewport.Height) && _viewport.Height > 0
             ? _viewport.Height : 600;
@@ -73,8 +75,9 @@ public sealed class ConnectionViewportPanel : VirtualizingPanel
             }
             else if (!ReferenceEquals(container.DataContext, Items[index]))
                 generator.PrepareItemContainer(container, Items[index], index);
+            container.IsHitTestVisible = true;
             container.IsVisible = true;
-            container.Measure(new Size(availableSize.Width, RowHeight));
+            container.Measure(new Size(width, RowHeight));
         }
         // 仅在视口缩小或数据缩短时卸载，持续滚动的槽位数量稳定。
         int capacity = Math.Max(wanted, Math.Min(itemCount, (int)Math.Ceiling(viewHeight * 2 / RowHeight) + 2));
@@ -95,7 +98,6 @@ public sealed class ConnectionViewportPanel : VirtualizingPanel
             AddInternalChild(spare);
         }
         _free.Clear();
-        double width = double.IsFinite(availableSize.Width) ? availableSize.Width : 0;
         return new Size(width, extent);
     }
 
@@ -109,7 +111,7 @@ public sealed class ConnectionViewportPanel : VirtualizingPanel
 
     protected override void OnItemsChanged(IReadOnlyList<object?> items, NotifyCollectionChangedEventArgs e)
     {
-        // 索引槽位固定；布局前逐槽校验引用，新增/删除也不会保留陈旧绑定。
+        // 索引槽位固定；立即校验引用，新增/删除后不能显示或命中旧连接。
         foreach (var pair in _indices)
             if (pair.Value < items.Count)
             {

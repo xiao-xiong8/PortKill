@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia;
 using PortKiller.Views;
 
 namespace PortKiller.Features.Ports;
@@ -9,6 +10,21 @@ public partial class PortsView : UserControl
 {
     public PortsView() => InitializeComponent();
     private MainWindow? Host => TopLevel.GetTopLevel(this) as MainWindow;
+    private void OnPortListScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        if (sender is ScrollViewer body && this.FindControl<ScrollViewer>("PortHeaderScroller") is { } header)
+        {
+            if (this.FindControl<Panel>("PortHeaderContent") is { } content && body.Extent.Width > 0)
+                content.Width = body.Extent.Width;
+            if (header.Offset.X != body.Offset.X) header.Offset = new Vector(body.Offset.X, 0);
+        }
+    }
+    private void OnPortHeaderScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        if (sender is ScrollViewer header && this.FindControl<ScrollViewer>("PortListScroller") is { } body
+            && body.Offset.X != header.Offset.X)
+            body.Offset = new Vector(header.Offset.X, body.Offset.Y);
+    }
     private void OnClearAllFilters(object? sender, RoutedEventArgs e) => Host?.OnClearAllFilters(sender, e);
     private void OnClearSearch(object? sender, RoutedEventArgs e) => Host?.OnClearSearch(sender, e);
     private void OnColHandlePressed(object? sender, PointerPressedEventArgs e) => Host?.OnColHandlePressed(sender, e);

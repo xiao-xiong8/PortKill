@@ -136,6 +136,9 @@ public partial class MainViewModel
         if (changed) _changedPublishes++;
         _lastFingerprint = result.Fingerprint;
         _allItems = result.Items;
+        if (changed) _connectionRowCache.UpdateSnapshot(result.Items);
+        if (changed) _connectionQueries.Invalidate();
+        ApplyProcessMetadata(MetadataSnapshot);
         TotalCount = result.TotalCount;
         ListeningCount = result.ListeningCount;
         EnteredCountCore(result.Items);
@@ -148,13 +151,12 @@ public partial class MainViewModel
         {
             UpdateHudRows();
             // 交互静默期：归并推迟到闸口归零时补做；手动强制刷新（F5/刷新按钮）不受限
-            if (!force && IsMergeHeld) _mergePending = true;
+            if (!force && IsMergeHeld && !_queryBypassesHold) _mergePending = true;
             else
             {
                 _mergePending = false;
                 if (force) _inspectorProcess = null;
-                ApplyFilter();
-                if (force) RecomputeInspector();
+                RequestConnectionFilter(respectHold: !force, refreshInspector: force);
                 MaybeRefreshKernelView();
             }
         }
@@ -182,7 +184,9 @@ public partial class MainViewModel
     // ── 筛选 ────────────────────────────────────────────────────────────
     partial void OnSearchTextChanged(string value)
     {
+        _connectionQueries.Invalidate();
         _searchDebounceCts?.Cancel();
+        _searchDebounceCts?.Dispose();
         _searchDebounceCts = new CancellationTokenSource();
         _ = DebounceSearchAsync(_searchDebounceCts.Token);
     }
@@ -262,87 +266,23 @@ public partial class MainViewModel
     // 归并使用 PortConnectionItem.Identity；排序与筛选始终基于最新扫描对象。
 
     [RelayCommand]
-    public void ApplyFilter()
+    public void ApplyFilter() => RequestConnectionFilter();
+
+    private void RequestConnectionFilter(bool respectHold = false, bool refreshInspector = false)
     {
-        if (_allItems == null) return;
-
-        var query = _allItems.AsEnumerable();
-
-        if (SelectedCategory != "全部分类")
+        if (_shuttingDown) return;
+        _queryBypassesHold |= !respectHold;
+        _refreshInspectorPending |= refreshInspector;
+        if (_backgroundQueriesEnabled && !IsPortsViewVisible) { _queryDirty = true; return; }
+        if (!_queryBypassesHold && IsMergeHeld) { _mergePending = true; return; }
+        var query = new PortKiller.Features.Ports.Services.PortQuery(_allItems, MetadataSnapshot,
+            SearchText, SelectedCategory, SelectedState, _sortCol, _sortAsc, !_queryBypassesHold, _refreshInspectorPending);
+        if (_backgroundQueriesEnabled)
         {
-            string cat = SelectedCategory;
-            query = query.Where(x => x.ServiceCategory == cat);
+            _queryInFlight = true;
+            _connectionQueries.Enqueue(query);
         }
-
-        if (SelectedState != "全部状态")
-        {
-            string st = SelectedState;
-            query = st switch
-            {
-                "LISTENING" => query.Where(x => x.IsListening),
-                "ESTABLISHED" => query.Where(x => x.IsEstablished),
-                "TIME_WAIT" => query.Where(x => x.IsTimeWait),
-                _ => query
-            };
-        }
-
-        if (!string.IsNullOrWhiteSpace(SearchText))
-        {
-            string keyword = SearchText.Trim();
-
-            if (keyword.Contains('-') && TryParsePortRange(keyword, out int minPort, out int maxPort))
-            {
-                query = query.Where(x => x.LocalPort >= minPort && x.LocalPort <= maxPort);
-            }
-            else
-            {
-                var tokens = keyword.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                foreach (var token in tokens)
-                {
-                    string sub = token;
-                    bool isPort = sub.StartsWith(':')
-                        ? int.TryParse(sub.TrimStart(':'), out _)
-                        : int.TryParse(sub, out _);
-
-                    if (isPort)
-                    {
-                        int searchPort = int.Parse(sub.TrimStart(':'));
-                        query = query.Where(x =>
-                            x.LocalPort == searchPort ||
-                            x.RemotePort == searchPort ||
-                            x.Pid == searchPort ||
-                            x.ProcessName.Contains(sub, StringComparison.OrdinalIgnoreCase));
-                    }
-                    else
-                    {
-                        query = query.Where(x =>
-                            x.ProcessName.Contains(sub, StringComparison.OrdinalIgnoreCase) ||
-                            x.ServiceCategory.Contains(sub, StringComparison.OrdinalIgnoreCase) ||
-                            x.State.Contains(sub, StringComparison.OrdinalIgnoreCase) ||
-                            x.LocalAddress.Contains(sub, StringComparison.OrdinalIgnoreCase) ||
-                            x.Protocol.Contains(sub, StringComparison.OrdinalIgnoreCase));
-                    }
-                }
-            }
-        }
-
-        var ordered = _sortCol switch
-        {
-            1 => _sortAsc ? query.OrderBy(x => x.State) : query.OrderByDescending(x => x.State),
-            2 => _sortAsc ? query.OrderBy(x => x.ServiceCategory) : query.OrderByDescending(x => x.ServiceCategory),
-            3 => _sortAsc ? query.OrderBy(x => x.ProcessName) : query.OrderByDescending(x => x.ProcessName),
-            4 => _sortAsc ? query.OrderBy(x => x.Pid) : query.OrderByDescending(x => x.Pid),
-            5 => _sortAsc ? query.OrderBy(x => x.LocalEndpoint) : query.OrderByDescending(x => x.LocalEndpoint),
-            0 => _sortAsc ? query.OrderBy(x => x.LocalPort) : query.OrderByDescending(x => x.LocalPort),
-            _ => query.OrderBy(x => x.LocalPort)
-        };
-        var list = ordered.ThenBy(x => x.Pid).ToList();
-
-        var signature = (_sortCol, _sortAsc);
-        bool sortChanged = signature != _mergeSortSignature;
-        _mergeSortSignature = signature;
-
-        MergeFilteredItems(list, sortChanged);
+        else CommitConnectionQuery(query, PortKiller.Features.Ports.Services.PortConnectionQueryService.Evaluate(query));
     }
 
     private bool _initialFocusApplied;
@@ -394,7 +334,7 @@ public partial class MainViewModel
             }
             else
             {
-                var row = PortConnectionItem.FromSnapshot(desired);
+                var row = _connectionRowCache.Take(desired) ?? PortConnectionItem.FromSnapshot(desired);
                 target.Add(row);
                 fresh.Add(row);
             }
@@ -409,6 +349,7 @@ public partial class MainViewModel
             {
                 item.PropertyChanged -= OnItemPropertyChanged;
                 if (ReferenceEquals(_focusedItem, item)) { item.IsFocused = false; _focusedItem = null; }
+                _connectionRowCache.Store(item);
                 removedCount++;
             }
         }

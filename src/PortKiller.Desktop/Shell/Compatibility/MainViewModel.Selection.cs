@@ -155,6 +155,7 @@ public partial class MainViewModel
         var item = _focusedItem;
         if (item == null)
         {
+            InspApplicationName = "—";
             InspectorVisible = false;
             _inspectorProcess = null;
             _inspectorVersion++;
@@ -182,6 +183,7 @@ public partial class MainViewModel
         }
         while (InspPorts.Count > ports.Count) InspPorts.RemoveAt(InspPorts.Count - 1);
 
+        InspApplicationName = item.ApplicationNameDisplay;
         if (!full) return;
 
         InspName = string.IsNullOrWhiteSpace(item.ProcessName) ? "（未知进程）" : item.ProcessName;

@@ -28,7 +28,7 @@
                                             </Viewbox>
                                             <TextBox Grid.Column="1" Classes="flat" x:Name="SearchBox"
                                                      Text="{Binding SearchText, Mode=TwoWay}"
-                                                     PlaceholderText="搜索端口 / 进程名 / PID"
+                                                     PlaceholderText="搜索软件 / 进程 / 端口 / PID"
                                                      VerticalContentAlignment="Center" />
                                             <Button Grid.Column="2" Classes="bare" Width="16" Height="16"
                                                     Click="OnClearSearch"
@@ -164,6 +164,9 @@
                                 <!-- 表头区：批量条（选中时出现，设计稿 50px） + 36px 表头 -->
                                 <StackPanel Grid.Row="0">
 
+                                <TextBlock Text="应用名称补全中" IsVisible="{Binding IsApplicationMetadataPending}" Margin="16,6"
+                                           FontSize="{DynamicResource TypeCaption}" Foreground="{DynamicResource TextMuted}" />
+
                                 <!-- ③ 批量操作条 -->
                                 <Border Height="50" Padding="16,0,12,0"
                                         IsVisible="{Binding HasSelection}"
@@ -194,7 +197,8 @@
                                 <Border Height="36" Background="{DynamicResource BgTableHead}"
                                         BorderBrush="{DynamicResource BorderSoft}" BorderThickness="0,0,0,1"
                                         ClipToBounds="False">
-                                    <Panel>
+                                    <ScrollViewer x:Name="PortHeaderScroller" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" ScrollChanged="OnPortHeaderScrollChanged">
+                                    <Panel x:Name="PortHeaderContent" MinWidth="{Binding TableMinWidth}">
                                         <Grid x:Name="HeaderGrid" Margin="0,0,16,0" Background="Transparent">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="44" />
@@ -205,6 +209,7 @@
                                                 <ColumnDefinition Width="{Binding ColWidth4}" />
                                                 <ColumnDefinition Width="{Binding ColWidth5}" />
                                                 <ColumnDefinition Width="{Binding ColWidth6}" />
+                                                <ColumnDefinition Width="{Binding ColWidth7}" />
                                             </Grid.ColumnDefinitions>
                                             <!-- 勾选列整格都是点击热区（44×36），不必瞄准 15px 小方块 -->
                                             <Border Grid.Column="0" Padding="16,0,0,0" Background="Transparent"
@@ -306,6 +311,39 @@
                                                         </Viewbox>
                                                     </StackPanel>
                                                     <Border Classes="colHandle" Tag="2" PointerPressed="OnColHandlePressed"
+                                                            VerticalAlignment="Stretch" HorizontalAlignment="Right" Width="7"
+                                                            Background="Transparent" Cursor="SizeWestEast">
+                                                        <Border Classes="colHandleBar" Width="1" Height="14" CornerRadius="2"
+                                                                Background="{DynamicResource HandleBar}" VerticalAlignment="Center" />
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+
+                                            <!-- 应用名称 · 逻辑列 7 -->
+                                            <Border Grid.Column="{Binding ColIdx7}" Classes="thCell" Tag="7"
+                                                    IsVisible="{Binding IsColVisible7}"
+                                                    PointerPressed="OnHeaderSortPressed">
+                                                <Grid>
+                                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                        <TextBlock Classes="th" Text="应用名称" />
+                                                        <Viewbox Width="12" Height="12" VerticalAlignment="Center">
+                                                            <Panel Width="24" Height="24">
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort7None}">
+                                                                    <Path Classes="ic thIdleArrow" StrokeThickness="2" Stroke="{DynamicResource SortIdle}" Data="M6.5 10 12 5.5 17.5 10" />
+                                                                    <Path Classes="ic thIdleArrow" StrokeThickness="2" Stroke="{DynamicResource SortIdle}" Data="M6.5 14 12 18.5 17.5 14" />
+                                                                </Canvas>
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort7Asc}">
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M12 19V6" />
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M6.5 11.5 12 6l5.5 5.5" />
+                                                                </Canvas>
+                                                                <Canvas Width="24" Height="24" IsVisible="{Binding IsSort7Desc}">
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M12 5v13" />
+                                                                    <Path Classes="ic" StrokeThickness="2.2" Stroke="{DynamicResource AccentFg}" Data="M6.5 12.5 12 18l5.5-5.5" />
+                                                                </Canvas>
+                                                            </Panel>
+                                                        </Viewbox>
+                                                    </StackPanel>
+                                                    <Border Classes="colHandle" Tag="7" PointerPressed="OnColHandlePressed"
                                                             VerticalAlignment="Stretch" HorizontalAlignment="Right" Width="7"
                                                             Background="Transparent" Cursor="SizeWestEast">
                                                         <Border Classes="colHandleBar" Width="1" Height="14" CornerRadius="2"
@@ -446,18 +484,19 @@
                                             </Border>
                                         </Canvas>
                                     </Panel>
+                                    </ScrollViewer>
                                 </Border>
                                 </StackPanel>
 
                                 <!-- 数据行 -->
-                                <ScrollViewer x:Name="PortListScroller" Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                                <ScrollViewer x:Name="PortListScroller" Grid.Row="1" HorizontalScrollBarVisibility="Auto" ScrollChanged="OnPortListScrollChanged"
                                               VerticalScrollBarVisibility="Auto"
                                               IsDeferredScrollingEnabled="False"
                                               IsScrollInertiaEnabled="True">
                                     <views:ConnectionItemsControl ItemsSource="{Binding FilteredItems}">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
-                                                <views:ConnectionViewportPanel />
+                                                <views:ConnectionViewportPanel MinWidth="{Binding TableMinWidth}" />
                                             </ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
@@ -479,6 +518,7 @@
                                                                 <ColumnDefinition Width="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColWidth4}" />
                                                                 <ColumnDefinition Width="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColWidth5}" />
                                                                 <ColumnDefinition Width="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColWidth6}" />
+                                                                <ColumnDefinition Width="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColWidth7}" />
                                                             </Grid.ColumnDefinitions>
                                                             <!-- 勾选列整格都是点击热区 -->
                                                             <Border Grid.Column="0" Padding="16,0,0,0"
@@ -525,9 +565,14 @@
                                                                 </Border>
                                                             </Border>
 
+                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx7}" Classes="ellipsis" Margin="8,0"
+                                                                       IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible7}"
+                                                                       Text="{Binding ApplicationNameDisplay}" ToolTip.Tip="{Binding ApplicationNameTip}"
+                                                                       FontSize="{DynamicResource TypeBody}" Foreground="{DynamicResource TextPrimary}" />
+
                                                             <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx3}" Classes="ellipsis" Margin="8,0"
                                                                        IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible3}"
-                                                                       Text="{Binding ProcessDisplay}" FontSize="{DynamicResource TypeBody}"
+                                                                       Text="{Binding ProcessDisplay}" ToolTip.Tip="{Binding ProcessDisplay}" FontSize="{DynamicResource TypeBody}"
                                                                        FontWeight="Medium"
                                                                        Foreground="{DynamicResource TextPrimary}" />
 
@@ -598,7 +643,7 @@
                                         <TextBlock Text="没有找到匹配的端口" FontSize="{DynamicResource TypeCard}" FontWeight="Medium"
                                                    Foreground="{DynamicResource TextSecondary}"
                                                    HorizontalAlignment="Center" />
-                                        <TextBlock Text="试试减少关键词，或清除「服务分类 / 状态」筛选条件后重试"
+                                        <TextBlock Text="{Binding EmptySearchDescription}"
                                                    FontSize="{DynamicResource TypeCaption}" Foreground="{DynamicResource TextMuted}"
                                                    TextAlignment="Center" TextWrapping="Wrap" />
                                         <Button Classes="tool" Height="32" Padding="14,0" HorizontalAlignment="Center"

@@ -823,10 +823,10 @@
                                             Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).SwitchToolCommand}"
                                             CommandParameter="{Binding Id}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                                         <Grid ColumnDefinitions="Auto,*,Auto">
-                                            <Path Grid.Column="0" Classes="ic" Data="{Binding Icon}" Width="15" Height="15" Stretch="Uniform"
-                                                  Stroke="{DynamicResource TextMuted}" StrokeThickness="1.8" />
-                                            <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="{DynamicResource TypeBody}" Margin="9,0,0,0"
-                                                       Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
+                                            <Path Grid.Column="0" Classes="ic navIcon" Data="{Binding Icon}" Width="15" Height="15" Stretch="Uniform"
+                                                  StrokeThickness="1.8" />
+                                            <TextBlock Grid.Column="1" Classes="navTitle" Text="{Binding Title}" FontSize="{DynamicResource TypeBody}" Margin="9,0,0,0"
+                                                       VerticalAlignment="Center" />
                                             <TextBlock Grid.Column="2" Text="{Binding Badge}" FontSize="{DynamicResource TypeMicro}"
                                                        Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
                                         </Grid>
@@ -972,6 +972,10 @@
                                     <Border Classes="card" Padding="4">
                                         <StackPanel>
                                             <StackPanel Margin="10" Spacing="4">
+                                                <TextBlock Classes="kvLabel" Text="应用名称" />
+                                                <TextBlock Classes="kvValue" Text="{Binding InspApplicationName}" />
+                                            </StackPanel>
+                                            <StackPanel Margin="10" Spacing="4">
                                                 <TextBlock Classes="kvLabel" Text="可执行文件" />
                                                 <TextBlock Classes="kvValue copyable" Text="{Binding InspExePath}"
                                                            PointerPressed="OnExePathPressed" />
@@ -1091,6 +1095,13 @@
                             <CheckBox Grid.Column="0" Theme="{StaticResource AppCheckBox}" IsChecked="{Binding IsColVisible2, Mode=OneWay}" IsHitTestVisible="False" Focusable="False"
                             VerticalAlignment="Center" />
                             <TextBlock Grid.Column="1" Text="服务分类" />
+                            </Grid>
+                            </Border>
+                            <Border Classes="colMenuItem" Tag="7" PointerPressed="OnToggleColMenuItem">
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+                            <CheckBox Grid.Column="0" Theme="{StaticResource AppCheckBox}" IsChecked="{Binding IsColVisible7, Mode=OneWay}" IsHitTestVisible="False" Focusable="False"
+                            VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="应用名称" />
                             </Grid>
                             </Border>
                             <Border Classes="colMenuItem" Tag="3" PointerPressed="OnToggleColMenuItem">

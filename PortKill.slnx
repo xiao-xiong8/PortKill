@@ -5,6 +5,7 @@
     <Project Path="src/PortKiller.Desktop/PortKiller.Desktop.csproj" />
   </Folder>
   <Folder Name="/src/Modules/">
+    <Project Path="src/Modules/PortKiller.UpdateManagement/PortKiller.UpdateManagement.csproj" />
     <Project Path="src/Modules/PortKiller.UpdateProtocol/PortKiller.UpdateProtocol.csproj" />
     <Project Path="src/Modules/PortKiller.Modules.Ports/PortKiller.Modules.Ports.csproj" />
     <Project Path="src/Modules/PortKiller.Updates/PortKiller.Updates.csproj" />
@@ -18,6 +19,8 @@
     <Project Path="src/Tools/PortKiller.UpdateTool/PortKiller.UpdateTool.csproj" />
   </Folder>
   <Folder Name="/src/Services/">
+    <Project Path="src/Services/PortKiller.UpdateAdmin.Api/PortKiller.UpdateAdmin.Api.csproj" />
     <Project Path="src/Services/PortKiller.UpdateNotifier/PortKiller.UpdateNotifier.csproj" />
+    <Project Path="src/Services/PortKiller.UpdatePublisher.Worker/PortKiller.UpdatePublisher.Worker.csproj" />
   </Folder>
 </Solution>

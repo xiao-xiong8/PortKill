@@ -14,6 +14,7 @@ namespace PortKiller.Updates;
 /// 仅支持当前 win-x64 AOT 四文件发布格式；不覆盖用户设置或发布配置。</summary>
 public static class UpdateInstaller
 {
+    internal static Action<int>? AfterReplaceForTesting { get; set; }
     internal static readonly string[] Files = ["PortKiller.exe", "av_libglesv2.dll", "libHarfBuzzSharp.dll", "libSkiaSharp.dll"];
     private static string Root(string install) => Path.Combine(install, ".portkiller-update");
     private static string JournalPath(string install) => Path.Combine(Root(install), "transaction.json");
@@ -99,7 +100,7 @@ public static class UpdateInstaller
             Process? candidate = null;
             try
             {
-                ApplyFiles(install, stage, journal);
+                ApplyFiles(install, stage, journal, AfterReplaceForTesting);
                 candidate = StartApplication(install, journal.Token);
                 var watch = Stopwatch.StartNew();
                 string health = Path.Combine(Root(install), "healthy-" + journal.Token);

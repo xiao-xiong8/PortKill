@@ -1,133 +1,163 @@
 #requires -Version 7.0
 [CmdletBinding()]
 param(
-    [string]$Version,
-    [Parameter(Mandatory)][string]$SshUser,
+    [string]$Version, [string]$Resume, [string]$SshUser,
     [string]$ServerIp = $env:PORTKILLER_UPDATE_SERVER_IP,
-    [ValidateRange(1, 65535)][int]$SshPort = 22,
-    [ValidateRange(1, 65535)][int]$HttpPort = 8080,
-    [string]$SigningKeyPath,
-    [string]$PublicKeyPath,
-    [string]$ReleaseNotesPath,
-    [string]$VcVarsAllPath
+    [ValidateRange(1,65535)][int]$SshPort = 22,
+    [ValidateRange(1,65535)][int]$HttpPort = 8080,
+    [uri]$PublicBaseUrl, [switch]$AllowHttp,
+    [string]$SigningKeyPath, [string]$PublicKeyPath, [string]$ReleaseNotesPath,
+    [string]$VcVarsAllPath, [string]$PreparedPublishDirectory,
+    [string]$LocalRoot, [switch]$AllowDirty, [string]$ResignRelease
 )
 $ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
-if ([string]::IsNullOrWhiteSpace($ServerIp)) {
-    $publisherSettingsPath = Join-Path $projectRoot 'config/publisher.local.json'
-    if (Test-Path -LiteralPath $publisherSettingsPath) {
-        $publisherSettings = Get-Content -LiteralPath $publisherSettingsPath -Raw | ConvertFrom-Json
-        $ServerIp = [string]$publisherSettings.ServerIp
-    }
+$releaseRoot = Join-Path $projectRoot 'artifacts/releases'
+[IO.Directory]::CreateDirectory($releaseRoot) | Out-Null
+$publisherLock = [IO.FileStream]::new((Join-Path $releaseRoot '.publisher.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+$sequenceLock = $null
+$explicitVersion = [bool]$Version
+function Save-Record {
+    $temporary = $recordPath + '.tmp'
+    [IO.File]::WriteAllText($temporary, ($record | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
+    [IO.File]::Move($temporary, $recordPath, $true)
 }
-if (-not $ReleaseNotesPath) { $ReleaseNotesPath = Join-Path $projectRoot 'docs/RELEASE-NOTES.txt' }
-if (-not (Test-Path -LiteralPath $ReleaseNotesPath)) { throw '找不到更新说明文件。' }
-$projectFile = Join-Path $projectRoot 'src/PortKiller.Desktop/PortKiller.Desktop.csproj'
-[xml]$project = [IO.File]::ReadAllText($projectFile)
-$versionNode = $project.SelectSingleNode('/Project/PropertyGroup/Version')
-if ($null -eq $versionNode) { throw 'Desktop 项目缺少 Version 属性。' }
-$currentVersion = [string]$versionNode.InnerText
-if ($currentVersion -notmatch '^\d+\.\d+(\.\d+){0,2}$') { throw "项目版本格式无效：$currentVersion" }
-
-function Normalize-Version([string]$value) {
-    $parsed = [version]$value
-    return [version]::new($parsed.Major, $parsed.Minor, [Math]::Max(0, $parsed.Build), [Math]::Max(0, $parsed.Revision))
+function Invoke-Tool([string[]]$Arguments) {
+    $output = & dotnet $tool @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "更新工具失败：$($Arguments[0])" }
+    return ($output -join "`n")
 }
-if (-not $Version) {
-    $parsed = [version]$currentVersion
-    $patch = [Math]::Max(0, $parsed.Build) + 1
-    $Version = "$($parsed.Major).$($parsed.Minor).$patch"
+function Invoke-Server([string[]]$Arguments) {
+    if ($LocalRoot) { return Invoke-Tool $Arguments }
+    # Remote paths are fixed; dynamic identifiers/digests are validated before use.
+    $output = & ssh -p $SshPort $target ("/opt/portkiller-updates/tool/PortKiller.UpdateTool " + ($Arguments -join ' '))
+    if ($LASTEXITCODE -ne 0) { throw '服务端操作失败；使用同一 ReleaseId 和 -Resume 恢复。' }
+    return ($output -join "`n")
 }
-if ($Version -notmatch '^\d+\.\d+(\.\d+){0,2}$' -or (Normalize-Version $Version) -le (Normalize-Version $currentVersion)) {
-    throw "发布版本必须高于当前版本 $currentVersion。"
-}
-if ($SshUser -notmatch '^[A-Za-z_][A-Za-z0-9_.-]*$') { throw 'SSH 用户名格式无效。' }
-$parsedIp = $null
-if (-not [Net.IPAddress]::TryParse($ServerIp, [ref]$parsedIp) -or $parsedIp.AddressFamily -ne [Net.Sockets.AddressFamily]::InterNetwork) {
-    throw 'ServerIp 必须是 IPv4 地址。'
-}
-if (-not $SigningKeyPath -or -not $PublicKeyPath) {
-    $keyDirectory = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'PortKiller/publisher/keys'
-    if (-not $SigningKeyPath) { $SigningKeyPath = Join-Path $keyDirectory 'update-private.pem' }
-    if (-not $PublicKeyPath) { $PublicKeyPath = Join-Path $keyDirectory 'update-public.pem' }
-}
-$SigningKeyPath = (Resolve-Path -LiteralPath $SigningKeyPath).Path
-$PublicKeyPath = (Resolve-Path -LiteralPath $PublicKeyPath).Path
-foreach ($tool in @('ssh', 'scp')) { if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "缺少 OpenSSH 命令：$tool" } }
-
-Push-Location -LiteralPath $projectRoot
 try {
-    & (Join-Path $projectRoot 'scripts/build/Build.ps1') -Configuration Release -IncludeUi
-    if ($LASTEXITCODE -ne 0) { throw '构建或回归验证失败。' }
-
-    $publishDirectory = Join-Path $projectRoot 'artifacts/publish/win-x64'
-    $publishArgs = @{ OutputDirectory = $publishDirectory; Version = $Version }
-    if ($VcVarsAllPath) { $publishArgs.VcVarsAllPath = $VcVarsAllPath }
-    & (Join-Path $projectRoot 'scripts/build/Publish-Aot.ps1') @publishArgs
-
-    $publicKey = [IO.File]::ReadAllText($PublicKeyPath).Trim()
-    $settings = [ordered]@{
-        Enabled = $true; AllowHttp = $true
-        ManifestUrl = "http://${ServerIp}:$HttpPort/stable/manifest.json"
-        PublicKeyPem = $publicKey
-        PollSeconds = 300; CheckTimeoutSeconds = 8; DownloadTimeoutSeconds = 180
+    $toolDirectory=Join-Path $releaseRoot '.tool'
+    & dotnet build (Join-Path $projectRoot 'src/Tools/PortKiller.UpdateTool/PortKiller.UpdateTool.csproj') -c Release -o $toolDirectory --nologo
+    if ($LASTEXITCODE -ne 0) { throw '更新工具构建失败。' }
+    $tool = Join-Path $toolDirectory 'PortKiller.UpdateTool.dll'
+    if ($Resume) {
+        if ($Resume -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$') { throw 'ReleaseId 格式错误。' }
+        $releaseDirectory = Join-Path $releaseRoot $Resume
+        $recordPath = Join-Path $releaseDirectory 'release-record.json'
+        $record = Get-Content -LiteralPath $recordPath -Raw | ConvertFrom-Json
+        if ($record.Phase -notin @('Verified','Staged','ManifestActivated','PublicVerified','Completed')) { throw '本次尚未完成签名验证，请创建新记录。' }
+        $Version = $record.Version; $PublicBaseUrl = [uri]$record.PublicBaseUrl; $AllowHttp = $record.AllowHttp
+    } else {
+        $dirty = @(& git -C $projectRoot status --porcelain)
+        if ($LASTEXITCODE -ne 0) { throw '无法读取 Git 状态。' }
+        if ($dirty.Count -gt 0 -and -not $AllowDirty) { throw '发布要求干净工作区；本地演练可显式使用 -AllowDirty，CI 禁止该选项。' }
+        if (-not $ServerIp) {
+            $localConfig = Join-Path $projectRoot 'config/publisher.local.json'
+            if (Test-Path -LiteralPath $localConfig) { $ServerIp = (Get-Content -LiteralPath $localConfig -Raw | ConvertFrom-Json).ServerIp }
+        }
+        if (-not $PublicBaseUrl) {
+            $address = $null
+            if (-not [Net.IPAddress]::TryParse($ServerIp, [ref]$address)) { throw '请提供 PublicBaseUrl 或兼容模式的 ServerIp。' }
+            $PublicBaseUrl = [uri]"http://${ServerIp}:$HttpPort/stable/"; $AllowHttp = $true
+        }
+        if (($PublicBaseUrl.Scheme -ne 'https' -and -not ($AllowHttp -and $PublicBaseUrl.Scheme -eq 'http')) -or $PublicBaseUrl.UserInfo -or $PublicBaseUrl.Query -or $PublicBaseUrl.Fragment) { throw '分发地址必须是 HTTPS；HTTP 需要 -AllowHttp。' }
+        $keyDirectory = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'PortKiller/publisher/keys'
+        if (-not $SigningKeyPath) { $SigningKeyPath = Join-Path $keyDirectory 'update-private.pem' }
+        if (-not $PublicKeyPath) { $PublicKeyPath = Join-Path $keyDirectory 'update-public.pem' }
+        $privateKey = [Security.Cryptography.RSA]::Create(); $publicKey = [Security.Cryptography.RSA]::Create()
+        try {
+            $privateKey.ImportFromPem([IO.File]::ReadAllText([IO.Path]::GetFullPath($SigningKeyPath)))
+            $publicKey.ImportFromPem([IO.File]::ReadAllText([IO.Path]::GetFullPath($PublicKeyPath)))
+            $privateFingerprint=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($privateKey.ExportSubjectPublicKeyInfo()))
+            $keyFingerprint=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($publicKey.ExportSubjectPublicKeyInfo()))
+            if ($privateKey.KeySize -lt 2048 -or $privateFingerprint -ne $keyFingerprint) { throw 'SigningKeyMismatch: 签名私钥与分发公钥不匹配。' }
+        } finally { $privateKey.Dispose(); $publicKey.Dispose() }
+        [xml]$project = [IO.File]::ReadAllText((Join-Path $projectRoot 'src/PortKiller.Desktop/PortKiller.Desktop.csproj'))
+        $current = [version]$project.SelectSingleNode('/Project/PropertyGroup/Version').InnerText
+        if (-not $Version) { $Version = "$($current.Major).$($current.Minor).$([Math]::Max(0,$current.Build)+1)" }
+        if ($Version -notmatch '^\d+\.\d+(\.\d+){0,2}$') { throw '版本格式错误。' }
+        function Normalized([version]$v) { return [version]::new($v.Major,$v.Minor,[Math]::Max(0,$v.Build),[Math]::Max(0,$v.Revision)) }
+        if (-not $ResignRelease -and (Normalized ([version]$Version)) -le (Normalized $current)) { throw "版本必须高于项目版本 $current。" }
+        $releaseId = "$([DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmss'))-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+        $releaseDirectory = Join-Path $releaseRoot $releaseId
+        [IO.Directory]::CreateDirectory($releaseDirectory) | Out-Null
+        $recordPath = Join-Path $releaseDirectory 'release-record.json'
+        $record = [pscustomobject]@{ReleaseId=$releaseId; Version=$Version; Phase='Created'; PublicBaseUrl=$PublicBaseUrl.AbsoluteUri; AllowHttp=[bool]$AllowHttp; Commit=(& git -C $projectRoot rev-parse HEAD); Dirty=($dirty.Count -gt 0); KeyFingerprint=$keyFingerprint; Expected='none'; Sequence=0L; ManifestSha256=''; PackageSha256=''}
+        Save-Record
+        $settings = [ordered]@{Enabled=$true; AllowHttp=[bool]$AllowHttp; ManifestUrl=$PublicBaseUrl.AbsoluteUri.TrimEnd('/')+'/manifest.json'; PublicKeyPem=[IO.File]::ReadAllText([IO.Path]::GetFullPath($PublicKeyPath)); RealtimeEnabled=$true; PollSeconds=300; CheckTimeoutSeconds=8; DownloadTimeoutSeconds=180}
+        [IO.File]::WriteAllText((Join-Path $releaseDirectory 'verification.json'), ($settings | ConvertTo-Json -Depth 4))
     }
-    [IO.File]::WriteAllText((Join-Path $publishDirectory 'update-settings.json'),
-        ($settings | ConvertTo-Json -Depth 4), [Text.UTF8Encoding]::new($false))
-
-    $timestamp = [DateTimeOffset]::UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'")
-    $releaseDirectory = Join-Path $projectRoot "artifacts/releases/$Version-$timestamp"
-    $keyDirectory = Split-Path -Parent $SigningKeyPath
-    [IO.Directory]::CreateDirectory($keyDirectory) | Out-Null
-    $sequencePath = Join-Path $keyDirectory 'update-sequence.txt'
-    $previousSequence = if (Test-Path -LiteralPath $sequencePath) { [long]::Parse([IO.File]::ReadAllText($sequencePath).Trim()) } else { 0L }
-    $sequence = [Math]::Max([DateTimeOffset]::UtcNow.ToUnixTimeSeconds(), $previousSequence + 1)
-    $sequenceTemporary = $sequencePath + '.tmp'
-    [IO.File]::WriteAllText($sequenceTemporary, $sequence.ToString([Globalization.CultureInfo]::InvariantCulture), [Text.UTF8Encoding]::new($false))
-    [IO.File]::Move($sequenceTemporary, $sequencePath, $true)
-
-    & (Join-Path $projectRoot 'scripts/release/New-UpdateRelease.ps1') `
-        -PublishDirectory $publishDirectory -Version $Version `
-        -PackageBaseUrl "http://${ServerIp}:$HttpPort/stable/" `
-        -SigningKeyPath $SigningKeyPath -OutputDirectory $releaseDirectory `
-        -Sequence $sequence -ReleaseNotesPath $ReleaseNotesPath -AllowHttp
-
+    $config = Join-Path $releaseDirectory 'verification.json'
+    if ($Version -notmatch '^\d+\.\d+(\.\d+){0,2}$' -or $record.ReleaseId -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$' -or $record.Expected -notmatch '^(none|[A-Fa-f0-9]{64})$') { throw '发布记录格式无效。' }
+    $serverRoot = if ($LocalRoot) { [IO.Path]::GetFullPath($LocalRoot) } else { '/srv/portkiller-updates/stable' }
+    $serverConfig = if ($LocalRoot) { $config } else { '/etc/portkiller-updates/verification.json' }
+    if (-not $LocalRoot) {
+        if ($SshUser -notmatch '^[A-Za-z_][A-Za-z0-9_.-]*$' -or $ServerIp -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]*$') { throw '请提供有效 SSH 用户和主机。' }
+        $target = "$SshUser@$ServerIp"
+    }
     $packageName = "PortKiller-$Version-win-x64.zip"
-    $packagePath = Join-Path $releaseDirectory $packageName
-    $manifestPath = Join-Path $releaseDirectory 'manifest.json'
-    $package = Get-Item -LiteralPath $packagePath
-    $packageHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    $manifestHash = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    $stageName = "portkiller-upload-$Version-$([guid]::NewGuid().ToString('N'))"
-    $target = "$SshUser@$ServerIp"
-    & ssh -p $SshPort $target "mkdir -m 700 -- '$stageName'"
-    if ($LASTEXITCODE -ne 0) { throw '无法连接服务器或创建上传暂存目录。' }
-    & scp -P $SshPort -- $packagePath $manifestPath "${target}:$stageName/"
-    if ($LASTEXITCODE -ne 0) { throw 'SCP 上传失败；服务器暂存目录保留供检查。' }
-
-    $remoteCommand = @"
-set -eu
-stage='$stageName'
-root='/srv/portkiller-updates/stable'
-cd "`$HOME/`$stage"
-test -w "`$root"
-test "`$(stat -c %s '$packageName')" = '$($package.Length)'
-printf '%s  %s\n' '$packageHash' '$packageName' | sha256sum -c -
-printf '%s  %s\n' '$manifestHash' 'manifest.json' | sha256sum -c -
-test ! -e "`$root/$packageName"
-install -m 0644 '$packageName' "`$root/$packageName.uploading"
-mv -T "`$root/$packageName.uploading" "`$root/$packageName"
-curl -fSs --max-time 15 -o /dev/null 'http://127.0.0.1:$HttpPort/stable/$packageName'
-install -m 0644 'manifest.json' "`$root/manifest.json.uploading"
-mv -T "`$root/manifest.json.uploading" "`$root/manifest.json"
-curl -fSs --max-time 15 -o /dev/null 'http://127.0.0.1:$HttpPort/stable/manifest.json'
-rm -rf -- "`$HOME/`$stage"
-"@
-    & ssh -p $SshPort $target $remoteCommand
-    if ($LASTEXITCODE -ne 0) { throw '服务器校验或原子发布失败；请检查 SSH 输出和暂存目录。' }
-
-    $versionNode.InnerText = $Version
-    $project.Save($projectFile)
-    Write-Output "发布成功：版本 $Version，HTTP ${ServerIp}:$HttpPort；产物保存在 $releaseDirectory"
-    Write-Output '初次安装时将 update-settings.json 与 AOT 四文件放在同一目录；后续更新只替换四个程序文件。'
-} finally { Pop-Location }
+    $package = Join-Path $releaseDirectory $packageName; $manifest = Join-Path $releaseDirectory 'manifest.json'
+    if (-not $Resume) {
+        $currentReceipt = (Invoke-Server @('inspect','--root',$serverRoot,'--config',$serverConfig)) | ConvertFrom-Json
+        if ($null -ne $currentReceipt) { $record.Expected=$currentReceipt.ManifestSha256 }
+        if (-not $explicitVersion -and -not $ResignRelease -and $currentReceipt -and (Normalized ([version]$currentReceipt.Version)) -ge (Normalized ([version]$Version))) {
+            $baseline=[version]$currentReceipt.Version
+            $Version="$($baseline.Major).$($baseline.Minor).$([Math]::Max(0,$baseline.Build)+1)"
+            $record.Version=$Version
+            $packageName="PortKiller-$Version-win-x64.zip"; $package=Join-Path $releaseDirectory $packageName
+        }
+        $sequenceDirectory=Split-Path -Parent ([IO.Path]::GetFullPath($SigningKeyPath))
+        $sequenceLock=[IO.FileStream]::new((Join-Path $sequenceDirectory 'sequence.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+        $sequencePath=Join-Path $sequenceDirectory 'update-sequence.txt'
+        $previous=if (Test-Path -LiteralPath $sequencePath) { [long]::Parse([IO.File]::ReadAllText($sequencePath)) } else { 0L }
+        $record.Sequence=[Math]::Max([DateTimeOffset]::UtcNow.ToUnixTimeSeconds(),[Math]::Max($previous,[long]$currentReceipt.Sequence)+1)
+        $seqTmp=$sequencePath+'.tmp'; [IO.File]::WriteAllText($seqTmp,[string]$record.Sequence); [IO.File]::Move($seqTmp,$sequencePath,$true)
+        Save-Record
+        $publish=Join-Path $releaseDirectory 'publish'
+        if ($ResignRelease) {
+            if ($ResignRelease -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,100}$') { throw '续签 ReleaseId 格式错误。' }
+            $old=Join-Path $releaseRoot $ResignRelease
+            Copy-Item -LiteralPath (Join-Path $old $packageName) -Destination $package
+            & (Join-Path $PSScriptRoot 'Renew-UpdateManifest.ps1') -ManifestPath (Join-Path $old 'manifest.json') -OutputPath $manifest -SigningKeyPath $SigningKeyPath -PublicKeyPath $PublicKeyPath -Sequence $record.Sequence
+        } else {
+            if ($PreparedPublishDirectory) {
+                [IO.Directory]::CreateDirectory($publish)|Out-Null
+                foreach ($name in @('PortKiller.exe','av_libglesv2.dll','libHarfBuzzSharp.dll','libSkiaSharp.dll')) { Copy-Item -LiteralPath (Join-Path $PreparedPublishDirectory $name) -Destination $publish }
+            } else {
+                & (Join-Path $projectRoot 'scripts/build/Build.ps1') -Configuration Release -IncludeUi
+                if ($LASTEXITCODE -ne 0) { throw '构建回归失败。' }
+                $buildArgs=@{OutputDirectory=$publish;Version=$Version}; if ($VcVarsAllPath) { $buildArgs.VcVarsAllPath=$VcVarsAllPath }
+                & (Join-Path $projectRoot 'scripts/build/Publish-Aot.ps1') @buildArgs
+            }
+            Copy-Item -LiteralPath $config -Destination (Join-Path $publish 'update-settings.json')
+            if (-not $ReleaseNotesPath) { $ReleaseNotesPath=Join-Path $projectRoot 'docs/RELEASE-NOTES.txt' }
+            & (Join-Path $PSScriptRoot 'New-UpdateRelease.ps1') -PublishDirectory $publish -Version $Version -PackageBaseUrl $PublicBaseUrl -SigningKeyPath $SigningKeyPath -OutputDirectory $releaseDirectory -Sequence $record.Sequence -ReleaseNotesPath $ReleaseNotesPath -AllowHttp:$AllowHttp
+            $zip=[IO.Compression.ZipFile]::Open((Join-Path $releaseDirectory "PortKiller-$Version-setup.zip"),[IO.Compression.ZipArchiveMode]::Create)
+            try { foreach ($file in @('PortKiller.exe','av_libglesv2.dll','libHarfBuzzSharp.dll','libSkiaSharp.dll','update-settings.json')) { [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip,(Join-Path $publish $file),$file)|Out-Null } } finally { $zip.Dispose() }
+        }
+        Invoke-Tool @('verify','--config',$config,'--manifest',$manifest,'--package',$package)|Out-Null
+        $record.ManifestSha256=(Get-FileHash -LiteralPath $manifest).Hash; $record.PackageSha256=(Get-FileHash -LiteralPath $package).Hash
+        $record.Phase='Verified'; Save-Record
+    }
+    if ((Get-FileHash -LiteralPath $manifest).Hash -ne $record.ManifestSha256 -or (Get-FileHash -LiteralPath $package).Hash -ne $record.PackageSha256) { throw '已签名产物发生变化，拒绝恢复。' }
+    Invoke-Tool @('verify','--config',$config,'--manifest',$manifest,'--package',$package)|Out-Null
+    if ($LocalRoot) { $remoteManifest=$manifest; $remotePackage=$package } else {
+        $stage='/srv/portkiller-updates/.staging/'+$record.ReleaseId
+        & ssh -p $SshPort $target "mkdir -p -m 700 $stage"
+        if ($LASTEXITCODE -ne 0) { throw '创建暂存目录失败。' }
+        & scp -P $SshPort -- $manifest $package "${target}:$stage/"
+        if ($LASTEXITCODE -ne 0) { throw '上传失败；使用同一 ReleaseId 恢复。' }
+        $remoteManifest="$stage/manifest.json"; $remotePackage="$stage/$packageName"
+    }
+    $record.Phase='Staged'; Save-Record
+    $receipt=Invoke-Server @('activate','--root',$serverRoot,'--config',$serverConfig,'--manifest',$remoteManifest,'--package',$remotePackage,'--expected',$record.Expected)
+    [IO.File]::WriteAllText((Join-Path $releaseDirectory 'server-receipt.json'),$receipt)
+    $record.Phase='ManifestActivated'; Save-Record
+    Invoke-Tool @('public-check','--config',$config,'--expected',$record.ManifestSha256)|Out-Null
+    $record.Phase='PublicVerified'; Save-Record
+    $record.Phase='Completed'; Save-Record
+    Write-Output "发布验证完成：$($record.ReleaseId)；记录：$recordPath"
+} catch {
+    if ($recordPath) { Write-Warning "已保留记录：$recordPath；签名完成后使用 -Resume <ReleaseId>。" }
+    throw
+} finally { if ($sequenceLock) { $sequenceLock.Dispose() }; $publisherLock.Dispose() }

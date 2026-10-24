@@ -6,17 +6,16 @@ using System.Text.Json;
 namespace PortKiller.Updates;
 
 // 配置随应用分发；服务器只能发布签名清单，不能更改信任公钥或安装路径。
-public sealed class UpdateOptions
+public sealed class UpdateOptions : ManifestVerificationOptions
 {
     public bool Enabled { get; set; }
-    public bool AllowHttp { get; set; }
-    public string ManifestUrl { get; set; } = "";
-    public string PublicKeyPem { get; set; } = "";
+    public bool RealtimeEnabled { get; set; } = true;
+    public string EventsUrl { get; set; } = "";
     public int PollSeconds { get; set; } = 300;
     public int CheckTimeoutSeconds { get; set; } = 8;
     public int DownloadTimeoutSeconds { get; set; } = 180;
 
-    internal Uri Validate()
+    public override Uri Validate()
     {
         if (!Uri.TryCreate(ManifestUrl, UriKind.Absolute, out var uri)
             || uri.Scheme != Uri.UriSchemeHttps && !(AllowHttp && uri.Scheme == Uri.UriSchemeHttp)
@@ -28,7 +27,18 @@ public sealed class UpdateOptions
         using var rsa = RSA.Create();
         rsa.ImportFromPem(PublicKeyPem);
         if (rsa.KeySize < 2048) throw new InvalidDataException("更新公钥至少需要 RSA 2048 位。");
+        if (RealtimeEnabled) _ = GetEventsUri(uri);
         return uri;
+    }
+
+    public Uri GetEventsUri(Uri? origin = null)
+    {
+        origin ??= new Uri(ManifestUrl, UriKind.Absolute);
+        var events = string.IsNullOrWhiteSpace(EventsUrl) ? new Uri(origin, "events") : new Uri(EventsUrl, UriKind.Absolute);
+        if (events.Scheme != origin.Scheme || !events.Authority.Equals(origin.Authority, StringComparison.OrdinalIgnoreCase)
+            || events.UserInfo.Length != 0 || events.Query.Length != 0 || events.Fragment.Length != 0)
+            throw new InvalidDataException("事件地址必须与更新清单同源且不含凭据、查询或片段。");
+        return events;
     }
 
     public static UpdateOptions Load(string directory)

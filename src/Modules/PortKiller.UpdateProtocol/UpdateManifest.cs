@@ -22,27 +22,29 @@ public sealed class UpdateManifest
     public string[] ReleaseNotes { get; set; } = [];
 
     [JsonIgnore]
-    internal string PayloadSha256 { get; private set; } = "";
+    public string PayloadSha256 { get; private set; } = "";
 
-    internal static Version ParseVersion(string text)
+    public static Version ParseVersion(string text)
     {
-        if (!System.Version.TryParse(text, out var version) || version.Minor < 0
+        if (string.IsNullOrWhiteSpace(text) || !System.Version.TryParse(text, out var version) || version.Minor < 0
             || text.Length > 32 || text.Any(c => !char.IsAsciiDigit(c) && c != '.'))
             throw new InvalidDataException("仅支持两至四段数字正式版本号。");
         return new Version(version.Major, version.Minor, Math.Max(0, version.Build), Math.Max(0, version.Revision));
     }
 
-    internal static UpdateManifest Verify(byte[] envelope, UpdateOptions options, DateTimeOffset? now = null)
+    public static UpdateManifest Verify(byte[] envelope, ManifestVerificationOptions options, DateTimeOffset? now = null, bool ignoreExpiry = false)
     {
-        var signed = JsonSerializer.Deserialize(envelope, UpdateJsonContext.Default.SignedUpdate)
+        if (envelope.Length > 65536) throw new InvalidDataException("更新清单过大。");
+        var signed = JsonSerializer.Deserialize(envelope, ProtocolJsonContext.Default.SignedUpdate)
             ?? throw new InvalidDataException("更新清单为空。");
+        if (string.IsNullOrEmpty(signed.Payload) || string.IsNullOrEmpty(signed.Signature)) throw new InvalidDataException("更新签名为空。");
         byte[] payload = Convert.FromBase64String(signed.Payload);
         using var rsa = RSA.Create();
         rsa.ImportFromPem(options.PublicKeyPem);
         if (!rsa.VerifyData(payload, Convert.FromBase64String(signed.Signature),
                 HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
             throw new InvalidDataException("更新清单签名不可信。");
-        var manifest = JsonSerializer.Deserialize(payload, UpdateJsonContext.Default.UpdateManifest)
+        var manifest = JsonSerializer.Deserialize(payload, ProtocolJsonContext.Default.UpdateManifest)
             ?? throw new InvalidDataException("更新内容为空。");
         _ = ParseVersion(manifest.Version);
         if (manifest.ReleaseNotes is null || manifest.ReleaseNotes.Length > 20
@@ -57,14 +59,14 @@ public sealed class UpdateManifest
             || package.Scheme != origin.Scheme || !package.Authority.Equals(origin.Authority, StringComparison.OrdinalIgnoreCase)
             || package.UserInfo.Length != 0 || package.Fragment.Length != 0 || package.Query.Length != 0
             || manifest.Size is <= 0 or > 268435456
-            || manifest.Sha256.Length != 64 || !manifest.Sha256.All(Uri.IsHexDigit))
+            || string.IsNullOrEmpty(manifest.Sha256) || manifest.Sha256.Length != 64 || !manifest.Sha256.All(Uri.IsHexDigit))
             throw new InvalidDataException("更新包平台、地址、大小或摘要不合法。");
         if (currentSchema)
         {
             DateTimeOffset utcNow = now ?? DateTimeOffset.UtcNow;
             TimeSpan lifetime = manifest.ExpiresUtc - manifest.PublishedUtc;
             if (manifest.Sequence <= 0 || manifest.PublishedUtc > utcNow.AddMinutes(5)
-                || manifest.ExpiresUtc <= utcNow || lifetime <= TimeSpan.Zero || lifetime > TimeSpan.FromDays(180))
+                || !ignoreExpiry && manifest.ExpiresUtc <= utcNow || lifetime <= TimeSpan.Zero || lifetime > TimeSpan.FromDays(180))
                 throw new InvalidDataException("更新清单发布序号或有效期无效。");
         }
         manifest.PayloadSha256 = Convert.ToHexString(SHA256.HashData(payload));

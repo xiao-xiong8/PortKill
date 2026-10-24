@@ -8,7 +8,9 @@ internal static class UpdateTrustStore
 {
     private static readonly object Sync = new();
 
-    internal static string DefaultPath => Path.Combine(
+    // Set only by the separate, non-shipping regression probe before starting any worker.
+    internal static string? ProbePath { get; set; }
+    internal static string DefaultPath => ProbePath ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "PortKiller", "update-trust.json");
 

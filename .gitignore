@@ -71,3 +71,12 @@ secrets*.json
 id_rsa*
 id_ed25519*
 **/.ssh/
+
+# Non-secret deployment examples and implementation records.
+!deploy/examples/update-settings.example.json
+!/docs/
+/docs/*
+!/docs/AUTO-UPDATE-ARCHITECTURE-PLAN.md
+!/docs/AUTO-UPDATE.md
+!/docs/AUTO-UPDATE-VALIDATION.md
+!/docs/ARCHITECTURE.md

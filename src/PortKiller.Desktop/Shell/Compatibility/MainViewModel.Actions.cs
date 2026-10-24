@@ -164,6 +164,7 @@ public partial class MainViewModel
         if (_shuttingDown) return;
         _shuttingDown = true;
         _lifetime.Cancel();
+        StopUpdates();
         DisposeProcessMetadata();
         Shell.SelectionChanged -= OnToolSelected;
         Shell.Dispose();

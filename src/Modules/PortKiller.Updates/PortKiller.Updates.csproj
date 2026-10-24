@@ -6,5 +6,8 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="PortKiller.Regression" />
+    <InternalsVisibleTo Include="PortKiller.UpdateRegression" />
+    <InternalsVisibleTo Include="PortKiller.UpdateProbe" />
+    <ProjectReference Include="../PortKiller.UpdateProtocol/PortKiller.UpdateProtocol.csproj" />
   </ItemGroup>
 </Project>

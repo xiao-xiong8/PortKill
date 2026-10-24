@@ -44,6 +44,7 @@ internal static class UpdateChecks
             bool supportsRange = rangeMode != 1;
             using var fixture = new Fixture(); int downloads = 0; long? resumedFrom = null;
             var resumeResponse = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var resumeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             HttpResponseMessage? pendingResponse = null;
             using var http = new HttpClient(new Handler((request, _) =>
             {
@@ -60,6 +61,7 @@ internal static class UpdateChecks
                     response.Content.Headers.ContentRange = new(rangeMode == 2 ? offset + 1 : offset, fixture.Package.Length - 1, fixture.Package.Length);
                 }
                 pendingResponse = response;
+                resumeStarted.SetResult();
                 return resumeResponse.Task;
             }));
             var service = fixture.Service(http);
@@ -71,6 +73,7 @@ internal static class UpdateChecks
                 && Directory.EnumerateFiles(fixture.Directory, "*.partial").Single() != null, "暂停丢失了已下载内容。");
             service.Changed -= PauseAfterProgress;
             var concurrent = Enumerable.Range(0, 20).Select(_ => service.DownloadAvailableAsync(CancellationToken.None)).ToArray();
+            await resumeStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
             resumeResponse.SetResult(pendingResponse!);
             await Task.WhenAll(concurrent);
             Program.Assert(resumedFrom == 8 && downloads == 2, "续传偏移或并发去重不正确。");

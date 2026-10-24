@@ -15,5 +15,7 @@ try {
         if ($IncludeUi) { $regressionArgs += @('--', '--ui') }
         & dotnet @regressionArgs
         if ($LASTEXITCODE -ne 0) { throw "回归失败：$LASTEXITCODE" }
+        & dotnet run --no-build --project (Join-Path $projectRoot 'tests/PortKiller.UpdateRegression/PortKiller.UpdateRegression.csproj') -c $Configuration
+        if ($LASTEXITCODE -ne 0) { throw "更新回归失败：$LASTEXITCODE" }
     }
 } finally { Pop-Location }

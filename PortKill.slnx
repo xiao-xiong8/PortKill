@@ -5,10 +5,19 @@
     <Project Path="src/PortKiller.Desktop/PortKiller.Desktop.csproj" />
   </Folder>
   <Folder Name="/src/Modules/">
+    <Project Path="src/Modules/PortKiller.UpdateProtocol/PortKiller.UpdateProtocol.csproj" />
     <Project Path="src/Modules/PortKiller.Modules.Ports/PortKiller.Modules.Ports.csproj" />
     <Project Path="src/Modules/PortKiller.Updates/PortKiller.Updates.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/PortKiller.UpdateRegression/PortKiller.UpdateRegression.csproj" />
+    <Project Path="tests/PortKiller.UpdateProbe/PortKiller.UpdateProbe.csproj" />
     <Project Path="tests/PortKiller.Regression/PortKiller.Regression.csproj" />
+  </Folder>
+  <Folder Name="/src/Tools/">
+    <Project Path="src/Tools/PortKiller.UpdateTool/PortKiller.UpdateTool.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/">
+    <Project Path="src/Services/PortKiller.UpdateNotifier/PortKiller.UpdateNotifier.csproj" />
   </Folder>
 </Solution>

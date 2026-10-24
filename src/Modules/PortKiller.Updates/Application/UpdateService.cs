@@ -28,9 +28,14 @@ public sealed class UpdateService
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
     private readonly TimeProvider _clock;
     private readonly string _trustPath;
+    private readonly UpdateOperationLog _operations;
     private string? _etag;
     private DateTimeOffset? _verifiedManifestExpiresUtc;
     private DateTimeOffset _nextCheck;
+    private DateTimeOffset _serverNextCheck;
+    private DateTimeOffset _nextAutomaticCheck;
+    private PreparedUpdate? _prepared;
+    private UpdateCoordinator? _coordinator;
     private byte[]? _availableEnvelope;
     private readonly object _downloadControl = new();
     private CancellationTokenSource? _downloadCancellation;
@@ -40,8 +45,9 @@ public sealed class UpdateService
     public int CheckCooldownSeconds => (int)Math.Clamp(Math.Ceiling((_nextCheck - _clock.GetUtcNow()).TotalSeconds), 0, int.MaxValue);
     public UpdateManifest? Available { get; private set; }
     public event Action<UpdateSnapshot>? Changed;
-    public UpdateManifest? Ready { get; private set; }
-    public string? ReadyPackage { get; private set; }
+    public PreparedUpdate? Prepared => Volatile.Read(ref _prepared);
+    public UpdateManifest? Ready => Prepared?.Manifest;
+    public string? ReadyPackage => Prepared?.PackagePath;
     public static string CurrentVersion
     {
         get
@@ -62,36 +68,43 @@ public sealed class UpdateService
         _current = UpdateManifest.ParseVersion(current ?? CurrentVersion); _delay = delay ?? Task.Delay;
         _clock = clock ?? TimeProvider.System;
         _trustPath = trustPath ?? UpdateTrustStore.DefaultPath;
+        _operations = new UpdateOperationLog(cache);
     }
 
-    public async Task RunAsync(CancellationToken token, Func<bool>? automaticCheckEnabled = null)
+    public Task RunAsync(CancellationToken token, Func<bool>? automaticCheckEnabled = null)
+        => Task.Run(async () =>
     {
         if (!_options.Enabled) { Publish(new(UpdateStage.Disabled, "自动更新未配置")); return; }
         try
         {
             _options.Validate();
-            await _delay(TimeSpan.FromSeconds(10 + Random.Shared.NextDouble() * 5), token);
-            while (!token.IsCancellationRequested)
-            {
-                // 下载暂停期间不被后台轮询恢复；偏好关闭后仍允许手动检查。
-                if ((automaticCheckEnabled?.Invoke() ?? true) && Snapshot.Stage != UpdateStage.Paused)
-                    await CheckAsync(token, download: false);
-                await _delay(TimeSpan.FromSeconds(_options.PollSeconds * (1 + Random.Shared.NextDouble() * .1)), token);
-            }
+            _coordinator = new UpdateCoordinator(_options, _client,
+                automaticCheckEnabled ?? (() => true),
+                () => Snapshot.Stage != UpdateStage.Paused && _gate.CurrentCount != 0,
+                ct => CheckCoreAsync(ct, false, true));
+            await _coordinator.RunAsync(token);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception ex) { Fail(ex, UpdateFailure.Configuration); }
-    }
+        finally { _coordinator = null; }
+    }, token);
 
-    public async Task CheckAsync(CancellationToken token, bool download = true)
+    public void NotifyEnvironmentChanged() => _coordinator?.RequestCheck();
+
+    public Task CheckAsync(CancellationToken token, bool download = true)
+        => Task.Run(() => CheckCoreAsync(token, download, false));
+
+    private async Task<bool> CheckCoreAsync(CancellationToken token, bool download, bool automatic)
     {
-        if (!_options.Enabled) { Publish(new(UpdateStage.Disabled, "自动更新未配置，请先配置发布源")); return; }
-        if (!_gate.Wait(0)) return;
+        if (!_options.Enabled) { Publish(new(UpdateStage.Disabled, "自动更新未配置，请先配置发布源")); return true; }
+        if (!_gate.Wait(0)) return false;
         try
         {
             token.ThrowIfCancellationRequested();
-            if (_clock.GetUtcNow() < _nextCheck) return;
+            var now = _clock.GetUtcNow();
+            if (now < _serverNextCheck || now < (automatic ? _nextAutomaticCheck : _nextCheck)) return false;
             _nextCheck = _clock.GetUtcNow().AddSeconds(30); // 手动按钮也不能绕过节流
+            _nextAutomaticCheck = now.AddSeconds(2);
             var uri = _options.Validate();
             Publish(new(UpdateStage.Checking, "正在检查应用更新…", Available));
             // 仅成功校验后保留 ETag；下载失败可在下一轮重试同一版本。
@@ -110,35 +123,40 @@ public sealed class UpdateService
                 // 不提前采纳服务端 ETag，防无效清单导致后续永久 304。
                 var verified = UpdateManifest.Verify(bytes, _options, _clock.GetUtcNow());
                 UpdateTrustStore.Accept(verified, _trustPath);
+                _candidateManifest = verified;
                 _candidateEtag = response.Headers.ETag?.ToString();
                 _candidateExpiresUtc = verified.Schema >= 2 ? verified.ExpiresUtc : null;
                 return bytes;
             }, _options.CheckTimeoutSeconds, token);
             if (envelope == null)
             {
-                if (Ready != null) Publish(new(UpdateStage.Ready, $"版本 {Ready.Version} 已就绪", Ready, Ready.Size));
+                if (Prepared is { } prepared && Available != null
+                    && prepared.Identity == ReleaseIdentity.From(Available))
+                    Publish(new(UpdateStage.Ready, $"版本 {prepared.Manifest.Version} 已就绪", prepared.Manifest, prepared.Manifest.Size));
                 else if (Available != null)
                 {
                     Publish(new(UpdateStage.Available, $"发现新版本 {Available.Version}", Available));
                     if (download && _availableEnvelope != null) await PreparePackageAsync(_availableEnvelope, token);
                 }
                 else Publish(new(UpdateStage.Latest, "当前已是最新版本"));
-                return;
+                return true;
             }
-            var manifest = UpdateManifest.Verify(envelope, _options, _clock.GetUtcNow());
+            var manifest = _candidateManifest ?? throw new InvalidDataException("缺少已验证清单。");
             if (UpdateManifest.ParseVersion(manifest.Version) <= _current)
             {
                 _etag = _candidateEtag; _verifiedManifestExpiresUtc = _candidateExpiresUtc;
-                Available = null; _availableEnvelope = null;
-                Publish(new(UpdateStage.Latest, "当前已是最新版本")); return;
+                Available = null; _availableEnvelope = null; Volatile.Write(ref _prepared, null);
+                Publish(new(UpdateStage.Latest, "当前已是最新版本")); return true;
             }
+            if (Prepared is { } old && old.Identity != ReleaseIdentity.From(manifest))
+                Volatile.Write(ref _prepared, null);
             Available = manifest; _availableEnvelope = envelope;
             _etag = _candidateEtag; _verifiedManifestExpiresUtc = _candidateExpiresUtc;
             string cachedPackage = PackagePath(manifest);
             if (await IsValidPackageAsync(cachedPackage, manifest, token))
             {
                 await MarkReadyAsync(cachedPackage, manifest, envelope, token);
-                return;
+                return true;
             }
             Publish(new(UpdateStage.Available, $"发现新版本 {manifest.Version}", manifest));
             if (download) await PreparePackageAsync(envelope, token);
@@ -149,18 +167,40 @@ public sealed class UpdateService
             Fail(ex);
         }
         finally { _gate.Release(); }
+        return _serverNextCheck <= _clock.GetUtcNow();
     }
     private string? _candidateEtag;
+    private UpdateManifest? _candidateManifest;
     private DateTimeOffset? _candidateExpiresUtc;
 
     /// <summary>检测和下载分开；并发入口共用单飞闸门，关闭窗口不会取消此任务。</summary>
-    public async Task DownloadAvailableAsync(CancellationToken token)
+    public Task DownloadAvailableAsync(CancellationToken token)
     {
-        if (!_gate.Wait(0)) return;
+        if (!_gate.Wait(0)) return Task.CompletedTask;
+        return Task.Run(async () =>
+        {
         try { token.ThrowIfCancellationRequested(); if (_availableEnvelope != null) await PreparePackageAsync(_availableEnvelope, token); }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception ex) { Fail(ex); }
         finally { _gate.Release(); }
+        });
+    }
+
+    public InstallationLease? TryAcquireInstallation()
+    {
+        if (!_gate.Wait(0)) return null;
+        var prepared = Prepared;
+        if (prepared == null || Snapshot.Stage != UpdateStage.Ready || Available == null
+            || prepared.Manifest.Schema >= 2 && prepared.Manifest.ExpiresUtc <= _clock.GetUtcNow()
+            || prepared.Identity != ReleaseIdentity.From(Available)) { _gate.Release(); return null; }
+        return new InstallationLease(prepared, _gate);
+    }
+
+    public sealed class InstallationLease(PreparedUpdate update, SemaphoreSlim gate) : IDisposable
+    {
+        private SemaphoreSlim? _gate = gate;
+        public PreparedUpdate Update { get; } = update;
+        public void Dispose() => Interlocked.Exchange(ref _gate, null)?.Release();
     }
 
     public void PauseDownload()
@@ -205,13 +245,14 @@ public sealed class UpdateService
     private async Task MarkReadyAsync(string package, UpdateManifest manifest, byte[] envelope, CancellationToken token)
     {
         await File.WriteAllBytesAsync(package + ".manifest", envelope, token);
-        Ready = manifest; ReadyPackage = package;
+        Volatile.Write(ref _prepared, new PreparedUpdate(manifest, package, ReleaseIdentity.From(manifest)));
         TrimCache(package);
         Publish(new(UpdateStage.Ready, $"版本 {manifest.Version} 已下载，确认后重启安装", manifest, manifest.Size));
     }
 
     private void Publish(UpdateSnapshot snapshot)
     {
+        _operations.Record(snapshot);
         Volatile.Write(ref _snapshot, snapshot);
         Changed?.Invoke(snapshot);
         Status?.Invoke(snapshot.Message, snapshot.Stage == UpdateStage.Failed);
@@ -327,9 +368,15 @@ public sealed class UpdateService
         {
             TimeSpan? retryAfter = response.Headers.RetryAfter?.Delta;
             if (response.Headers.RetryAfter?.Date is { } date) retryAfter = date - _clock.GetUtcNow();
+            if (retryAfter > TimeSpan.Zero)
+            {
+                var until = _clock.GetUtcNow().Add(retryAfter.Value);
+                if (until > _serverNextCheck) _serverNextCheck = until;
+            }
             if (retryAfter > TimeSpan.FromSeconds(60))
             {
-                _nextCheck = _clock.GetUtcNow().Add(retryAfter.Value);
+                _serverNextCheck = _clock.GetUtcNow().Add(retryAfter.Value);
+                _nextCheck = _serverNextCheck;
                 throw new HttpRequestException("更新服务器要求稍后重试。", null, response.StatusCode);
             }
             throw new TransientUpdateException(retryAfter);

@@ -1,4 +1,5 @@
 using Avalonia;
+using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -15,6 +16,10 @@ internal static class UpdateUiChecks
 {
     internal static async Task StatesAndWindowLifetime()
     {
+        Program.Assert(PortKiller.Views.MainWindow.IsUpdateResumeMessage(0x0218, 18)
+            && PortKiller.Views.MainWindow.IsUpdateResumeMessage(0x0218, 7)
+            && !PortKiller.Views.MainWindow.IsUpdateResumeMessage(0x0218, 4)
+            && !PortKiller.Views.MainWindow.IsUpdateResumeMessage(0x0010, 18), "休眠恢复消息分类不正确。");
         var previousTheme = Application.Current!.RequestedThemeVariant;
         var manifest = new UpdateManifest
         {
@@ -49,6 +54,20 @@ internal static class UpdateUiChecks
                     window.Hide(); window.Show(); window.UpdateLayout();
                     Program.Assert(firstCaption.AsSpan().SequenceEqual(RenderCaption(closeButton)),
                         $"{theme} 更新窗口重新打开后关闭按钮发生变化。");
+                    var samples = new List<double>();
+                    vm.Apply(new(UpdateStage.Downloading, "正在下载更新…", manifest, 0, 1000000));
+                    window.UpdateLayout();
+                    for (int sample = 0; sample < 1000; sample++)
+                    {
+                        long start = Stopwatch.GetTimestamp();
+                        vm.Apply(new(UpdateStage.Downloading, "正在下载更新…", manifest, manifest.Size * (sample % 100) / 100, 1000000 + sample));
+                        window.UpdateLayout();
+                        samples.Add(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+                        if (sample % 50 == 0) await Task.Delay(1);
+                    }
+                    samples.Sort();
+                    Program.Assert(samples[949] <= 16 && samples[^1] < 100, $"{theme} 更新 UI 执行超时：P95={samples[949]:F2}ms max={samples[^1]:F2}ms。");
+                    Console.WriteLine($"METRIC update UI {theme} n=1000 Apply+Layout P95={samples[949]:F2}ms max={samples[^1]:F2}ms");
                     var titleBar = window.FindControl<Border>("UpdateTitleBar")!;
                     // 输入命中使用合成器已提交的场景，需要等待首帧，不能只完成 Measure/Arrange。
                     using (var frameDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(2)))

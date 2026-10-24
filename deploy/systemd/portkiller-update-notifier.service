@@ -1,0 +1,20 @@
+[Unit]
+Description=PortKiller signed release notifications
+After=network.target
+
+[Service]
+Type=simple
+User=portkiller-notifier
+Group=www-data
+ExecStart=/opt/portkiller-updates/notifier/PortKiller.UpdateNotifier /srv/portkiller-updates/stable /etc/portkiller-updates/verification.json
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/srv/portkiller-updates /etc/portkiller-updates
+WorkingDirectory=/opt/portkiller-updates/notifier
+
+[Install]
+WantedBy=multi-user.target

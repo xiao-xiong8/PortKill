@@ -58,6 +58,8 @@ public sealed class UpdateManifest
             || !Uri.TryCreate(manifest.PackageUrl, UriKind.Absolute, out var package)
             || package.Scheme != origin.Scheme || !package.Authority.Equals(origin.Authority, StringComparison.OrdinalIgnoreCase)
             || package.UserInfo.Length != 0 || package.Fragment.Length != 0 || package.Query.Length != 0
+            || UnsafePackageUrlText(manifest.PackageUrl)
+            || !ValidPackagePath(package.AbsolutePath)
             || manifest.Size is <= 0 or > 268435456
             || string.IsNullOrEmpty(manifest.Sha256) || manifest.Sha256.Length != 64 || !manifest.Sha256.All(Uri.IsHexDigit))
             throw new InvalidDataException("更新包平台、地址、大小或摘要不合法。");
@@ -72,4 +74,21 @@ public sealed class UpdateManifest
         manifest.PayloadSha256 = Convert.ToHexString(SHA256.HashData(payload));
         return manifest;
     }
+
+    private static bool ValidPackagePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path.Contains('\\') || path.Contains("//", StringComparison.Ordinal)
+            || path.Contains("%2f", StringComparison.OrdinalIgnoreCase) || path.Contains("%5c", StringComparison.OrdinalIgnoreCase)
+            || path.Contains("%2e", StringComparison.OrdinalIgnoreCase)) return false;
+        string[] segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments.Length > 0 && segments[^1].EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+            && segments.All(segment => segment is not ("." or "..") && segment.IndexOf(':') < 0);
+    }
+
+    private static bool UnsafePackageUrlText(string value)
+        => value.Contains('\\') || value.Contains("/../", StringComparison.Ordinal)
+            || value.Contains("/./", StringComparison.Ordinal)
+            || value.Contains("%2e", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("%2f", StringComparison.OrdinalIgnoreCase)
+            || value.Contains("%5c", StringComparison.OrdinalIgnoreCase);
 }

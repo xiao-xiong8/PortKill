@@ -35,6 +35,25 @@ dotnet run --project src/PortKiller.Desktop/PortKiller.Desktop.csproj
 pwsh -File scripts/build/Publish-Aot.ps1
 ```
 
+管理后台与桌面分别构建和运行。后台版本、数据库和运行配置独立；生产接口默认要求认证，桌面端不使用管理账号。
+
+```powershell
+# 当前终端启用本地 SDK；可选择安装固定版本的前端工具
+. ./scripts/dev/Initialize-Dev.ps1 -InstallWebTools
+pwsh -File scripts/build/Build-Desktop.ps1
+pwsh -File scripts/build/Build-Admin.ps1
+pwsh -File scripts/build/Build-Web.ps1
+
+# 在独立终端运行对应进程
+pwsh -File scripts/dev/Start-Admin.ps1 -Service Api
+pwsh -File scripts/dev/Start-Admin.ps1 -Service Worker
+pwsh -File scripts/dev/Start-Admin.ps1 -Service Web
+```
+
+开发配置生成于 `.local/config/admin.local.json`，通过 `PORTKILL_ADMIN_CONFIG` 指定；可用 `Administration__DataRoot` 覆盖后台数据目录。默认开发数据位于用户本地数据目录的 `PortKill.UpdateAdmin.Development`，与桌面 `PortKiller` 设置隔离。API 默认仅监听 `127.0.0.1:5081`，前端开发入口为 `127.0.0.1:5173`。Cookie 始终使用 Secure；登录流程需要 HTTPS 管理入口。
+
+实际接口契约位于 `deploy/contracts/admin-api.v1.json`。接口变更后运行 `scripts/checks/Test-AdminContract.ps1 -Update`，再在前端目录执行 `pnpm generate:api`；验证时使用不带 `-Update` 的契约检查及 `pnpm check:api`。
+
 若需显式初始化 MSVC，向发布脚本传入 `-VcVarsAllPath C:/path/to/vcvarsall.bat`。回归项目是可执行程序，以上脚本会实际运行检查；仅执行 `dotnet test` 不能替代这些回归。
 
 ## 代码结构

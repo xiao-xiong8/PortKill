@@ -1,4 +1,3 @@
-using System.Data;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -12,185 +11,160 @@ using PortKiller.UpdateManagement.Persistence.Entities;
 
 namespace PortKiller.UpdateManagement.Security;
 
-/// <summary>Creates one-shot approval challenges and durable publish jobs.</summary>
-public sealed class PublishManagementService(
-    UpdateAdminDbContext database,
-    AdminOptions options,
-    TimeProvider clock,
-    AdminSessionService sessions,
-    AdminAuditService audit)
+public sealed class PublishManagementService(UpdateAdminDbContext database, AdminOptions options, TimeProvider clock,
+    AdminSessionService sessions, AdminAuditService audit, IPublishedReleaseReader source)
 {
     private const string Operation = "publish.confirm";
-    private const string None = "none";
-    private const int MaximumIdempotencyKeyLength = 128;
     private long Now => clock.GetUtcNow().ToUnixTimeMilliseconds();
 
-    public async Task<PublishChallengeResponse> CreateChallengeAsync(
-        ClaimsPrincipal principal, string draftId, CancellationToken token)
+    public async Task<PublishChallengeResponse> CreateChallengeAsync(ClaimsPrincipal principal, string draftId, CancellationToken token)
     {
-        SessionTicket ticket = await RequireFreshPublisherAsync(principal, token);
-        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
-        ReleaseDraft draft = await RequireDraftAsync(principal, ticket.User.Id, draftId, token);
+        string baseline = (await source.ReadAsync(token))?.ManifestSha256 ?? "none";
+        await using var transaction = await database.Database.BeginTransactionAsync(token);
+        SessionTicket actor = await RequirePublisherAsync(principal, token);
+        var draft = await DraftAsync(draftId, token);
         ValidateDraft(draft, Now);
-        string baseline = await CurrentBaselineAsync(draft.Application, draft.Channel, token);
-        long now = Now;
+        long strongUntil = actor.Session.StrongAuthenticationUtcMs!.Value
+            + (long)TimeSpan.FromMinutes(options.StrongAuthenticationMinutes).TotalMilliseconds;
         var approval = new PublishApproval
         {
-            UserId = ticket.User.Id, SessionId = ticket.Session.Id, DraftId = draft.Id,
-            ManifestSha256 = NormalizeDigest(draft.ManifestSha256!), PackageSha256 = NormalizeDigest(draft.PackageSha256!),
+            UserId = actor.User.Id, SessionId = actor.Session.Id, DraftId = draft.Id,
+            Application = draft.Application, Channel = draft.Channel, Runtime = draft.Runtime, ArchiveId = draft.ArchiveId,
+            ManifestSha256 = draft.ManifestSha256!.ToUpperInvariant(), PackageSha256 = draft.PackageSha256!.ToUpperInvariant(),
             Version = draft.Version!, Sequence = draft.Sequence!.Value, ExpectedManifestSha256 = baseline,
-            ExpiresUtcMs = checked(now + (long)TimeSpan.FromMinutes(options.StrongAuthenticationMinutes).TotalMilliseconds)
+            ExpiresUtcMs = Math.Min(Now + 120_000, strongUntil)
         };
         database.PublishApprovals.Add(approval);
-        audit.Stage("publish.challenge_created", draft.Id, actorUserId: ticket.User.Id);
-        await database.SaveChangesAsync(token);
-        await transaction.CommitAsync(token);
-        return Challenge(approval, draft);
+        audit.Stage("publish.challenge_created", draft.Id, actorUserId: actor.User.Id);
+        await database.SaveChangesAsync(token); await transaction.CommitAsync(token);
+        return new(approval.Id, draft.Id, draft.Application, draft.Channel, approval.Version, approval.Sequence,
+            approval.ManifestSha256, approval.PackageSha256, JsonSerializer.Deserialize<string[]>(draft.ReleaseNotesJson) ?? [],
+            baseline, approval.ExpiresUtcMs);
     }
 
-    public async Task<PublishJobResponse> ConfirmAsync(
-        ClaimsPrincipal principal, string draftId, PublishConfirmationRequest request,
-        string? headerIdempotencyKey, CancellationToken token)
+    public async Task<PublishJobResponse> ConfirmAsync(ClaimsPrincipal principal, string draftId,
+        PublishConfirmationRequest request, string? headerIdempotencyKey, CancellationToken token)
     {
-        SessionTicket ticket = await RequireFreshPublisherAsync(principal, token);
         string key = request.IdempotencyKey ?? headerIdempotencyKey ?? "";
-        ValidateIdempotencyKey(key);
-        string requestHash = Digest(draftId + "\n" + request.ChallengeId);
-
-        for (int attempt = 0; attempt < 3; attempt++)
+        if (key.Length is < 1 or > 128 || key.Any(c => c < 0x21 || c > 0x7e)
+            || request.IdempotencyKey != null && headerIdempotencyKey != null && request.IdempotencyKey != headerIdempotencyKey)
+            throw new AdminFailure("idempotency_key_invalid", 400, "幂等键格式无效或与请求头不一致。");
+        if (!Guid.TryParseExact(request.ChallengeId, "N", out _) || !Guid.TryParseExact(draftId, "N", out _))
+            throw new AdminFailure("invalid_request", 400, "发布确认标识无效。");
+        string requestHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(draftId + "\n" + request.ChallengeId)));
+        for (int attempt = 0; ; attempt++)
         {
-            try
+            try { return await ConfirmCoreAsync(principal, draftId, request.ChallengeId, key, requestHash, token); }
+            catch (Exception exception) when (Busy(exception))
             {
-                return await ConfirmCoreAsync(ticket, draftId, request.ChallengeId, key, requestHash, token);
-            }
-            catch (Exception exception) when (IsRetryableConcurrency(exception) && attempt < 2)
-            {
+                if (attempt >= 2)
+                    throw new AdminFailure(UniqueViolation(exception) ? "publish_in_progress" : "publish_busy", 409,
+                        UniqueViolation(exception) ? "同一应用和渠道已有发布任务正在处理。" : "发布正在被另一个请求处理，请稍后重试。");
                 database.ChangeTracker.Clear();
-                await Task.Delay(TimeSpan.FromMilliseconds(25 * (attempt + 1)), token);
-            }
-            catch (Exception exception) when (IsRetryableConcurrency(exception))
-            {
-                throw new AdminFailure("publish_busy", 409, "发布正在被另一个请求处理，请稍后重试。");
+                await Task.Delay(25 * (attempt + 1), token);
             }
         }
-        throw new AdminFailure("publish_busy", 409, "发布正在被另一个请求处理，请稍后重试。");
     }
 
-    public async Task<PublishJobResponse> GetJobAsync(
-        ClaimsPrincipal principal, string id, CancellationToken token)
+    private async Task<PublishJobResponse> ConfirmCoreAsync(ClaimsPrincipal principal, string draftId, string challengeId,
+        string key, string requestHash, CancellationToken token)
+    {
+        // Read the real signed commit record, including releases made with the original SSH/CLI publisher.
+        string baseline = (await source.ReadAsync(token))?.ManifestSha256 ?? "none";
+        await using var transaction = await database.Database.BeginTransactionAsync(token);
+        var actor = await RequirePublisherAsync(principal, token);
+        var approval = await database.PublishApprovals.AsNoTracking().SingleOrDefaultAsync(x => x.Id == challengeId, token);
+        if (approval == null || approval.DraftId != draftId || approval.UserId != actor.User.Id || approval.SessionId != actor.Session.Id)
+            throw new AdminFailure("publish_challenge_binding_mismatch", 409, "发布确认与当前会话或产物不匹配。");
+
+        var previous = await database.IdempotencyRequests.AsNoTracking().SingleOrDefaultAsync(x => x.UserId == actor.User.Id
+            && x.Operation == Operation && x.Key == key, token);
+        if (previous != null)
+        {
+            if (previous.RequestSha256 != requestHash)
+                throw new AdminFailure("idempotency_key_reused", 409, "幂等键已经用于另一个发布请求。");
+            if (previous.ExpiresUtcMs <= Now)
+                throw new AdminFailure("idempotency_key_expired", 409, "幂等键已过期，请使用新的幂等键。");
+            var result = await database.ReleaseJobs.AsNoTracking().SingleAsync(x => x.Id == previous.ResultResourceId, token);
+            return Response(result, approval);
+        }
+
+        var job = await database.ReleaseJobs.AsNoTracking().SingleOrDefaultAsync(x => x.PublishApprovalId == approval.Id, token);
+        if (job == null)
+        {
+            if (approval.ConsumedUtcMs != null)
+                throw new AdminFailure("publish_challenge_used", 409, "发布确认已经使用。");
+            if (approval.ExpiresUtcMs <= Now)
+                throw new AdminFailure("publish_challenge_expired", 409, "发布确认已经过期，请重新确认。");
+            var draft = await DraftAsync(draftId, token);
+            ValidateDraft(draft, Now);
+            if (!Matches(draft, approval))
+                throw new AdminFailure("publish_artifact_changed", 409, "已验证产物发生变化，请重新生成发布确认。");
+            if (baseline != approval.ExpectedManifestSha256)
+                throw new AdminFailure("publish_baseline_changed", 409, "当前正式清单已变化，请刷新后重新确认发布。");
+            if (await database.ReleaseJobs.AnyAsync(x => x.Kind == "publish" && x.Application == approval.Application
+                && x.Channel == approval.Channel && (x.State == PublishJobState.Queued || x.State == PublishJobState.Publishing
+                    || x.State == PublishJobState.ManifestActivated || x.State == PublishJobState.PublicVerifying), token))
+                throw new AdminFailure("publish_in_progress", 409, "同一应用和渠道已有发布任务正在处理。");
+            int consumed = await database.PublishApprovals.Where(x => x.Id == approval.Id && x.ConsumedUtcMs == null && x.ExpiresUtcMs > Now)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.ConsumedUtcMs, Now), token);
+            if (consumed != 1) throw new AdminFailure("publish_challenge_used", 409, "发布确认已经使用。");
+            job = new ReleaseJob
+            {
+                DraftId = draft.Id, PublishApprovalId = approval.Id, RequestedById = actor.User.Id, Kind = "publish",
+                Application = approval.Application, Channel = approval.Channel, State = PublishJobState.Queued,
+                ExpectedManifestSha256 = baseline, CreatedUtcMs = Now
+            };
+            database.ReleaseJobs.Add(job);
+            database.JobEvents.Add(new JobEvent { JobId = job.Id, Sequence = 1, Stage = "queued", Message = "publish_queued", CreatedUtcMs = Now });
+            audit.Stage("publish.confirmed", job.Id, actorUserId: actor.User.Id);
+        }
+        database.IdempotencyRequests.Add(new IdempotencyRequest
+        {
+            UserId = actor.User.Id, Operation = Operation, Key = key, RequestSha256 = requestHash,
+            ResultResourceId = job.Id, CreatedUtcMs = Now, ExpiresUtcMs = Now + (long)TimeSpan.FromDays(7).TotalMilliseconds
+        });
+        await database.SaveChangesAsync(token); await transaction.CommitAsync(token);
+        return Response(job, approval);
+    }
+
+    public async Task<PublishJobResponse> GetJobAsync(ClaimsPrincipal principal, string id, CancellationToken token)
     {
         string userId = principal.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? throw new AdminFailure("authentication_required", 401, "会话已失效。");
         bool administrator = principal.IsInRole("Administrator");
-        var row = await database.ReleaseJobs.AsNoTracking()
-            .Where(job => job.Id == id && job.Kind == "publish")
-            .Join(database.ReleaseDrafts, job => job.DraftId, draft => draft.Id, (job, draft) => new { job, draft })
+        var row = await database.ReleaseJobs.AsNoTracking().Where(x => x.Id == id && x.Kind == "publish"
+                && x.Application == "PortKill" && x.Channel == "stable")
+            .Join(database.PublishApprovals, job => job.PublishApprovalId, approval => approval.Id, (job, approval) => new { job, approval })
+            .Join(database.ReleaseDrafts, item => item.job.DraftId, draft => draft.Id,
+                (item, draft) => new { item.job, item.approval, OwnerId = draft.OwnerId })
             .SingleOrDefaultAsync(token);
-        if (row == null || (!administrator && row.job.RequestedById != userId && row.draft.OwnerId != userId))
+        if (row == null || !administrator && row.job.RequestedById != userId && row.OwnerId != userId)
             throw new AdminFailure("resource_not_found", 404, "发布任务不存在。");
-        return Response(row.job, row.draft);
+        return Response(row.job, row.approval);
     }
 
-    internal async Task<string> CurrentBaselineAsync(string application, string channel, CancellationToken token)
-        => await CurrentBaselineAsyncCore(application, channel, token);
-
-    private async Task<PublishJobResponse> ConfirmCoreAsync(
-        SessionTicket ticket, string draftId, string challengeId, string key, string requestHash,
-        CancellationToken token)
+    private async Task<SessionTicket> RequirePublisherAsync(ClaimsPrincipal principal, CancellationToken token)
     {
-        await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
-        long now = Now;
-        var existingRequest = await database.IdempotencyRequests.SingleOrDefaultAsync(item => item.UserId == ticket.User.Id
-            && item.Operation == Operation && item.Key == key, token);
-        if (existingRequest != null)
-        {
-            if (!existingRequest.RequestSha256.Equals(requestHash, StringComparison.OrdinalIgnoreCase))
-                throw new AdminFailure("idempotency_key_reused", 409, "幂等键已经用于另一个发布请求。");
-            if (existingRequest.ExpiresUtcMs <= now)
-                throw new AdminFailure("idempotency_key_expired", 409, "幂等键已过期，请使用新的幂等键。");
-            if (existingRequest.ResultResourceId == null)
-                throw new AdminFailure("idempotency_in_progress", 409, "幂等请求正在处理，请稍后重试。");
-            var existingJob = await database.ReleaseJobs.AsNoTracking().SingleOrDefaultAsync(job => job.Id == existingRequest.ResultResourceId
-                && job.Kind == "publish", token);
-            if (existingJob == null) throw new AdminFailure("idempotency_result_missing", 409, "幂等请求结果不可用，请重新确认发布。");
-            var existingDraft = await database.ReleaseDrafts.AsNoTracking().SingleAsync(draft => draft.Id == existingJob.DraftId, token);
-            await transaction.CommitAsync(token);
-            return Response(existingJob, existingDraft);
-        }
-
-        var approval = await database.PublishApprovals.SingleOrDefaultAsync(item => item.Id == challengeId, token);
-        if (approval == null || approval.DraftId != draftId || approval.UserId != ticket.User.Id || approval.SessionId != ticket.Session.Id)
-            throw new AdminFailure("publish_challenge_binding_mismatch", 409, "发布确认与当前会话或产物不匹配。");
-        if (approval.ConsumedUtcMs != null)
-            throw new AdminFailure("publish_challenge_used", 409, "发布确认已经使用。");
-        if (approval.ExpiresUtcMs <= now)
-            throw new AdminFailure("publish_challenge_expired", 409, "发布确认已经过期，请重新确认。");
-
-        var draft = await RequireDraftAsync(principal: null, ticket.User.Id, draftId, token, allowAdministrator: true);
-        ValidateDraft(draft, now);
-        if (!DigestEquals(draft.ManifestSha256, approval.ManifestSha256)
-            || !DigestEquals(draft.PackageSha256, approval.PackageSha256)
-            || !string.Equals(draft.Version, approval.Version, StringComparison.Ordinal)
-            || draft.Sequence != approval.Sequence)
-            throw new AdminFailure("publish_artifact_changed", 409, "已验证产物发生变化，请重新生成发布确认。");
-
-        string currentBaseline = await CurrentBaselineAsyncCore(draft.Application, draft.Channel, token);
-        if (!currentBaseline.Equals(approval.ExpectedManifestSha256, StringComparison.OrdinalIgnoreCase))
-            throw new AdminFailure("publish_baseline_changed", 409, "当前正式清单已变化，请刷新后重新确认发布。");
-
-        bool active = await database.ReleaseJobs.AnyAsync(job => job.Kind == "publish"
-            && job.Application == draft.Application && job.Channel == draft.Channel
-            && (job.State == PublishJobState.Queued || job.State == PublishJobState.Publishing
-                || job.State == PublishJobState.ManifestActivated || job.State == PublishJobState.PublicVerifying),
-            token);
-        if (active) throw new AdminFailure("publish_in_progress", 409, "同一应用和渠道已有发布任务正在处理。");
-
-        approval.ConsumedUtcMs = now;
-        var job = new ReleaseJob
-        {
-            DraftId = draft.Id, RequestedById = ticket.User.Id, Kind = "publish",
-            Application = draft.Application, Channel = draft.Channel, State = PublishJobState.Queued,
-            ExpectedManifestSha256 = approval.ExpectedManifestSha256, CreatedUtcMs = now
-        };
-        database.ReleaseJobs.Add(job);
-        database.JobEvents.Add(new JobEvent { JobId = job.Id, Sequence = 1, Stage = "queued", Message = "publish_queued", CreatedUtcMs = now });
-        database.IdempotencyRequests.Add(new IdempotencyRequest
-        {
-            UserId = ticket.User.Id, Operation = Operation, Key = key, RequestSha256 = requestHash,
-            ResultResourceId = job.Id, CreatedUtcMs = now,
-            ExpiresUtcMs = checked(now + (long)TimeSpan.FromDays(7).TotalMilliseconds)
-        });
-        audit.Stage("publish.confirmed", job.Id, actorUserId: ticket.User.Id);
-        await database.SaveChangesAsync(token);
-        await transaction.CommitAsync(token);
-        return Response(job, draft);
-    }
-
-    private async Task<SessionTicket> RequireFreshPublisherAsync(ClaimsPrincipal principal, CancellationToken token)
-    {
-        if (!principal.IsInRole("Publisher") && !principal.IsInRole("Administrator")
-            && !principal.HasClaim(AdminPermissions.Claim, AdminPermissions.Publish))
-            throw new AdminFailure("permission_denied", 403, "当前账号没有发布权限。");
-        SessionTicket ticket = await sessions.ValidateAsync(principal, token)
+        var actor = await sessions.ValidateAsync(principal, token)
             ?? throw new AdminFailure("authentication_required", 401, "会话已失效。");
-        if (ticket.Session.Phase != SessionPhase.Full)
-            throw new AdminFailure("authentication_required", 401, "会话尚未完成强认证。");
-        long? strongAt = ticket.Session.StrongAuthenticationUtcMs;
-        long age = strongAt is null ? long.MaxValue : Now - strongAt.Value;
-        if (age < 0 || age >= TimeSpan.FromMinutes(options.StrongAuthenticationMinutes).TotalMilliseconds)
+        await database.Entry(actor.User).ReloadAsync(token); await database.Entry(actor.Session).ReloadAsync(token);
+        if (!await sessions.IsActiveAsync(actor.Session.Id, actor.User.Id, SessionPhase.Full, token))
+            throw new AdminFailure("authentication_required", 401, "会话已失效。");
+        if (actor.Session.StrongAuthenticationUtcMs is not { } at || Now < at
+            || Now - at >= TimeSpan.FromMinutes(options.StrongAuthenticationMinutes).TotalMilliseconds)
             throw new AdminFailure("recent_authentication_required", 403, "发布需要近期的多因素强认证。");
-        return ticket;
+        bool authorized = await database.UserRoles.Where(x => x.UserId == actor.User.Id)
+            .Join(database.Roles, link => link.RoleId, role => role.Id, (link, role) => role.Name)
+            .AnyAsync(name => name == "Publisher" || name == "Administrator", token);
+        if (!authorized) throw new AdminFailure("permission_denied", 403, "当前账号没有发布权限。");
+        return actor;
     }
 
-    private async Task<ReleaseDraft> RequireDraftAsync(
-        ClaimsPrincipal? principal, string userId, string draftId, CancellationToken token, bool allowAdministrator = false)
-    {
-        bool administrator = allowAdministrator || principal?.IsInRole("Administrator") == true;
-        var draft = await database.ReleaseDrafts.SingleOrDefaultAsync(item => item.Id == draftId
-            && (item.OwnerId == userId || administrator), token);
-        if (draft == null) throw new AdminFailure("resource_not_found", 404, "发布草稿不存在。");
-        return draft;
-    }
+    private async Task<ReleaseDraft> DraftAsync(string id, CancellationToken token)
+        => await database.ReleaseDrafts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id
+            && x.Application == "PortKill" && x.Channel == "stable" && x.Runtime == "win-x64", token)
+            ?? throw new AdminFailure("resource_not_found", 404, "发布草稿不存在。");
 
     private static void ValidateDraft(ReleaseDraft draft, long now)
     {
@@ -198,59 +172,30 @@ public sealed class PublishManagementService(
             throw new AdminFailure("publish_not_ready", 409, "发布草稿尚未通过验证。");
         if (draft.ManifestExpiresUtcMs is not { } expiry || expiry <= now)
             throw new AdminFailure("publish_manifest_expired", 409, "签名清单已过期，请重新准备产物。");
+        if (draft.ArchiveCleanedUtcMs != null || draft.ArchiveCleanupLeaseUtcMs > now)
+            throw new AdminFailure("publish_archive_unavailable", 409, "封存产物已清理或正在清理。");
         if (string.IsNullOrWhiteSpace(draft.Version) || draft.Sequence is not > 0
             || !IsDigest(draft.ManifestSha256) || !IsDigest(draft.PackageSha256))
             throw new AdminFailure("publish_metadata_invalid", 409, "发布草稿元数据无效。");
     }
 
-    private async Task<string> CurrentBaselineAsyncCore(string application, string channel, CancellationToken token)
-    {
-        string? current = await database.ReleaseJobs.AsNoTracking()
-            .Where(job => job.Kind == "publish" && job.Application == application && job.Channel == channel
-                && (job.State == PublishJobState.ManifestActivated || job.State == PublishJobState.PublicVerifying
-                    || job.State == PublishJobState.Completed || job.State == PublishJobState.ActiveUnverified))
-            .Join(database.ReleaseDrafts, job => job.DraftId, draft => draft.Id, (job, draft) => new { job, draft.ManifestSha256 })
-            .OrderByDescending(item => item.job.CreatedUtcMs).ThenByDescending(item => item.job.Id)
-            .Select(item => item.ManifestSha256)
-            .FirstOrDefaultAsync(token);
-        return IsDigest(current) ? NormalizeDigest(current!) : None;
-    }
+    internal static bool Matches(ReleaseDraft draft, PublishApproval approval)
+        => draft.Application == approval.Application && draft.Channel == approval.Channel && draft.Runtime == approval.Runtime
+            && draft.ArchiveId == approval.ArchiveId && draft.Version == approval.Version && draft.Sequence == approval.Sequence
+            && string.Equals(draft.ManifestSha256, approval.ManifestSha256, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(draft.PackageSha256, approval.PackageSha256, StringComparison.OrdinalIgnoreCase);
 
-    private static PublishChallengeResponse Challenge(PublishApproval approval, ReleaseDraft draft)
-        => new(approval.Id, draft.Id, draft.Application, draft.Channel, approval.Version, approval.Sequence,
-            approval.ManifestSha256, approval.PackageSha256, Notes(draft), approval.ExpectedManifestSha256, approval.ExpiresUtcMs);
+    internal static PublishJobResponse Response(ReleaseJob job, PublishApproval approval)
+        => new(job.Id, job.DraftId, job.Application, job.Channel, job.State, approval.Version, approval.Sequence,
+            approval.ManifestSha256, approval.PackageSha256, approval.ExpectedManifestSha256, job.CreatedUtcMs, job.ErrorCode);
 
-    private static PublishJobResponse Response(ReleaseJob job, ReleaseDraft draft)
-        => new(job.Id, draft.Id, job.Application, job.Channel, job.State, draft.Version!, draft.Sequence!.Value,
-            NormalizeDigest(draft.ManifestSha256!), NormalizeDigest(draft.PackageSha256!), job.ExpectedManifestSha256 ?? None,
-            job.CreatedUtcMs, job.ErrorCode);
-
-    private static string[] Notes(ReleaseDraft draft)
-    {
-        try { return JsonSerializer.Deserialize<string[]>(draft.ReleaseNotesJson) ?? []; }
-        catch (JsonException) { return []; }
-    }
-
-    private static void ValidateIdempotencyKey(string key)
-    {
-        if (key.Length is < 1 or > MaximumIdempotencyKeyLength || key.Any(character => character < 0x21 || character > 0x7e))
-            throw new AdminFailure("idempotency_key_invalid", 400, "幂等键格式无效。");
-    }
-
-    private static string Digest(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     private static bool IsDigest(string? value) => value is { Length: 64 } && value.All(Uri.IsHexDigit);
-    private static string NormalizeDigest(string value) => value.ToUpperInvariant();
-    private static bool DigestEquals(string? left, string right)
-        => left != null && left.Equals(right, StringComparison.OrdinalIgnoreCase);
+    private static bool Busy(Exception exception)
+        => exception is SqliteException { SqliteErrorCode: 5 or 6 }
+            or SqliteException { SqliteExtendedErrorCode: 2067 }
+            or DbUpdateException { InnerException: SqliteException { SqliteErrorCode: 5 or 6 or 19 } };
 
-    private static bool IsRetryableConcurrency(Exception exception)
-    {
-        SqliteException? sqlite = exception switch
-        {
-            SqliteException direct => direct,
-            DbUpdateException { InnerException: SqliteException inner } => inner,
-            _ => null
-        };
-        return sqlite?.SqliteErrorCode is 5 or 6 or 19;
-    }
+    private static bool UniqueViolation(Exception exception)
+        => exception is SqliteException { SqliteExtendedErrorCode: 2067 }
+            or DbUpdateException { InnerException: SqliteException { SqliteExtendedErrorCode: 2067 } };
 }

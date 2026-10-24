@@ -85,6 +85,7 @@ public sealed class ReleaseJob : IVersionedEntity
     public string DraftId { get; set; } = "";
     public string RequestedById { get; set; } = "";
     public string Kind { get; set; } = "validate";
+    public string? PublishApprovalId { get; set; }
     public string Application { get; set; } = "PortKill";
     public string Channel { get; set; } = "stable";
     public PublishJobState State { get; set; }
@@ -104,6 +105,10 @@ public sealed class PublishApproval
     public string UserId { get; set; } = "";
     public string SessionId { get; set; } = "";
     public string DraftId { get; set; } = "";
+    public string Application { get; set; } = "PortKill";
+    public string Channel { get; set; } = "stable";
+    public string Runtime { get; set; } = "win-x64";
+    public string ArchiveId { get; set; } = "";
     public string ManifestSha256 { get; set; } = "";
     public string PackageSha256 { get; set; } = "";
     public string Version { get; set; } = "";

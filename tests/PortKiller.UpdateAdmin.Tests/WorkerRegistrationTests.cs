@@ -29,6 +29,8 @@ public sealed class WorkerRegistrationTests
         using IServiceScope scope = provider.CreateScope();
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ValidationTaskExecutor>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<PublishTaskExecutor>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<PublishTaskQueue>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<UploadCleanupService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ValidationTaskQueue>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ValidationArchiveService>());

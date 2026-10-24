@@ -25,11 +25,15 @@ public sealed class ReleaseStore(string root, ManifestVerificationOptions option
         if (repair && receipt != null) SaveReceipt(receipt);
         return receipt;
     }
-    public ReleaseReceipt Activate(string manifestPath, string package, string expected, Action<string>? fault = null)
+    public ReleaseReceipt Activate(string manifestPath, string package, string expected, Action<string>? fault = null,
+        string? approvedManifestSha256 = null, string? approvedPackageSha256 = null)
     {
         using var lease = Lock();
         byte[] envelope = ReadManifest(manifestPath);
         var manifest = UpdateManifest.Verify(envelope, options);
+        if (approvedManifestSha256 != null && !Convert.ToHexString(SHA256.HashData(envelope)).Equals(approvedManifestSha256, StringComparison.OrdinalIgnoreCase)
+            || approvedPackageSha256 != null && !manifest.Sha256.Equals(approvedPackageSha256, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("激活产物与已确认的摘要不一致。");
         if (manifest.Schema != 2) throw new InvalidDataException("服务端发布要求 schema 2。");
         var candidate = Receipt(envelope, manifest);
         ReleasePackage.Verify(package, manifest);

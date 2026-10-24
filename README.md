@@ -107,7 +107,17 @@ pwsh -File scripts/build/Test-UpdatePipeline.ps1 -VcVarsAllPath C:/path/to/vcvar
 
 该入口包含 UI、真实 AOT 安装与恢复、隔离发布演练、性能检查及 Linux 服务端构建。结果写入 `.local/artifacts/update-validation/`。真实 Linux、Nginx、TLS 和公网部署仍需单独验收；过程记录保存在本地，不随源码分发。
 
-网页发布管理后台已提供独立的 Vue 前端、net10.0 API/Worker、SQLite + EF Core 10 认证权限审计基础，以及两文件流式上传 API。上传文件进入私有随机暂存区并按实际字节数计量；验证任务、完整发布页面和 Linux 部署仍在后续阶段实施。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
+网页发布管理后台由独立 Vue 前端、net10.0 API/Worker 和 SQLite + EF Core 10 业务模块组成。上传、严格验签、产物封存、单次发布确认及由 Worker 调用 UpdateTool 原子激活已实现；后续仍需完成中断恢复、公网验证、管理事件流、前端完整流程和生产部署验收。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
+
+发布配置由 API 和 Worker 各自的配置提供。API 需要 `UpdateTool:ExecutablePath`、`UpdateTool:VerificationConfigPath` 和 `UpdateTool:ReleaseRoot`，用于验证上传产物并读取当前签名清单；Worker 使用相同的工具、验签配置和正式分发目录，并设置 `UpdateTool:Enabled=true`。两个进程必须共享相同的管理数据库、验签配置和 `ReleaseRoot`；API 对正式目录只需读取权限，Worker 需要按 UpdateTool 的原子发布流程写入。生产环境建议通过服务环境变量注入路径：
+
+```text
+UpdateTool__ExecutablePath=/opt/portkiller-updates/tool/PortKiller.UpdateTool
+UpdateTool__VerificationConfigPath=/etc/portkiller-updates/verification.json
+UpdateTool__ReleaseRoot=/srv/portkiller-updates/stable
+```
+
+在 API 进程中保持 `UpdateTool__Enabled=false`；仅发布 Worker 设置为 `true`。Windows 开发机应使用对应的绝对路径。`VerificationConfigPath` 只包含验证公钥及公开 URL，不放置发布私钥；签名私钥继续留在受控 Windows 制作环境。正式部署的服务账户、共享目录权限和恢复流程在 P7 阶段验收。
 
 ```powershell
 # 后台测试、实际 OpenAPI 比对、前端检查与构建

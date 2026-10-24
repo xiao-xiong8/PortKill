@@ -7,6 +7,7 @@ public sealed class UpdateToolOptions
     public bool Enabled { get; set; }
     public string ExecutablePath { get; set; } = "";
     public string VerificationConfigPath { get; set; } = "";
+    public string ReleaseRoot { get; set; } = "";
     public int TimeoutSeconds { get; set; } = 45;
     public int MaximumOutputBytes { get; set; } = 65_536;
 
@@ -19,6 +20,22 @@ public sealed class UpdateToolOptions
             throw new InvalidOperationException("Publisher UpdateTool configuration is invalid.");
         ExecutablePath = Path.GetFullPath(ExecutablePath);
         VerificationConfigPath = Path.GetFullPath(VerificationConfigPath);
+    }
+
+    public void ValidatePublishing()
+    {
+        if (!Enabled) throw new InvalidOperationException("Publisher UpdateTool is disabled.");
+        Validate();
+        ValidateSource();
+    }
+
+    public void ValidateSource()
+    {
+        if (string.IsNullOrWhiteSpace(ReleaseRoot) || !Path.IsPathFullyQualified(ReleaseRoot)
+            || string.IsNullOrWhiteSpace(VerificationConfigPath) || !Path.IsPathFullyQualified(VerificationConfigPath)
+            || Path.GetPathRoot(Path.GetFullPath(ReleaseRoot)) == Path.GetFullPath(ReleaseRoot))
+            throw new InvalidOperationException("Publisher release source must use configured absolute paths.");
+        ReleaseRoot = Path.GetFullPath(ReleaseRoot);
     }
 }
 

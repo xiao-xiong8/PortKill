@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Text.Json.Serialization;
 using PortKiller.UpdateManagement;
 using PortKiller.UpdateManagement.Contracts;
@@ -27,6 +28,11 @@ public static class AdminApiHost
         configure?.Invoke(builder);
         var administration = AdminHostConfiguration.Load(builder.Configuration, args);
         builder.Services.AddSingleton(administration);
+        var updateTool = new UpdateToolOptions();
+        builder.Configuration.GetSection("UpdateTool").Bind(updateTool);
+        builder.Services.TryAddSingleton(updateTool);
+        builder.Services.AddSingleton<UpdateToolClient>();
+        builder.Services.TryAddSingleton<IPublishedReleaseReader, PublishedReleaseReader>();
         builder.Services.AddAdminIdentity(administration);
         builder.AddRequestSecurity();
         builder.Services.AddScoped<AdminCookieEvents>();

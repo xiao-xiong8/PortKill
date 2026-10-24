@@ -363,6 +363,18 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                     b.Property<string>("Id")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Application")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ArchiveId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<long?>("ConsumedUtcMs")
                         .HasColumnType("INTEGER");
 
@@ -382,6 +394,10 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("PackageSha256")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Runtime")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
@@ -538,6 +554,9 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                     b.Property<string>("LeaseOwner")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("PublishApprovalId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ReceiptSha256")
                         .HasColumnType("TEXT");
 
@@ -556,6 +575,9 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DraftId");
+
+                    b.HasIndex("PublishApprovalId")
+                        .IsUnique();
 
                     b.HasIndex("RequestedById");
 
@@ -773,6 +795,11 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                         .HasForeignKey("DraftId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("PortKiller.UpdateManagement.Persistence.Entities.PublishApproval", null)
+                        .WithMany()
+                        .HasForeignKey("PublishApprovalId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("PortKiller.UpdateManagement.Persistence.Entities.AdminUser", null)
                         .WithMany()

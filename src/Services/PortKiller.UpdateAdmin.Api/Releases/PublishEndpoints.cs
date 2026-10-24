@@ -13,7 +13,7 @@ public static class PublishEndpoints
             var challenge = await service.CreateChallengeAsync(context.User, draftId, context.RequestAborted);
             return Results.Ok(challenge);
         })
-            .RequireAuthorization(AdminPermissions.Publish).WithName("CreatePublishChallenge")
+            .RequireAuthorization(AdminPermissions.Publish).RequireRateLimiting("publish-confirmation").WithName("CreatePublishChallenge")
             .ProducesProblem(401).ProducesProblem(403).ProducesProblem(404).ProducesProblem(409);
 
         releases.MapPost("/{draftId}/publish", async (string draftId, PublishConfirmationRequest request,
@@ -23,7 +23,7 @@ public static class PublishEndpoints
             var job = await service.ConfirmAsync(context.User, draftId, request, header, context.RequestAborted);
             return Results.Accepted($"/api/v1/publish-jobs/{job.Id}", job);
         })
-            .RequireAuthorization(AdminPermissions.Publish).WithName("ConfirmPublish")
+            .RequireAuthorization(AdminPermissions.Publish).RequireRateLimiting("publish-confirmation").WithName("ConfirmPublish")
             .ProducesProblem(400).ProducesProblem(401).ProducesProblem(403).ProducesProblem(404).ProducesProblem(409);
 
         app.MapGet("/api/v1/publish-jobs/{id}", async (string id, PublishManagementService service, HttpContext context)

@@ -40,6 +40,7 @@ public static class RequestSecurity
             // IP remains part of the key even when an attacker keeps obtaining new pending sessions.
             options.AddPolicy("mfa", context => Window(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", 20));
             options.AddPolicy("security-change", context => Window(context.User.FindFirst(AdminIdentity.SessionClaim)?.Value ?? "anonymous", 10));
+            options.AddPolicy("publish-confirmation", context => Window(context.User.FindFirst(AdminIdentity.SessionClaim)?.Value ?? "anonymous", 20));
             options.OnRejected = async (rejection, _) =>
             {
                 rejection.HttpContext.Response.Headers.RetryAfter = "60";

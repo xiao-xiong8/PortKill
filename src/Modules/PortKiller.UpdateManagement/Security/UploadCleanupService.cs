@@ -16,6 +16,9 @@ public sealed class UploadCleanupService(UpdateAdminDbContext database, AdminOpt
     public async Task<UploadCleanupResult> CleanupAsync(CancellationToken token)
     {
         long now = Now;
+        await database.PublishApprovals.Where(approval => approval.ExpiresUtcMs < now && approval.ConsumedUtcMs == null
+                && !database.ReleaseJobs.Any(job => job.PublishApprovalId == approval.Id))
+            .OrderBy(approval => approval.ExpiresUtcMs).Take(500).ExecuteDeleteAsync(token);
         int expired = 0, stagingDeleted = 0, archivesDeleted = 0;
         var stagingCandidates = await database.UploadSessions.AsNoTracking()
             .Where(upload => upload.StorageCleanedUtcMs == null &&

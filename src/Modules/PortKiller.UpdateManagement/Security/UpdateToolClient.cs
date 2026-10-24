@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using PortKiller.UpdateManagement.Configuration;
@@ -8,6 +9,12 @@ namespace PortKiller.UpdateManagement.Security;
 
 public sealed record UpdateToolResult(bool Succeeded, string? ErrorCode, string? Version, long? Sequence,
     string? ExpiresUtc, string? Runtime, long? PackageSize, string? PackageSha256, string? ManifestSha256, string[] ReleaseNotes);
+
+public sealed record UpdateToolActivationResult(bool Succeeded, string? ErrorCode, string? Version, long? Sequence,
+    string? ExpiresUtc, string? ManifestSha256, string? PackageSha256, string? ReceiptSha256);
+
+public sealed record UpdateToolInspectionResult(bool Succeeded, string? ErrorCode, bool HasCurrent,
+    string? Version, long? Sequence, string? ManifestSha256, string? PackageSha256, string? ExpiresUtc);
 
 public sealed class UpdateToolClient(UpdateToolOptions options)
 {
@@ -99,6 +106,116 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
         catch (InvalidOperationException) { return Failure("tool_protocol_error"); }
     }
 
+    public async Task<UpdateToolActivationResult> ActivateAsync(
+        string manifestPath, string packagePath, string expectedManifestSha256, CancellationToken token,
+        string approvedManifestSha256, string approvedPackageSha256)
+    {
+        try
+        {
+            options.ValidatePublishing();
+            AdminRuntimeLease.RequireLocalPath(options.ReleaseRoot);
+            AdminRuntimeLease.RequireLocalPath(manifestPath);
+            AdminRuntimeLease.RequireLocalPath(packagePath);
+            if (!File.Exists(manifestPath) || !File.Exists(packagePath)) return ActivationFailure("file_unavailable");
+            ToolInvocation invocation = await InvokeAsync("activate", [
+                ("--root", options.ReleaseRoot), ("--config", options.VerificationConfigPath),
+                ("--manifest", Path.GetFullPath(manifestPath)), ("--package", Path.GetFullPath(packagePath)),
+                ("--expected", expectedManifestSha256), ("--manifest-sha256", approvedManifestSha256),
+                ("--package-sha256", approvedPackageSha256)], token);
+            if (!invocation.Succeeded) return ActivationFailure(invocation.ErrorCode ?? "tool_execution_failed");
+            using var document = JsonDocument.Parse(invocation.Output);
+            JsonElement root = document.RootElement;
+            string version = GetString(root, "Version", "version");
+            long sequence = GetInt64(root, "Sequence", "sequence");
+            string expires = GetString(root, "ExpiresUtc", "expiresUtc");
+            string manifest = GetString(root, "ManifestSha256", "manifestSha256");
+            string package = GetString(root, "PackageSha256", "packageSha256");
+            if (version.Length is < 1 or > 32 || sequence <= 0 || expires.Length is < 1 or > 64
+                || !IsDigest(manifest) || !IsDigest(package)) return ActivationFailure("tool_protocol_error");
+            return new(true, null, version, sequence, expires, manifest.ToUpperInvariant(), package.ToUpperInvariant(),
+                Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(invocation.Output))));
+        }
+        catch (JsonException) { return ActivationFailure("tool_protocol_error"); }
+        catch (InvalidOperationException) { return ActivationFailure("tool_unavailable"); }
+        catch (AdminFailure failure) when (failure.Code == "invalid_storage_path") { return ActivationFailure("file_unavailable"); }
+    }
+
+    public Task<UpdateToolInspectionResult> InspectAsync(CancellationToken token)
+        => InspectCoreAsync("inspect", token);
+
+    public Task<UpdateToolInspectionResult> RecoverAsync(CancellationToken token)
+        => InspectCoreAsync("recover", token);
+
+    private async Task<UpdateToolInspectionResult> InspectCoreAsync(string command, CancellationToken token)
+    {
+        try
+        {
+            options.ValidatePublishing();
+            AdminRuntimeLease.RequireLocalPath(options.ReleaseRoot);
+            ToolInvocation invocation = await InvokeAsync(command, [
+                ("--root", options.ReleaseRoot), ("--config", options.VerificationConfigPath)], token);
+            if (!invocation.Succeeded) return InspectionFailure(invocation.ErrorCode ?? "tool_execution_failed");
+            using var document = JsonDocument.Parse(invocation.Output);
+            if (document.RootElement.ValueKind == JsonValueKind.Null)
+                return new(true, null, false, null, null, null, null, null);
+            JsonElement root = document.RootElement;
+            string version = GetString(root, "Version", "version");
+            long sequence = GetInt64(root, "Sequence", "sequence");
+            string manifest = GetString(root, "ManifestSha256", "manifestSha256");
+            string package = GetString(root, "PackageSha256", "packageSha256");
+            string expires = GetString(root, "ExpiresUtc", "expiresUtc");
+            if (version.Length is < 1 or > 32 || sequence <= 0 || expires.Length is < 1 or > 64
+                || !IsDigest(manifest) || !IsDigest(package)) return InspectionFailure("tool_protocol_error");
+            return new(true, null, true, version, sequence, manifest.ToUpperInvariant(), package.ToUpperInvariant(), expires);
+        }
+        catch (JsonException) { return InspectionFailure("tool_protocol_error"); }
+        catch (InvalidOperationException) { return InspectionFailure("tool_unavailable"); }
+        catch (AdminFailure failure) when (failure.Code == "invalid_storage_path") { return InspectionFailure("file_unavailable"); }
+    }
+
+    private async Task<ToolInvocation> InvokeAsync(string command, (string Name, string Value)[] arguments, CancellationToken token)
+    {
+        var start = new ProcessStartInfo(options.ExecutablePath)
+        {
+            UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8,
+            WorkingDirectory = Path.GetDirectoryName(options.ExecutablePath)!
+        };
+        start.Environment.Clear();
+        if (!OperatingSystem.IsWindows()) start.Environment["TMPDIR"] = Path.GetTempPath();
+        if (OperatingSystem.IsWindows())
+            foreach (string name in new[] { "SYSTEMROOT", "WINDIR", "TEMP", "TMP" }) CopyEnvironment(name, start);
+        start.ArgumentList.Add(command);
+        foreach ((string name, string value) in arguments) AddArgument(start, name, value);
+        start.ArgumentList.Add("--json-errors");
+        using var process = new Process { StartInfo = start, EnableRaisingEvents = true };
+        try
+        {
+            if (!process.Start()) return new(false, "tool_unavailable", "", false);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+        { return new(false, "tool_unavailable", "", false); }
+
+        Task<CapturedOutput> stdout = CaptureAsync(process.StandardOutput, options.MaximumOutputBytes, token);
+        Task<CapturedOutput> stderr = CaptureAsync(process.StandardError, options.MaximumOutputBytes, token);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(options.TimeoutSeconds));
+        try { await process.WaitForExitAsync(timeout.Token); }
+        catch (OperationCanceledException)
+        {
+            Kill(process); await process.WaitForExitAsync(CancellationToken.None); await Task.WhenAll(stdout, stderr);
+            token.ThrowIfCancellationRequested(); return new(false, "tool_timeout", "", false);
+        }
+        CapturedOutput output = await stdout; _ = await stderr;
+        if (output.Truncated) return new(false, "tool_output_limit", output.Text, true);
+        if (process.ExitCode != 0)
+        {
+            UpdateToolResult error = ParseError(output.Text);
+            return new(false, error.ErrorCode ?? "tool_execution_failed", output.Text, false);
+        }
+        return new(true, null, output.Text, false);
+    }
+
     private static void AddArgument(ProcessStartInfo start, string name, string value)
     {
         start.ArgumentList.Add(name);
@@ -174,5 +291,11 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
     }
 
     private static UpdateToolResult Failure(string code) => new(false, code, null, null, null, null, null, null, null, []);
+    private static UpdateToolActivationResult ActivationFailure(string code)
+        => new(false, code, null, null, null, null, null, null);
+    private static UpdateToolInspectionResult InspectionFailure(string code)
+        => new(false, code, false, null, null, null, null, null);
+    private static bool IsDigest(string value) => value.Length == 64 && value.All(Uri.IsHexDigit);
+    private sealed record ToolInvocation(bool Succeeded, string? ErrorCode, string Output, bool Truncated);
     private sealed record CapturedOutput(string Text, bool Truncated);
 }

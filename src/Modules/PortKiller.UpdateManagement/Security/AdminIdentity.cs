@@ -65,6 +65,8 @@ public static class AdminWorkerServices
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddScoped<ValidationTaskQueue>();
         services.AddScoped<ValidationTaskExecutor>();
+        services.AddScoped<PublishTaskQueue>();
+        services.AddScoped<PublishTaskExecutor>();
         services.AddSingleton<ValidationArchiveService>();
         services.AddScoped<UploadCleanupService>();
         return services;

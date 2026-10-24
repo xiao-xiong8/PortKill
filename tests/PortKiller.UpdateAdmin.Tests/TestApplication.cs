@@ -23,11 +23,12 @@ internal sealed class TestApplication : IAsyncDisposable
     public ManualClock Clock { get; } = new();
     public CapturedLogs Logs { get; } = new();
     private readonly CookieContainer _defaultCookies = new();
+    private Action<Microsoft.Extensions.DependencyInjection.IServiceCollection>? _configureServices;
     public string DefaultCookieHeader => _defaultCookies.GetCookieHeader(new Uri("https://localhost"));
 
-    public static async Task<TestApplication> StartAsync()
+    public static async Task<TestApplication> StartAsync(Action<Microsoft.Extensions.DependencyInjection.IServiceCollection>? configureServices = null)
     {
-        var fixture = new TestApplication();
+        var fixture = new TestApplication { _configureServices = configureServices };
         fixture.App = fixture.CreateApp();
         using (var scope = fixture.App.Services.CreateScope())
             await AdminDatabase.MigrateAsync(scope.ServiceProvider.GetRequiredService<UpdateAdminDbContext>());
@@ -37,7 +38,8 @@ internal sealed class TestApplication : IAsyncDisposable
     }
 
     private WebApplication CreateApp() => AdminApiHost.Create(["--Administration:DataRoot", Root, "--urls", "https://localhost:0"], builder =>
-    { builder.WebHost.UseTestServer(); builder.Services.AddSingleton<TimeProvider>(Clock); builder.Logging.AddProvider(Logs); });
+    { builder.WebHost.UseTestServer(); builder.Services.AddSingleton<TimeProvider>(Clock); builder.Logging.AddProvider(Logs);
+      _configureServices?.Invoke(builder.Services); });
     public HttpClient NewClient(CookieContainer? cookies = null, bool autoCsrf = true) => new(new TestCookieHandler(App.GetTestServer().CreateHandler(), cookies ?? new(), autoCsrf)) { BaseAddress = new Uri("https://localhost") };
     public async Task RestartAsync()
     {

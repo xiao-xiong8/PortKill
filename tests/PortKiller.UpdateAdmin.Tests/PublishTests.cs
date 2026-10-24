@@ -17,7 +17,7 @@ public sealed class PublishTests
     [Fact]
     public async Task ChallengeBindsVerifiedArtifactAndConfirmationIsIdempotent()
     {
-        await using var app = await TestApplication.StartAsync();
+        await using var app = await StartAsync();
         await MfaTests.EnrollAsync(app);
         string draftId = await SeedReadyDraftAsync(app);
 
@@ -48,7 +48,7 @@ public sealed class PublishTests
     [Fact]
     public async Task ChangedArtifactExpiredChallengeAndBaselineAreRejectedDeterministically()
     {
-        await using var app = await TestApplication.StartAsync();
+        await using var app = await StartAsync();
         await MfaTests.EnrollAsync(app);
         string draftId = await SeedReadyDraftAsync(app);
 
@@ -69,6 +69,7 @@ public sealed class PublishTests
 
         string secondDraft = await SeedReadyDraftAsync(app, "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
         string secondChallenge = await CreateChallengeAsync(app, secondDraft);
+        app.App.Services.GetRequiredService<TestReleaseReader>().Current = new("0.1.0", 1, new string('A', 64), new string('C', 64), 1);
         await using (var scope = app.App.Services.CreateAsyncScope())
         {
             var database = scope.ServiceProvider.GetRequiredService<UpdateAdminDbContext>();
@@ -112,7 +113,7 @@ public sealed class PublishTests
     [Fact]
     public async Task ConcurrentSameKeyConfirmationReturnsOneDurableJob()
     {
-        await using var app = await TestApplication.StartAsync();
+        await using var app = await StartAsync();
         await MfaTests.EnrollAsync(app);
         string draftId = await SeedReadyDraftAsync(app);
         string challengeId = await CreateChallengeAsync(app, draftId);
@@ -137,6 +138,57 @@ public sealed class PublishTests
         Assert.Equal(results[0].Id, results[1].Id);
         using var verify = app.App.Services.CreateScope();
         Assert.Equal(1, await verify.ServiceProvider.GetRequiredService<UpdateAdminDbContext>().ReleaseJobs.CountAsync(item => item.Kind == "publish"));
+    }
+
+    [Fact]
+    public async Task ConcurrentDifferentApprovalsReturnOneJobAndStableConflict()
+    {
+        await using var app = await StartAsync();
+        await MfaTests.EnrollAsync(app);
+        string firstDraft = await SeedReadyDraftAsync(app);
+        string firstChallenge = await CreateChallengeAsync(app, firstDraft);
+        string secondDraft = await SeedReadyDraftAsync(app, "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+        string secondChallenge = await CreateChallengeAsync(app, secondDraft);
+
+        async Task<HttpResponseMessage> ConfirmAsync(string draftId, string challengeId, string key)
+            => await app.Client.PostAsJsonAsync($"/api/v1/releases/{draftId}/publish",
+                new PublishConfirmationRequest(challengeId, key));
+
+        var responses = await Task.WhenAll(
+            ConfirmAsync(firstDraft, firstChallenge, "concurrent-publish-a"),
+            ConfirmAsync(secondDraft, secondChallenge, "concurrent-publish-b"));
+        using var first = responses[0];
+        using var second = responses[1];
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Accepted);
+        var conflict = Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Conflict);
+        Assert.Equal("publish_in_progress", (await conflict.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        await using var verify = app.App.Services.CreateAsyncScope();
+        Assert.Single(await verify.ServiceProvider.GetRequiredService<UpdateAdminDbContext>().ReleaseJobs
+            .Where(item => item.Kind == "publish").ToListAsync());
+    }
+
+    [Fact]
+    public async Task ExpiredIdempotencyKeyCannotBeReplayed()
+    {
+        await using var app = await StartAsync();
+        await MfaTests.EnrollAsync(app);
+        string draftId = await SeedReadyDraftAsync(app);
+        string challengeId = await CreateChallengeAsync(app, draftId);
+        var request = new PublishConfirmationRequest(challengeId, "expired-publish-key");
+        using (var initial = await app.Client.PostAsJsonAsync($"/api/v1/releases/{draftId}/publish", request))
+            Assert.Equal(HttpStatusCode.Accepted, initial.StatusCode);
+
+        await using (var scope = app.App.Services.CreateAsyncScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<UpdateAdminDbContext>();
+            var idempotency = await database.IdempotencyRequests.SingleAsync();
+            idempotency.ExpiresUtcMs = app.Clock.GetUtcNow().AddMilliseconds(-1).ToUnixTimeMilliseconds();
+            await database.SaveChangesAsync();
+        }
+
+        using var replay = await app.Client.PostAsJsonAsync($"/api/v1/releases/{draftId}/publish", request);
+        Assert.Equal(HttpStatusCode.Conflict, replay.StatusCode);
+        Assert.Equal("idempotency_key_expired", (await replay.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
     }
 
     private static async Task<string> CreateChallengeAsync(TestApplication app, string draftId)
@@ -164,4 +216,17 @@ public sealed class PublishTests
 
     private static async Task<string> UserIdAsync(IServiceProvider services)
         => (await services.GetRequiredService<UserManager<AdminUser>>().FindByNameAsync("operator"))!.Id;
+
+    private static Task<TestApplication> StartAsync() => TestApplication.StartAsync(services =>
+    {
+        var source = new TestReleaseReader();
+        services.AddSingleton(source);
+        services.AddSingleton<IPublishedReleaseReader>(source);
+    });
+}
+
+internal sealed class TestReleaseReader : IPublishedReleaseReader
+{
+    public PublishedRelease? Current { get; set; }
+    public Task<PublishedRelease?> ReadAsync(CancellationToken token) => Task.FromResult(Current);
 }

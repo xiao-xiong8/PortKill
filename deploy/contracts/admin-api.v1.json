@@ -921,6 +921,284 @@
           }
         }
       }
+    },
+    "/api/v1/uploads": {
+      "post": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "CreateUpload",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/{id}": {
+      "get": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "GetUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "CancelUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/{id}/manifest": {
+      "put": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "UploadManifest",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/{id}/package": {
+      "put": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "UploadPackage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Payload Too Large",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/{id}/complete": {
+      "post": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "CompleteUpload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadCompletionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1117,6 +1395,23 @@
         "properties": {
           "id": {
             "type": "string"
+          }
+        }
+      },
+      "CreateUploadRequest": {
+        "required": [
+          "manifestBytes",
+          "packageBytes"
+        ],
+        "type": "object",
+        "properties": {
+          "manifestBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "packageBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
           }
         }
       },
@@ -1464,6 +1759,61 @@
           "contractVersion": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "format": "int32"
+          }
+        }
+      },
+      "UploadCompletionResponse": {
+        "required": [
+          "uploadId",
+          "state"
+        ],
+        "type": "object",
+        "properties": {
+          "uploadId": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/UploadState"
+          }
+        }
+      },
+      "UploadSessionResponse": {
+        "required": [
+          "id",
+          "state",
+          "manifestExpectedBytes",
+          "manifestReceivedBytes",
+          "packageExpectedBytes",
+          "packageReceivedBytes",
+          "expiresUtcMs"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/UploadState"
+          },
+          "manifestExpectedBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "manifestReceivedBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "packageExpectedBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "packageReceivedBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "expiresUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
           }
         }
       },

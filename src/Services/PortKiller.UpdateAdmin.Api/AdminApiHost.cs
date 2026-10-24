@@ -8,6 +8,7 @@ using PortKiller.UpdateAdmin.Api.Authentication;
 using PortKiller.UpdateManagement.Security;
 using PortKiller.UpdateManagement.Persistence.Entities;
 using PortKiller.UpdateManagement.Persistence;
+using PortKiller.UpdateAdmin.Api.Uploads;
 
 namespace PortKiller.UpdateAdmin.Api;
 
@@ -79,6 +80,7 @@ public static class AdminApiHost
             .RequireAuthorization(AdminPermissions.Read).WithName("GetCapabilities").ProducesProblem(401).ProducesProblem(403);
         app.MapAdminAuthentication();
         app.MapAdminAccounts();
+        app.MapUploadEndpoints();
         app.MapGet("/api/v1/audit", async (AdminAuditService audit, HttpContext context, int page = 1, int pageSize = 20, string? action = null)
             => await audit.ListAsync(page, pageSize, action, context.RequestAborted))
             .RequireAuthorization(AdminPermissions.Audit).WithName("ListAuditEvents").ProducesProblem(400).ProducesProblem(401).ProducesProblem(403);

@@ -15,6 +15,14 @@ public sealed class AdminOptions
     public int StrongAuthenticationMinutes { get; set; } = 5;
     public int AuditRetentionDays { get; set; } = 90;
     public int AuditMaximumRows { get; set; } = 100_000;
+    public int MaxUploadPackageBytes { get; set; } = 268_435_456;
+    public int MaxActiveUploadsPerUser { get; set; } = 2;
+    public int MaxActiveUploadsTotal { get; set; } = 100;
+    public long MaxReservedUploadBytesPerUser { get; set; } = 629_145_600;
+    public long MaxReservedUploadBytesTotal { get; set; } = 2_147_483_648;
+    public int UploadExpirationHours { get; set; } = 24;
+    public string StagingPath => Path.Combine(DataRoot, "staging");
+    public string ArchivePath => Path.Combine(DataRoot, "archive");
 
     public void Validate()
     {
@@ -24,7 +32,11 @@ public sealed class AdminOptions
         if (Path.GetPathRoot(DataRoot) == DataRoot || IdleMinutes is < 1 or > 120
             || AbsoluteHours is < 1 or > 24 || PendingMinutes is < 1 or > 15
             || StrongAuthenticationMinutes is < 1 or > 10 || AuditRetentionDays is < 1 or > 3650
-            || AuditMaximumRows is < 100 or > 10_000_000)
+            || AuditMaximumRows is < 100 or > 10_000_000 || MaxUploadPackageBytes is < 1 or > 268_435_456
+            || MaxActiveUploadsPerUser is < 1 or > 20 || MaxActiveUploadsTotal is < 1 or > 1000
+            || MaxReservedUploadBytesPerUser < MaxUploadPackageBytes || MaxReservedUploadBytesPerUser > 10_737_418_240
+            || MaxReservedUploadBytesTotal < MaxUploadPackageBytes || MaxReservedUploadBytesTotal > 107_374_182_400
+            || UploadExpirationHours is < 1 or > 168)
             throw new InvalidOperationException("Administration storage or session limits are invalid.");
     }
 }

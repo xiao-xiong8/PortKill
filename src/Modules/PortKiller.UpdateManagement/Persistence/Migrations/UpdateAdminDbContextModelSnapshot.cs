@@ -584,8 +584,26 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                     b.Property<long>("LastActivityUtcMs")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("ManifestExpectedBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ManifestReceivedBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ManifestSha256")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("OwnerId")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PackageExpectedBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("PackageReceivedBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PackageSha256")
                         .HasColumnType("TEXT");
 
                     b.Property<long>("ReceivedBytes")

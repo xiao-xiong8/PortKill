@@ -42,6 +42,12 @@ public sealed class UploadSession : IVersionedEntity
     public string StorageId { get; set; } = Guid.NewGuid().ToString("N");
     public UploadState State { get; set; }
     public long ReceivedBytes { get; set; }
+    public long ManifestExpectedBytes { get; set; }
+    public long ManifestReceivedBytes { get; set; }
+    public string? ManifestSha256 { get; set; }
+    public long PackageExpectedBytes { get; set; }
+    public long PackageReceivedBytes { get; set; }
+    public string? PackageSha256 { get; set; }
     public long CreatedUtcMs { get; set; }
     public long LastActivityUtcMs { get; set; }
     public long ExpiresUtcMs { get; set; }

@@ -107,7 +107,7 @@ pwsh -File scripts/build/Test-UpdatePipeline.ps1 -VcVarsAllPath C:/path/to/vcvar
 
 该入口包含 UI、真实 AOT 安装与恢复、隔离发布演练、性能检查及 Linux 服务端构建。结果写入 `.local/artifacts/update-validation/`。真实 Linux、Nginx、TLS 和公网部署仍需单独验收；过程记录保存在本地，不随源码分发。
 
-网页发布管理后台已提供独立的 Vue 前端、net10.0 API/Worker 骨架、接口契约，以及 SQLite + EF Core 10 的认证、权限和审计基础。完整上传发布业务及前端认证页面仍在后续阶段实施。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
+网页发布管理后台已提供独立的 Vue 前端、net10.0 API/Worker、SQLite + EF Core 10 认证权限审计基础，以及两文件流式上传 API。上传文件进入私有随机暂存区并按实际字节数计量；验证任务、完整发布页面和 Linux 部署仍在后续阶段实施。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
 
 ```powershell
 # 后台测试、实际 OpenAPI 比对、前端检查与构建

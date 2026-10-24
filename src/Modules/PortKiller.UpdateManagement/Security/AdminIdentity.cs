@@ -48,6 +48,7 @@ public static class AdminIdentity
         services.AddScoped<AdminAccountService>();
         services.AddScoped<AdminAuditService>();
         services.AddScoped<AdminBackupService>();
+        services.AddScoped<UploadManagementService>();
         return services;
     }
 

@@ -84,6 +84,8 @@ MainViewModel.* 位于 Shell/Compatibility，仍是已有功能的兼容协调�
 
 API/Worker 在运行期持有同一数据根的共享维护锁并检查迁移版本；维护命令持有排他锁，锁探测不生效时拒绝继续。在线备份通过 SQLite BackupDatabase 捕获包含 WAL 已提交写入的一致快照，同时保存认证密钥及摘要。恢复必须停机，先验证暂存副本，再撤销恢复出的全部会话并原子替换数据库，保留替换前的数据库和已有认证密钥。管理数据库恢复不替代公开清单、不可变包及发布回执的一致性核对，完整发布恢复由后续阶段完成。
 
+上传 API 只接受 `application/octet-stream` 的清单包络和 ZIP 两个流，服务端分配随机 StorageId，客户端不可指定文件名或磁盘路径。活动会话按账号及服务总量预留容量；Kestrel 请求体限制依据该会话预留值设置，应用另以固定 64 KiB 缓冲读取实际字节、增量计算 SHA-256 和精确核对长度。单会话文件锁串行接收、完成与取消，失败会删除临时文件；文件和摘要均核对后会话才转成 Uploaded。文件保留在 DataRoot/staging 私有目录，不由 API 静态发布。当前此阶段只确认两文件传输，持久验证任务及验签状态由后续 P3-02/P3-04 加入。
+
 UpdateTool 仍通过 CLI 调用。管理侧约定可选 `--json-errors`、schema=1 的 code/message 错误封套，由 P3 工具适配任务落地；现有不带该选项的调用方保持原格式及退出码。P1 只固定该契约，不宣称 CLI 已支持新参数。
 
 用户 config.json、更新信任配置、注册表键、互斥体、EXE 名称与版本保持兼容。SettingsJsonContext 和 UpdateJsonContext 继续用于 AOT 序列化。

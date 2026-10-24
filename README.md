@@ -119,6 +119,13 @@ pwsh -File scripts/checks/Test-Admin.ps1 -IncludeBrowser
 
 浏览器默认使用 Playwright Chromium；若使用本机 Chrome，可在当前终端设置 `$env:PORTKILL_TEST_BROWSER_CHANNEL='chrome'`，测试仍使用独立临时浏览器配置。
 
+首次启用管理认证时，先在受控终端执行数据库迁移，再初始化首位管理员。密码由终端隐藏输入或标准输入读取，不通过命令参数或环境变量提供；未完成 MFA 的登录只能进入认证流程。
+
+```powershell
+dotnet run --project src/Services/PortKiller.UpdateAdmin.Api -c Release -- db migrate
+dotnet run --project src/Services/PortKiller.UpdateAdmin.Api -c Release -- admin init --user <管理员账号>
+```
+
 专用 Linux 环境使用 `bash scripts/checks/test-admin-linux.sh` 执行真实服务端测试。Windows 上的测试和 linux-x64 构建不能代替该运行结果；实际 Windows AOT 包在 Linux 上的验包测试属于 P3。
 
 ## 提交与发布文件

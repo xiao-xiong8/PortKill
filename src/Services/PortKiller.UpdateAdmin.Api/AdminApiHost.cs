@@ -5,6 +5,10 @@ using PortKiller.UpdateManagement;
 using PortKiller.UpdateManagement.Contracts;
 using PortKiller.UpdateManagement.Configuration;
 using Microsoft.AspNetCore.DataProtection;
+using PortKiller.UpdateAdmin.Api.Authentication;
+using PortKiller.UpdateManagement.Security;
+using PortKiller.UpdateManagement.Persistence.Entities;
+using Microsoft.AspNetCore.Diagnostics;
 
 namespace PortKiller.UpdateAdmin.Api;
 
@@ -17,6 +21,8 @@ public static class AdminApiHost
         configure?.Invoke(builder);
         var administration = AdminHostConfiguration.Load(builder.Configuration, args);
         builder.Services.AddSingleton(administration);
+        builder.Services.AddAdminIdentity(administration);
+        builder.Services.AddScoped<AdminCookieEvents>();
         if (string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
             builder.WebHost.UseUrls("http://127.0.0.1:5081");
         string urls = builder.Configuration["urls"] ?? "http://127.0.0.1:5081";
@@ -33,19 +39,27 @@ public static class AdminApiHost
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
                 options.Cookie.SameSite = SameSiteMode.Strict;
-                options.Events.OnRedirectToLogin = context =>
-                    ApiProblems.WriteAsync(context.HttpContext, 401, AdminErrorCodes.AuthenticationRequired, "需要有效的管理员会话。");
-                options.Events.OnRedirectToAccessDenied = context =>
-                    ApiProblems.WriteAsync(context.HttpContext, 403, AdminErrorCodes.PermissionDenied, "当前账号无权执行此操作。");
+                options.EventsType = typeof(AdminCookieEvents);
+                options.SlidingExpiration = false;
             });
-        builder.Services.AddAuthorizationBuilder().SetFallbackPolicy(
-            new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+        builder.Services.AddAuthorizationBuilder().SetFallbackPolicy(new AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser().RequireClaim(AdminIdentity.PhaseClaim, SessionPhase.Full.ToString()).Build())
+            .AddPolicy(AdminIdentity.PendingPolicy, policy => policy.RequireAuthenticatedUser());
         builder.Services.AddProblemDetails();
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
         builder.Services.AddOpenApi("v1");
         var app = builder.Build();
-        app.UseExceptionHandler();
+        app.UseExceptionHandler(handler => handler.Run(async context =>
+        {
+            var error = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+            if (error is AdminFailure failure)
+                await ApiProblems.WriteAsync(context, failure.Status, failure.Code, failure.Message);
+            else if (error is BadHttpRequestException)
+                await ApiProblems.WriteAsync(context, 400, AdminErrorCodes.InvalidRequest, "请求格式无效。");
+            else
+                await ApiProblems.WriteAsync(context, 500, AdminErrorCodes.InternalError, "请求暂时无法完成，请稍后重试。");
+        }));
         app.UseAuthentication();
         app.UseAuthorization();
         app.MapGet("/health/live", () => new LiveHealthResponse("ok", "admin-api")).AllowAnonymous().WithName("GetLiveHealth");
@@ -54,6 +68,7 @@ public static class AdminApiHost
             .WithName("GetSystemStatus").ProducesProblem(401).ProducesProblem(403);
         app.MapGet("/api/v1/system/capabilities", () => AdminContract.Capabilities)
             .WithName("GetCapabilities").ProducesProblem(401).ProducesProblem(403);
+        app.MapAdminAuthentication();
         return app;
     }
 }

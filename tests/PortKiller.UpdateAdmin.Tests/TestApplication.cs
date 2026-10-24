@@ -2,6 +2,9 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using PortKiller.UpdateAdmin.Api;
+using Microsoft.Data.Sqlite;
+using PortKiller.UpdateManagement.Configuration;
+using PortKiller.UpdateManagement.Persistence;
 
 namespace PortKiller.UpdateAdmin.Tests;
 
@@ -26,6 +29,8 @@ internal sealed class TestApplication : IAsyncDisposable
     {
         Client?.Dispose();
         if (App != null) await App.DisposeAsync();
+        using (var connection = new SqliteConnection(AdminDatabase.ConnectionString(new AdminOptions { DataRoot = Root })))
+            SqliteConnection.ClearPool(connection);
         string full = Path.GetFullPath(Root);
         if (!full.StartsWith(Path.GetFullPath(TestRoot) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Test cleanup outside sandbox");

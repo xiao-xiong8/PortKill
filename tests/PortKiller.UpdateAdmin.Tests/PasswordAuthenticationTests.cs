@@ -62,7 +62,7 @@ public sealed class PasswordAuthenticationTests
             catch (AdminFailure error) when (error.Code == "bootstrap_exists") { return false; }
         }
         var results = await Task.WhenAll(Task.Run(() => Attempt("first-operator")), Task.Run(() => Attempt("second-operator")));
-        Assert.Single(results.Where(created => created));
+        Assert.Single(results, created => created);
         using var scope = app.App.Services.CreateScope();
         Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<UpdateAdminDbContext>().Users.CountAsync());
     }

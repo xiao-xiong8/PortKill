@@ -42,8 +42,9 @@ public static class AdminApiHost
                 options.EventsType = typeof(AdminCookieEvents);
                 options.SlidingExpiration = false;
             });
-        builder.Services.AddAuthorizationBuilder().SetFallbackPolicy(new AuthorizationPolicyBuilder()
-            .RequireAuthenticatedUser().RequireClaim(AdminIdentity.PhaseClaim, SessionPhase.Full.ToString()).Build())
+        var fullSessionPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser()
+            .RequireClaim(AdminIdentity.PhaseClaim, SessionPhase.Full.ToString()).Build();
+        builder.Services.AddAuthorizationBuilder().SetFallbackPolicy(fullSessionPolicy).SetDefaultPolicy(fullSessionPolicy)
             .AddPolicy(AdminIdentity.PendingPolicy, policy => policy.RequireAuthenticatedUser());
         builder.Services.AddProblemDetails();
         builder.Services.ConfigureHttpJsonOptions(options =>
@@ -62,6 +63,11 @@ public static class AdminApiHost
         }));
         app.UseAuthentication();
         app.UseAuthorization();
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments("/api/v1")) context.Response.Headers.CacheControl = "no-store";
+            await next(context);
+        });
         app.MapGet("/health/live", () => new LiveHealthResponse("ok", "admin-api")).AllowAnonymous().WithName("GetLiveHealth");
         app.MapGet("/api/v1/system/status", () => new SystemStatusResponse(
             AdminApplication.Name, AdminApplication.Version, AdminContract.Version))

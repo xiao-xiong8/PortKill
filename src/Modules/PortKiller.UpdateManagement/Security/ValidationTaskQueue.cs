@@ -15,7 +15,8 @@ public sealed class ValidationTaskQueue(UpdateAdminDbContext database, TimeProvi
     private long Now => clock.GetUtcNow().ToUnixTimeMilliseconds();
 
     public sealed record Completion(string Version, long Sequence, string Runtime, long PackageSize,
-        string ManifestSha256, string PackageSha256, string[] ReleaseNotes, long ValidatedUtcMs, string ArchiveId);
+        string ManifestSha256, string PackageSha256, string[] ReleaseNotes, long ValidatedUtcMs,
+        long ManifestExpiresUtcMs, string ArchiveId);
 
     public async Task<(string DraftId, string JobId)> EnqueueAsync(UploadSession upload, CancellationToken token)
     {
@@ -169,6 +170,7 @@ public sealed class ValidationTaskQueue(UpdateAdminDbContext database, TimeProvi
         if (completion.ArchiveId.Length is < 1 or > 64 || completion.ArchiveId.Any(c => !char.IsAsciiLetterOrDigit(c))
             || completion.Version.Length is < 1 or > 32 || completion.Sequence <= 0 || completion.Runtime != "win-x64"
             || completion.PackageSize <= 0 || completion.ManifestSha256.Length != 64 || completion.PackageSha256.Length != 64
+            || completion.ManifestExpiresUtcMs <= 0
             || completion.ReleaseNotes.Length > 20)
             throw new ArgumentException("Validation completion is invalid.", nameof(completion));
         await using var transaction = await database.Database.BeginTransactionAsync(token);
@@ -191,6 +193,7 @@ public sealed class ValidationTaskQueue(UpdateAdminDbContext database, TimeProvi
                 .SetProperty(draft => draft.ManifestSha256, completion.ManifestSha256).SetProperty(draft => draft.PackageSha256, completion.PackageSha256)
                 .SetProperty(draft => draft.ReleaseNotesJson, System.Text.Json.JsonSerializer.Serialize(completion.ReleaseNotes))
                 .SetProperty(draft => draft.ValidatedUtcMs, completion.ValidatedUtcMs)
+                .SetProperty(draft => draft.ManifestExpiresUtcMs, completion.ManifestExpiresUtcMs)
                 .SetProperty(draft => draft.Revision, draft => draft.Revision + 1), token);
         await AddEventAsync(id, "validated", "validation_ready_for_approval", token);
         await transaction.CommitAsync(token);
@@ -207,7 +210,7 @@ public sealed class ValidationTaskQueue(UpdateAdminDbContext database, TimeProvi
     private static ValidationTaskResponse Response(ReleaseJob job, ReleaseDraft draft)
         => new(job.Id, job.DraftId, job.State, job.Attempts, job.CreatedUtcMs, job.LeaseExpiresUtcMs, job.ErrorCode,
             draft.ValidationState, draft.Version, draft.Sequence, draft.ManifestSha256, draft.PackageSha256,
-            JsonSerializer.Deserialize<string[]>(draft.ReleaseNotesJson) ?? [], draft.ValidatedUtcMs);
+            JsonSerializer.Deserialize<string[]>(draft.ReleaseNotesJson) ?? [], draft.ValidatedUtcMs, draft.ManifestExpiresUtcMs);
 
 
     private async Task FailExhaustedLeasesAsync(long now, CancellationToken token)

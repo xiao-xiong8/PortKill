@@ -10,6 +10,7 @@ public sealed record UploadCleanupResult(int ExpiredUploads, int StagingDirector
 
 public sealed class UploadCleanupService(UpdateAdminDbContext database, AdminOptions options, TimeProvider clock)
 {
+    private const int ArchiveCleanupLeaseMinutes = 15;
     private long Now => clock.GetUtcNow().ToUnixTimeMilliseconds();
 
     public async Task<UploadCleanupResult> CleanupAsync(CancellationToken token)
@@ -56,10 +57,13 @@ public sealed class UploadCleanupService(UpdateAdminDbContext database, AdminOpt
                     .SetProperty(upload => upload.Revision, upload => upload.Revision + 1), token);
         }
 
-        long archiveCutoff = now - (long)TimeSpan.FromDays(options.RejectedArchiveRetentionDays).TotalMilliseconds;
+        long rejectedArchiveCutoff = now - (long)TimeSpan.FromDays(options.RejectedArchiveRetentionDays).TotalMilliseconds;
+        long unpublishedArchiveCutoff = now - (long)TimeSpan.FromDays(options.UnpublishedArchiveRetentionDays).TotalMilliseconds;
         var archiveCandidates = await database.ReleaseDrafts.AsNoTracking()
-            .Where(draft => draft.ValidationState == ValidationState.Rejected && draft.ArchiveCleanedUtcMs == null
-                && draft.CreatedUtcMs <= archiveCutoff
+            .Where(draft => (draft.ValidationState == ValidationState.Rejected && draft.CreatedUtcMs <= rejectedArchiveCutoff
+                    || draft.ValidationState == ValidationState.ReadyForApproval && draft.CreatedUtcMs <= unpublishedArchiveCutoff)
+                && draft.ArchiveCleanedUtcMs == null
+                && (draft.ArchiveCleanupLeaseUtcMs == null || draft.ArchiveCleanupLeaseUtcMs <= now)
                 && !database.PublishApprovals.Any(approval => approval.DraftId == draft.Id)
                 && !database.ReleaseJobs.Any(job => job.DraftId == draft.Id &&
                     ((job.Kind == "publish" && job.State != PublishJobState.Failed && job.State != PublishJobState.Superseded)
@@ -67,11 +71,41 @@ public sealed class UploadCleanupService(UpdateAdminDbContext database, AdminOpt
             .Select(draft => new { draft.Id, draft.ArchiveId }).Take(64).ToListAsync(token);
         foreach (var candidate in archiveCandidates)
         {
-            if (!TryDeleteDirectory(Path.Combine(options.ArchivePath, candidate.ArchiveId))) continue;
-            archivesDeleted++;
-            await database.ReleaseDrafts.Where(draft => draft.Id == candidate.Id && draft.ArchiveCleanedUtcMs == null)
-                .ExecuteUpdateAsync(update => update.SetProperty(draft => draft.ArchiveCleanedUtcMs, now)
+            long leaseUntil = now + (long)TimeSpan.FromMinutes(ArchiveCleanupLeaseMinutes).TotalMilliseconds;
+            await using var transaction = await database.Database.BeginTransactionAsync(token);
+            int claimed = await database.ReleaseDrafts
+                .Where(draft => draft.Id == candidate.Id && draft.ArchiveCleanedUtcMs == null
+                    && (draft.ArchiveCleanupLeaseUtcMs == null || draft.ArchiveCleanupLeaseUtcMs <= now)
+                    && !database.PublishApprovals.Any(approval => approval.DraftId == draft.Id)
+                    && !database.ReleaseJobs.Any(job => job.DraftId == draft.Id &&
+                        ((job.Kind == "publish" && job.State != PublishJobState.Failed && job.State != PublishJobState.Superseded)
+                            || (job.Kind == "validate" && (job.State == PublishJobState.Queued || job.State == PublishJobState.Publishing)))))
+                .ExecuteUpdateAsync(update => update.SetProperty(draft => draft.ArchiveCleanupLeaseUtcMs, leaseUntil)
                     .SetProperty(draft => draft.Revision, draft => draft.Revision + 1), token);
+            if (claimed != 1)
+            {
+                await transaction.CommitAsync(token);
+                continue;
+            }
+
+            bool deleted = TryDeleteDirectory(Path.Combine(options.ArchivePath, candidate.ArchiveId));
+            if (deleted)
+            {
+                archivesDeleted++;
+                await database.ReleaseDrafts.Where(draft => draft.Id == candidate.Id
+                        && draft.ArchiveCleanedUtcMs == null && draft.ArchiveCleanupLeaseUtcMs == leaseUntil)
+                    .ExecuteUpdateAsync(update => update.SetProperty(draft => draft.ArchiveCleanedUtcMs, now)
+                        .SetProperty(draft => draft.ArchiveCleanupLeaseUtcMs, (long?)null)
+                        .SetProperty(draft => draft.Revision, draft => draft.Revision + 1), token);
+            }
+            else
+            {
+                await database.ReleaseDrafts.Where(draft => draft.Id == candidate.Id
+                        && draft.ArchiveCleanupLeaseUtcMs == leaseUntil)
+                    .ExecuteUpdateAsync(update => update.SetProperty(draft => draft.ArchiveCleanupLeaseUtcMs, (long?)null)
+                        .SetProperty(draft => draft.Revision, draft => draft.Revision + 1), token);
+            }
+            await transaction.CommitAsync(token);
         }
         return new(expired, stagingDeleted, archivesDeleted);
     }

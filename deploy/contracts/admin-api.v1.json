@@ -1950,6 +1950,11 @@
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "format": "int64",
             "nullable": true
+          },
+          "manifestExpiresUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64",
+            "nullable": true
           }
         }
       }

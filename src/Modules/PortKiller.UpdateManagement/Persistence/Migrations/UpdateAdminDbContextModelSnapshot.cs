@@ -425,6 +425,9 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                     b.Property<long?>("ArchiveCleanedUtcMs")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("ArchiveCleanupLeaseUtcMs")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("ArchiveId")
                         .IsRequired()
                         .HasColumnType("TEXT");

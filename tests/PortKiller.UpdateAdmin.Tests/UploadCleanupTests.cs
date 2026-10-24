@@ -58,6 +58,17 @@ public sealed class UploadCleanupTests
             Assert.False(Directory.Exists(archive));
             database.ChangeTracker.Clear();
             Assert.NotNull((await database.ReleaseDrafts.AsNoTracking().SingleAsync(item => item.Id == draft.Id)).ArchiveCleanedUtcMs);
+
+            var readyUpload = new UploadSession { OwnerId = userId, StorageId = Guid.NewGuid().ToString("N"), State = UploadState.Uploaded,
+                CreatedUtcMs = 1, LastActivityUtcMs = 1, ExpiresUtcMs = 2 };
+            var readyDraft = new ReleaseDraft { OwnerId = userId, UploadId = readyUpload.Id, ArchiveId = Guid.NewGuid().ToString("N"),
+                ValidationState = ValidationState.ReadyForApproval, CreatedUtcMs = 1 };
+            database.UploadSessions.Add(readyUpload); database.ReleaseDrafts.Add(readyDraft); await database.SaveChangesAsync();
+            string readyArchive = Path.Combine(app.Root, "archive", readyDraft.ArchiveId);
+            Directory.CreateDirectory(readyArchive); await File.WriteAllBytesAsync(Path.Combine(readyArchive, "package.zip"), [1]);
+            result = await scope.ServiceProvider.GetRequiredService<UploadCleanupService>().CleanupAsync(CancellationToken.None);
+            Assert.True(result.ArchivesDeleted >= 1);
+            Assert.False(Directory.Exists(readyArchive));
         }
     }
 }

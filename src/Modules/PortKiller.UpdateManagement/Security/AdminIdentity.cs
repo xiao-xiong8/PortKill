@@ -49,15 +49,25 @@ public static class AdminIdentity
         services.AddScoped<AdminAuditService>();
         services.AddScoped<AdminBackupService>();
         services.AddScoped<UploadManagementService>();
+        services.AddAdminWorkerServices();
+        return services;
+    }
+
+    public static bool ValidUserName(string? name) => name is { Length: >= 3 and <= 64 }
+        && name.All(character => char.IsLetterOrDigit(character) || "._@+-".Contains(character));
+}
+
+public static class AdminWorkerServices
+{
+    public static IServiceCollection AddAdminWorkerServices(this IServiceCollection services)
+    {
+        services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddScoped<ValidationTaskQueue>();
         services.AddScoped<ValidationTaskExecutor>();
         services.AddSingleton<ValidationArchiveService>();
         services.AddScoped<UploadCleanupService>();
         return services;
     }
-
-    public static bool ValidUserName(string? name) => name is { Length: >= 3 and <= 64 }
-        && name.All(character => char.IsLetterOrDigit(character) || "._@+-".Contains(character));
 }
 
 public sealed class DummyPasswordVerifier(Microsoft.Extensions.Options.IOptions<PasswordHasherOptions> options)

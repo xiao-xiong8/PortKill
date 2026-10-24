@@ -10,6 +10,6 @@ public sealed record ValidationTaskResponse(string Id, string DraftId, PublishJo
     long CreatedUtcMs, long? LeaseExpiresUtcMs, string? ErrorCode,
     ValidationState ValidationState = ValidationState.Pending, string? Version = null, long? Sequence = null,
     string? ManifestSha256 = null, string? PackageSha256 = null, string[]? ReleaseNotes = null,
-    long? ValidatedUtcMs = null);
+    long? ValidatedUtcMs = null, long? ManifestExpiresUtcMs = null);
 
 public enum UploadPart { Manifest, Package }

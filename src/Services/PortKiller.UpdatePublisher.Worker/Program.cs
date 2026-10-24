@@ -12,7 +12,7 @@ builder.Services.AddSingleton(options);
 builder.Services.AddSingleton(updateToolOptions);
 builder.Services.AddAdminDatabase(options);
 builder.Services.AddHostedService<AdminRuntimeService>();
-builder.Services.AddScoped<PortKiller.UpdateManagement.Security.ValidationTaskQueue>();
+builder.Services.AddAdminWorkerServices();
 builder.Services.AddSingleton<UpdateToolClient>();
 builder.Services.AddHostedService<ValidationTaskWorker>();
 builder.Services.AddHostedService<UploadCleanupWorker>();

@@ -638,6 +638,8 @@ export interface components {
             id: string;
             /** Format: int64 */
             leaseExpiresUtcMs: unknown;
+            /** Format: int64 */
+            manifestExpiresUtcMs?: unknown;
             manifestSha256?: string | null;
             packageSha256?: string | null;
             releaseNotes?: string[] | null;

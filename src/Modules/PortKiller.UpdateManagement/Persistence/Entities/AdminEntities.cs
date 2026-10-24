@@ -74,6 +74,7 @@ public sealed class ReleaseDraft : IVersionedEntity
     public long? ValidatedUtcMs { get; set; }
     public long? ManifestExpiresUtcMs { get; set; }
     public long? ArchiveCleanedUtcMs { get; set; }
+    public long? ArchiveCleanupLeaseUtcMs { get; set; }
     public long CreatedUtcMs { get; set; }
     public long Revision { get; set; }
 }

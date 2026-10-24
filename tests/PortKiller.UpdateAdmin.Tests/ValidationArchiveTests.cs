@@ -56,6 +56,8 @@ public sealed class ValidationArchiveTests
         Assert.Equal(ValidationState.ReadyForApproval, draft.ValidationState);
         Assert.Equal(PublishJobState.Completed, job.State);
         Assert.Equal(version, draft.Version);
+        Assert.NotNull(draft.ManifestExpiresUtcMs);
+        Assert.True(draft.ManifestExpiresUtcMs > app.Clock.GetUtcNow().ToUnixTimeMilliseconds());
         Assert.Equal(package.Length, new FileInfo(Path.Combine(app.Root, "archive", draft.ArchiveId, "package.zip")).Length);
 
         string archivedPackage = Path.Combine(app.Root, "archive", draft.ArchiveId, "package.zip");
@@ -67,6 +69,7 @@ public sealed class ValidationArchiveTests
         var status = await app.Client.GetFromJsonAsync<JsonElement>($"/api/v1/validation-tasks/{taskId}");
         Assert.Equal("readyForApproval", status.GetProperty("validationState").GetString());
         Assert.Equal(version, status.GetProperty("version").GetString());
+        Assert.Equal(draft.ManifestExpiresUtcMs, status.GetProperty("manifestExpiresUtcMs").GetInt64());
     }
 
     [Fact]

@@ -44,6 +44,7 @@ internal sealed class TestApplication : IAsyncDisposable
         Client.Dispose(); await App.DisposeAsync();
         App = CreateApp(); await App.StartAsync(); Client = NewClient(_defaultCookies);
     }
+    public async Task StopAsync() { Client.Dispose(); await App.StopAsync(); }
     public async Task<string> SeedAdminAsync(string name = "operator", string password = "Test-Only-Password!492")
     {
         using var scope = App.Services.CreateScope();

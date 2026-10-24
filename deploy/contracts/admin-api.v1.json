@@ -821,7 +821,14 @@
         },
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedAccountResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -1099,6 +1106,17 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "CreatedAccountResponse": {
+        "required": [
+          "id"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
           }
         }
       },

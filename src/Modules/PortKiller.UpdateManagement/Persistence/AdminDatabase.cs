@@ -18,7 +18,7 @@ public static class AdminDatabase
     public static async Task MigrateAsync(UpdateAdminDbContext database, CancellationToken token = default)
     {
         string directory = Path.GetDirectoryName(database.Database.GetDbConnection().DataSource)!;
-        Directory.CreateDirectory(directory);
+        AdminRuntimeLease.EnsureDataDirectory(directory);
         await database.Database.MigrateAsync(token);
         await database.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;", token);
         await database.Database.ExecuteSqlRawAsync("PRAGMA foreign_keys=ON;", token);

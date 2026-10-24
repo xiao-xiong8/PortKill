@@ -9,6 +9,7 @@ using PortKiller.UpdateManagement.Persistence.Entities;
 namespace PortKiller.UpdateManagement.Security;
 
 public sealed record AccountView(string Id, string UserName, bool Disabled, bool MfaEnabled, bool RecoveryAcknowledged, string[] Roles);
+public sealed record CreatedAccountResponse(string Id);
 public sealed record CreateAccountRequest(string UserName, string Password, string[] Roles);
 public sealed record ChangeRolesRequest(string[] Roles);
 public sealed record AccountStateRequest(bool Disabled);

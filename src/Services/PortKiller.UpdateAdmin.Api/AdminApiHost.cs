@@ -7,12 +7,18 @@ using PortKiller.UpdateManagement.Configuration;
 using PortKiller.UpdateAdmin.Api.Authentication;
 using PortKiller.UpdateManagement.Security;
 using PortKiller.UpdateManagement.Persistence.Entities;
+using PortKiller.UpdateManagement.Persistence;
 
 namespace PortKiller.UpdateAdmin.Api;
 
 public static class AdminApiHost
 {
     public static WebApplication Create(string[] args, Action<WebApplicationBuilder>? configure = null)
+        => CreateCore(args, configure, requireDatabase: true);
+
+    internal static WebApplication CreateForContractExport(string[] args) => CreateCore(args, null, requireDatabase: false);
+
+    private static WebApplication CreateCore(string[] args, Action<WebApplicationBuilder>? configure, bool requireDatabase)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         { Args = args, ContentRootPath = AppContext.BaseDirectory });
@@ -22,6 +28,7 @@ public static class AdminApiHost
         builder.Services.AddAdminIdentity(administration);
         builder.AddRequestSecurity();
         builder.Services.AddScoped<AdminCookieEvents>();
+        if (requireDatabase) builder.Services.AddHostedService<AdminRuntimeService>();
         builder.Services.AddHostedService<SessionMaintenanceService>();
         if (string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
             builder.WebHost.UseUrls("http://127.0.0.1:5081");

@@ -8,7 +8,7 @@ public static class ContractExporter
 {
     public static async Task ExportAsync(string output)
     {
-        await using var app = AdminApiHost.Create(["--urls", "http://127.0.0.1:0"]);
+        await using var app = AdminApiHost.CreateForContractExport(["--urls", "http://127.0.0.1:0"]);
         await app.StartAsync();
         try
         {

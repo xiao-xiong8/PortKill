@@ -21,6 +21,7 @@ public static class AdminIdentity
         services.AddAdminDatabase(options);
         services.TryAddSingleton(TimeProvider.System);
         services.AddHttpContextAccessor();
+        AdminRuntimeLease.EnsureDataDirectory(options.DataRoot);
         if (!OperatingSystem.IsWindows())
         {
             var permissions = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
@@ -46,6 +47,7 @@ public static class AdminIdentity
         services.AddScoped<AdminMfaService>();
         services.AddScoped<AdminAccountService>();
         services.AddScoped<AdminAuditService>();
+        services.AddScoped<AdminBackupService>();
         return services;
     }
 

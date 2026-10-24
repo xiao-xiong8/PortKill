@@ -107,7 +107,7 @@ pwsh -File scripts/build/Test-UpdatePipeline.ps1 -VcVarsAllPath C:/path/to/vcvar
 
 该入口包含 UI、真实 AOT 安装与恢复、隔离发布演练、性能检查及 Linux 服务端构建。结果写入 `.local/artifacts/update-validation/`。真实 Linux、Nginx、TLS 和公网部署仍需单独验收；过程记录保存在本地，不随源码分发。
 
-网页发布管理后台已提供独立的 Vue 前端、net10.0 API/Worker 骨架、接口契约和基础验证入口，完整发布业务仍在实施中。后续数据层采用 SQLite + EF Core 10。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
+网页发布管理后台已提供独立的 Vue 前端、net10.0 API/Worker 骨架、接口契约，以及 SQLite + EF Core 10 的认证、权限和审计基础。完整上传发布业务及前端认证页面仍在后续阶段实施。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
 
 ```powershell
 # 后台测试、实际 OpenAPI 比对、前端检查与构建
@@ -127,6 +127,20 @@ pwsh -File scripts/checks/Test-Admin.ps1 -IncludeBrowser
 dotnet run --project src/Services/PortKiller.UpdateAdmin.Api -c Release -- db migrate
 dotnet run --project src/Services/PortKiller.UpdateAdmin.Api -c Release -- admin init --user <管理员账号>
 ```
+
+API 与 Worker 启动前都检查迁移版本，启动不会自动迁移。二者运行时持有共享维护锁；迁移、恢复、初始化和离线 MFA 重置要求排他锁，因此需先停止这两个服务。在线备份可以在服务运行期间执行：
+
+```powershell
+dotnet run --project src/Services/PortKiller.UpdateAdmin.Api -c Release -- db backup --output D:/private-backups/admin-20261024
+
+# 停止 API 和 Worker 后恢复；已有数据库会保留为 admin.sqlite.pre-restore-<随机ID>
+dotnet run --project src/Services/PortKiller.UpdateAdmin.Api -c Release -- db restore --input D:/private-backups/admin-20261024
+
+# 所有 MFA 设备和恢复码均丢失时，由本机运维终端停机恢复指定账号
+dotnet run --project src/Services/PortKiller.UpdateAdmin.Api -c Release -- admin reset-mfa --user <管理员账号>
+```
+
+上述命令可附加 `--data-root <绝对目录>`，应与服务使用同一配置。备份使用 SQLite Online Backup API，完成后才写入 `backup.json`；包含数据库、迁移版本、认证密钥和 SHA-256 清单。恢复校验复制后的数据库、外键、迁移版本和密钥摘要，保留现有密钥，撤销所有恢复出的会话，随后需重新登录并完成 MFA。备份目录包含认证材料，必须按凭据保管；Linux 新数据目录默认仅属主可访问，已有目录需去掉 other 权限，API/Worker 共享组和 umask 在部署阶段配置。仅使用支持文件锁的本地磁盘，维护时停止所有数据库写入者。此备份只覆盖管理数据库和认证密钥，正式包及公开清单的全量恢复与发布状态核对属于后续部署阶段。
 
 专用 Linux 环境使用 `bash scripts/checks/test-admin-linux.sh` 执行真实服务端测试。Windows 上的测试和 linux-x64 构建不能代替该运行结果；实际 Windows AOT 包在 Linux 上的验包测试属于 P3。
 

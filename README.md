@@ -121,6 +121,8 @@ pwsh -File scripts/checks/Test-Admin.ps1 -IncludeBrowser
 
 首次启用管理认证时，先在受控终端执行数据库迁移，再初始化首位管理员。密码由终端隐藏输入或标准输入读取，不通过命令参数或环境变量提供；未完成 MFA 的登录只能进入认证流程。
 
+管理接口使用持久可撤销会话，密码验证后必须完成验证器 MFA 和恢复码确认。Viewer 只读，Uploader 可上传和验证，Publisher 可发布，Administrator 管理全部权限；发布及账号管理要求五分钟内的强认证。修改密码、角色、账号状态或 MFA 会撤销受影响的会话。所有修改请求（含登录）先读取 `/api/v1/auth/csrf`，携带返回的 `requestToken` 到 `X-PortKill-CSRF` 请求头，身份变化后重新读取；Cookie 仅限 HTTPS。代理只信任本机回环地址的一跳转发头，认证入口限流且返回 JSON 错误。
+
 ```powershell
 dotnet run --project src/Services/PortKiller.UpdateAdmin.Api -c Release -- db migrate
 dotnet run --project src/Services/PortKiller.UpdateAdmin.Api -c Release -- admin init --user <管理员账号>

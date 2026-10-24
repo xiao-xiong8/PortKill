@@ -21,6 +21,7 @@ public static class AdminApiHost
         var administration = AdminHostConfiguration.Load(builder.Configuration, args);
         builder.Services.AddSingleton(administration);
         builder.Services.AddAdminIdentity(administration);
+        builder.AddRequestSecurity();
         builder.Services.AddScoped<AdminCookieEvents>();
         builder.Services.AddHostedService<SessionMaintenanceService>();
         if (string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
@@ -42,13 +43,16 @@ public static class AdminApiHost
             });
         var fullSessionPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser()
             .RequireClaim(AdminIdentity.PhaseClaim, SessionPhase.Full.ToString()).Build();
-        builder.Services.AddAuthorizationBuilder().SetFallbackPolicy(fullSessionPolicy).SetDefaultPolicy(fullSessionPolicy)
+        var authorization = builder.Services.AddAuthorizationBuilder().SetFallbackPolicy(fullSessionPolicy).SetDefaultPolicy(fullSessionPolicy)
             .AddPolicy(AdminIdentity.PendingPolicy, policy => policy.RequireAuthenticatedUser());
+        AdminPermissions.AddPolicies(authorization);
         builder.Services.AddProblemDetails();
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
         builder.Services.AddOpenApi("v1");
         var app = builder.Build();
+        app.UseForwardedHeaders();
+        app.UseRouting();
         app.UseExceptionHandler(handler => handler.Run(async context =>
         {
             var error = context.Features.Get<IExceptionHandlerFeature>()?.Error;
@@ -65,14 +69,17 @@ public static class AdminApiHost
             await next(context);
         });
         app.UseAuthentication();
+        app.UseRateLimiter();
         app.UseAuthorization();
+        app.UseCsrfValidation();
         app.MapGet("/health/live", () => new LiveHealthResponse("ok", "admin-api")).AllowAnonymous().WithName("GetLiveHealth");
         app.MapGet("/api/v1/system/status", () => new SystemStatusResponse(
             AdminApplication.Name, AdminApplication.Version, AdminContract.Version))
-            .WithName("GetSystemStatus").ProducesProblem(401).ProducesProblem(403);
+            .RequireAuthorization(AdminPermissions.Read).WithName("GetSystemStatus").ProducesProblem(401).ProducesProblem(403);
         app.MapGet("/api/v1/system/capabilities", () => AdminContract.Capabilities)
-            .WithName("GetCapabilities").ProducesProblem(401).ProducesProblem(403);
+            .RequireAuthorization(AdminPermissions.Read).WithName("GetCapabilities").ProducesProblem(401).ProducesProblem(403);
         app.MapAdminAuthentication();
+        app.MapAdminAccounts();
         return app;
     }
 }

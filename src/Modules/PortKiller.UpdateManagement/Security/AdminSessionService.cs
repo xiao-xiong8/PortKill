@@ -11,7 +11,7 @@ public sealed record SessionTicket(AdminUser User, AdminSession Session);
 public sealed record SessionView(string Id, SessionPhase Phase, string AuthenticationMethod, long CreatedUtcMs,
     long LastSeenUtcMs, long ExpiresUtcMs, bool Current);
 public sealed record CurrentSessionView(string UserId, string UserName, SessionPhase Phase, string CurrentSessionId,
-    string[] Roles, long ExpiresUtcMs, long? StrongAuthenticationExpiresUtcMs);
+    string[] Roles, string[] Permissions, long ExpiresUtcMs, long? StrongAuthenticationExpiresUtcMs);
 
 public sealed class AdminSessionService(UpdateAdminDbContext database, UserManager<AdminUser> users, AdminOptions options, TimeProvider clock)
 {
@@ -74,7 +74,9 @@ public sealed class AdminSessionService(UpdateAdminDbContext database, UserManag
         };
         if (ticket.Session.Phase == SessionPhase.Full)
         {
-            foreach (string role in await users.GetRolesAsync(ticket.User)) claims.Add(new(ClaimTypes.Role, role));
+            var roles = await users.GetRolesAsync(ticket.User);
+            foreach (string role in roles) claims.Add(new(ClaimTypes.Role, role));
+            foreach (string permission in AdminPermissions.ForRoles(roles)) claims.Add(new(AdminPermissions.Claim, permission));
             if (ticket.Session.StrongAuthenticationUtcMs is { } strongAt)
                 claims.Add(new("strong_auth_at", strongAt.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         }
@@ -85,8 +87,9 @@ public sealed class AdminSessionService(UpdateAdminDbContext database, UserManag
     {
         var ticket = await ValidateAsync(principal, token)
             ?? throw new AdminFailure("authentication_required", 401, "会话已失效。");
+        string[] roles = ticket.Session.Phase == SessionPhase.Full ? (await users.GetRolesAsync(ticket.User)).ToArray() : [];
         return new(ticket.User.Id, ticket.User.UserName!, ticket.Session.Phase, ticket.Session.Id,
-            ticket.Session.Phase == SessionPhase.Full ? (await users.GetRolesAsync(ticket.User)).ToArray() : [],
+            roles, AdminPermissions.ForRoles(roles),
             Expires(ticket.Session), ticket.Session.StrongAuthenticationUtcMs is { } strongAt
                 ? strongAt + (long)TimeSpan.FromMinutes(options.StrongAuthenticationMinutes).TotalMilliseconds : null);
     }

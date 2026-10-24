@@ -8,6 +8,8 @@ using PortKiller.UpdateManagement.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using PortKiller.UpdateManagement.Security;
 using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace PortKiller.UpdateAdmin.Tests;
 
@@ -34,7 +36,7 @@ internal sealed class TestApplication : IAsyncDisposable
 
     private WebApplication CreateApp() => AdminApiHost.Create(["--Administration:DataRoot", Root, "--urls", "https://localhost:0"], builder =>
     { builder.WebHost.UseTestServer(); builder.Services.AddSingleton<TimeProvider>(Clock); });
-    public HttpClient NewClient(CookieContainer? cookies = null) => new(new TestCookieHandler(App.GetTestServer().CreateHandler(), cookies ?? new())) { BaseAddress = new Uri("https://localhost") };
+    public HttpClient NewClient(CookieContainer? cookies = null, bool autoCsrf = true) => new(new TestCookieHandler(App.GetTestServer().CreateHandler(), cookies ?? new(), autoCsrf)) { BaseAddress = new Uri("https://localhost") };
     public async Task RestartAsync()
     {
         Client.Dispose(); await App.DisposeAsync();
@@ -59,16 +61,31 @@ internal sealed class TestApplication : IAsyncDisposable
     }
 }
 
-internal sealed class TestCookieHandler(HttpMessageHandler inner, CookieContainer cookies) : DelegatingHandler(inner)
+internal sealed class TestCookieHandler(HttpMessageHandler inner, CookieContainer cookies, bool autoCsrf) : DelegatingHandler(inner)
 {
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
     {
+        if (autoCsrf && request.Method != HttpMethod.Get && request.Method != HttpMethod.Head)
+        {
+            using var csrfRequest = new HttpRequestMessage(HttpMethod.Get, new Uri(request.RequestUri!, "/api/v1/auth/csrf"));
+            AddCookies(csrfRequest);
+            using var csrfResponse = await base.SendAsync(csrfRequest, token); StoreCookies(csrfRequest, csrfResponse);
+            csrfResponse.EnsureSuccessStatusCode();
+            string csrf = (await csrfResponse.Content.ReadFromJsonAsync<JsonElement>(token)).GetProperty("requestToken").GetString()!;
+            request.Headers.Add("X-PortKill-CSRF", csrf);
+        }
+        AddCookies(request);
+        var response = await base.SendAsync(request, token); StoreCookies(request, response); return response;
+    }
+    private void AddCookies(HttpRequestMessage request)
+    {
         string cookieHeader = cookies.GetCookieHeader(request.RequestUri!);
         if (cookieHeader.Length != 0) { request.Headers.Remove("Cookie"); request.Headers.Add("Cookie", cookieHeader); }
-        var response = await base.SendAsync(request, token);
+    }
+    private void StoreCookies(HttpRequestMessage request, HttpResponseMessage response)
+    {
         if (response.Headers.TryGetValues("Set-Cookie", out var values))
             foreach (string value in values) cookies.SetCookies(request.RequestUri!, value);
-        return response;
     }
 }
 

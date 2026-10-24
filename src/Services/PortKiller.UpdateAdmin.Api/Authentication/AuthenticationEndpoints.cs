@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using System.Security.Claims;
 using PortKiller.UpdateManagement.Security;
 using PortKiller.UpdateManagement.Persistence.Entities;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace PortKiller.UpdateAdmin.Api.Authentication;
 
@@ -24,9 +25,9 @@ public static class AuthenticationEndpoints
             await SignInAsync(context, sessions, ticket);
             return new AuthenticationResponse(ticket.Session.Phase switch
             { SessionPhase.EnrollmentRequired => "enrollMfa", SessionPhase.RecoveryAcknowledgementRequired => "acknowledgeRecovery", _ => "verifyMfa" }, ticket.Session.Phase);
-        }).AllowAnonymous().WithName("Login").ProducesProblem(400).ProducesProblem(401);
+        }).AllowAnonymous().RequireRateLimiting("login").WithName("Login").ProducesProblem(400).ProducesProblem(401).ProducesProblem(429);
 
-        var pending = app.MapGroup("/api/v1/auth/mfa").RequireAuthorization(AdminIdentity.PendingPolicy);
+        var pending = app.MapGroup("/api/v1/auth/mfa").RequireAuthorization(AdminIdentity.PendingPolicy).RequireRateLimiting("mfa");
         pending.MapPost("/enrollment/start", async (AdminMfaService mfa, HttpContext context)
             => await mfa.StartEnrollmentAsync(context.User, context.RequestAborted))
             .WithName("StartMfaEnrollment").ProducesProblem(401).ProducesProblem(403);
@@ -64,7 +65,7 @@ public static class AuthenticationEndpoints
             var ticket = await mfa.ReauthenticateAsync(context.User, request.Password, request.Code, context.RequestAborted);
             await SignInAsync(context, sessions, ticket);
             return new AuthenticationResponse("complete", ticket.Session.Phase);
-        }).WithName("Reauthenticate").ProducesProblem(401).ProducesProblem(403);
+        }).RequireRateLimiting("mfa").WithName("Reauthenticate").ProducesProblem(401).ProducesProblem(403);
 
         app.MapGet("/api/v1/auth/me", async (AdminSessionService sessions, HttpContext context)
             => await sessions.CurrentAsync(context.User, context.RequestAborted))
@@ -87,10 +88,14 @@ public static class AuthenticationEndpoints
     }
 
     internal static async Task SignInAsync(HttpContext context, AdminSessionService sessions, SessionTicket ticket)
-        => await context.SignInAsync(AdminIdentity.Scheme, await sessions.PrincipalAsync(ticket), new AuthenticationProperties
+    {
+        var principal = await sessions.PrincipalAsync(ticket);
+        await context.SignInAsync(AdminIdentity.Scheme, principal, new AuthenticationProperties
         {
             IsPersistent = false, AllowRefresh = false,
             IssuedUtc = DateTimeOffset.FromUnixTimeMilliseconds(ticket.Session.CreatedUtcMs),
             ExpiresUtc = DateTimeOffset.FromUnixTimeMilliseconds(ticket.Session.AbsoluteExpiresUtcMs)
         });
+        context.User = principal;
+    }
 }

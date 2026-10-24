@@ -5,7 +5,7 @@ using PortKiller.UpdateManagement.Persistence.Entities;
 
 namespace PortKiller.UpdateManagement.Security;
 
-public sealed class AdminBootstrap(UpdateAdminDbContext database, UserManager<AdminUser> users, RoleManager<IdentityRole> roles, TimeProvider clock)
+public sealed class AdminBootstrap(UpdateAdminDbContext database, UserManager<AdminUser> users, RoleManager<IdentityRole> roles, TimeProvider clock, AdminAuditService audit)
 {
     public async Task<string> CreateAsync(string userName, string password, CancellationToken token = default)
     {
@@ -18,6 +18,8 @@ public sealed class AdminBootstrap(UpdateAdminDbContext database, UserManager<Ad
         var user = new AdminUser { UserName = userName, LockoutEnabled = true, CreatedUtcMs = clock.GetUtcNow().ToUnixTimeMilliseconds() };
         Ensure(await users.CreateAsync(user, password));
         Ensure(await users.AddToRoleAsync(user, "Administrator"));
+        audit.Stage("account.bootstrap", user.Id, actorUserId: user.Id);
+        await database.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
         return user.Id;
     }

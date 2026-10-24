@@ -13,7 +13,7 @@ public sealed record EnrollmentSecret(string SharedKey, string AuthenticatorUri)
 public sealed record EnrollmentConfirmation(SessionTicket Ticket, string[] RecoveryCodes);
 
 public sealed class AdminMfaService(UpdateAdminDbContext database, UserManager<AdminUser> users,
-    AdminSessionService sessions, TimeProvider clock)
+    AdminSessionService sessions, TimeProvider clock, AdminAuditService audit)
 {
     private long Now => clock.GetUtcNow().ToUnixTimeMilliseconds();
 
@@ -41,7 +41,7 @@ public sealed class AdminMfaService(UpdateAdminDbContext database, UserManager<A
             ticket.Session.SecurityStamp = await users.GetSecurityStampAsync(ticket.User);
             await database.SaveChangesAsync(token);
         }
-        await transaction.CommitAsync(token);
+        await CommitAuditAsync(transaction, "mfa.enrollment_started", ticket, token);
         string issuer = Uri.EscapeDataString("PortKill Administration");
         string account = Uri.EscapeDataString(ticket.User.UserName!);
         return new(key!, $"otpauth://totp/{issuer}:{account}?secret={key}&issuer={issuer}&digits=6&period=30");
@@ -61,7 +61,7 @@ public sealed class AdminMfaService(UpdateAdminDbContext database, UserManager<A
         ticket.Session.StrongAuthenticationUtcMs = Now;
         ticket.Session.SecurityStamp = await users.GetSecurityStampAsync(ticket.User);
         await database.SaveChangesAsync(token);
-        await transaction.CommitAsync(token);
+        await CommitAuditAsync(transaction, "mfa.enrollment_confirmed", ticket, token);
         return new(ticket, recovery);
     }
 
@@ -75,7 +75,7 @@ public sealed class AdminMfaService(UpdateAdminDbContext database, UserManager<A
         ticket.User.RecoveryCodesAcknowledged = true;
         AdminBootstrap.Ensure(await users.UpdateAsync(ticket.User));
         var full = await UpgradeAsync(ticket, "totp", ticket.Session.StrongAuthenticationUtcMs, token);
-        await transaction.CommitAsync(token);
+        await CommitAuditAsync(transaction, "mfa.recovery_acknowledged", full, token);
         return full;
     }
 
@@ -85,7 +85,7 @@ public sealed class AdminMfaService(UpdateAdminDbContext database, UserManager<A
         var ticket = await RequireAsync(principal, token, SessionPhase.MfaRequired);
         await ConsumeTotpAsync(ticket.User, code, transaction, token);
         var full = await UpgradeAsync(ticket, "totp", Now, token);
-        await transaction.CommitAsync(token);
+        await CommitAuditAsync(transaction, "mfa.verified", full, token);
         return full;
     }
 
@@ -98,7 +98,7 @@ public sealed class AdminMfaService(UpdateAdminDbContext database, UserManager<A
             await RejectAsync(ticket.User, transaction, token);
         AdminBootstrap.Ensure(await users.ResetAccessFailedCountAsync(ticket.User));
         var full = await UpgradeAsync(ticket, "recovery", null, token);
-        await transaction.CommitAsync(token);
+        await CommitAuditAsync(transaction, "mfa.recovery_used", full, token);
         return full;
     }
 
@@ -117,7 +117,7 @@ public sealed class AdminMfaService(UpdateAdminDbContext database, UserManager<A
         ticket.Session.StrongAuthenticationUtcMs = Now;
         ticket.Session.AuthenticationMethod = "totp";
         await database.SaveChangesAsync(token);
-        await transaction.CommitAsync(token);
+        await CommitAuditAsync(transaction, "mfa.reauthenticated", ticket, token);
         return ticket;
     }
 
@@ -140,8 +140,16 @@ public sealed class AdminMfaService(UpdateAdminDbContext database, UserManager<A
     private async Task RejectAsync(AdminUser user, IDbContextTransaction transaction, CancellationToken token)
     {
         if (!await users.IsLockedOutAsync(user)) AdminBootstrap.Ensure(await users.AccessFailedAsync(user));
+        audit.Stage("mfa.rejected", user.Id, "failure", user.Id);
+        await database.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
         throw new AdminFailure("mfa_invalid", 401, "验证码或恢复码无效。");
+    }
+
+    private async Task CommitAuditAsync(IDbContextTransaction transaction, string action, SessionTicket ticket, CancellationToken token)
+    {
+        audit.Stage(action, ticket.Session.Id, actorUserId: ticket.User.Id);
+        await database.SaveChangesAsync(token); await transaction.CommitAsync(token);
     }
 
     private async Task<SessionTicket> UpgradeAsync(SessionTicket pending, string method, long? strongAt, CancellationToken token)

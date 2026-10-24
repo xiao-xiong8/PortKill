@@ -7,7 +7,6 @@ using PortKiller.UpdateManagement.Configuration;
 using PortKiller.UpdateAdmin.Api.Authentication;
 using PortKiller.UpdateManagement.Security;
 using PortKiller.UpdateManagement.Persistence.Entities;
-using Microsoft.AspNetCore.Diagnostics;
 
 namespace PortKiller.UpdateAdmin.Api;
 
@@ -47,27 +46,20 @@ public static class AdminApiHost
             .AddPolicy(AdminIdentity.PendingPolicy, policy => policy.RequireAuthenticatedUser());
         AdminPermissions.AddPolicies(authorization);
         builder.Services.AddProblemDetails();
+        builder.Services.AddExceptionHandler<AdminExceptionHandler>();
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
         builder.Services.AddOpenApi("v1");
         var app = builder.Build();
         app.UseForwardedHeaders();
         app.UseRouting();
-        app.UseExceptionHandler(handler => handler.Run(async context =>
-        {
-            var error = context.Features.Get<IExceptionHandlerFeature>()?.Error;
-            if (error is AdminFailure failure)
-                await ApiProblems.WriteAsync(context, failure.Status, failure.Code, failure.Message);
-            else if (error is BadHttpRequestException)
-                await ApiProblems.WriteAsync(context, 400, AdminErrorCodes.InvalidRequest, "请求格式无效。");
-            else
-                await ApiProblems.WriteAsync(context, 500, AdminErrorCodes.InternalError, "请求暂时无法完成，请稍后重试。");
-        }));
+        app.UseExceptionHandler();
         app.Use(async (context, next) =>
         {
             if (context.Request.Path.StartsWithSegments("/api/v1")) context.Response.Headers.CacheControl = "no-store";
             await next(context);
         });
+        app.UseMiddleware<AuditMiddleware>();
         app.UseAuthentication();
         app.UseRateLimiter();
         app.UseAuthorization();
@@ -80,6 +72,9 @@ public static class AdminApiHost
             .RequireAuthorization(AdminPermissions.Read).WithName("GetCapabilities").ProducesProblem(401).ProducesProblem(403);
         app.MapAdminAuthentication();
         app.MapAdminAccounts();
+        app.MapGet("/api/v1/audit", async (AdminAuditService audit, HttpContext context, int page = 1, int pageSize = 20, string? action = null)
+            => await audit.ListAsync(page, pageSize, action, context.RequestAborted))
+            .RequireAuthorization(AdminPermissions.Audit).WithName("ListAuditEvents").ProducesProblem(400).ProducesProblem(401).ProducesProblem(403);
         return app;
     }
 }

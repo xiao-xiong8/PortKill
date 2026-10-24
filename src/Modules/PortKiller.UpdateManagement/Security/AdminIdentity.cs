@@ -45,6 +45,7 @@ public static class AdminIdentity
         services.AddScoped<PasswordAuthenticationService>();
         services.AddScoped<AdminMfaService>();
         services.AddScoped<AdminAccountService>();
+        services.AddScoped<AdminAuditService>();
         return services;
     }
 

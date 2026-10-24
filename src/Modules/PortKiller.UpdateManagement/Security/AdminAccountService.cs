@@ -15,7 +15,7 @@ public sealed record AccountStateRequest(bool Disabled);
 public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
 public sealed class AdminAccountService(UpdateAdminDbContext database, UserManager<AdminUser> users,
-    AdminSessionService sessions, AdminOptions options, TimeProvider clock, IUserStore<AdminUser> userStore)
+    AdminSessionService sessions, AdminOptions options, TimeProvider clock, IUserStore<AdminUser> userStore, AdminAuditService audit)
 {
     private long Now => clock.GetUtcNow().ToUnixTimeMilliseconds();
     private static string[] ValidateRoles(string[]? roles)
@@ -87,6 +87,7 @@ public sealed class AdminAccountService(UpdateAdminDbContext database, UserManag
         var user = new AdminUser { UserName = request.UserName, CreatedUtcMs = Now, LockoutEnabled = true };
         AdminBootstrap.Ensure(await users.CreateAsync(user, request.Password));
         AdminBootstrap.Ensure(await users.AddToRolesAsync(user, roles));
+        audit.Stage("account.created", user.Id); await database.SaveChangesAsync(token);
         await transaction.CommitAsync(token); return user.Id;
     }
 
@@ -99,7 +100,8 @@ public sealed class AdminAccountService(UpdateAdminDbContext database, UserManag
         var current = await users.GetRolesAsync(target);
         AdminBootstrap.Ensure(await users.RemoveFromRolesAsync(target, current.Except(roles)));
         AdminBootstrap.Ensure(await users.AddToRolesAsync(target, roles.Except(current)));
-        await InvalidateAsync(target, token); await transaction.CommitAsync(token);
+        await InvalidateAsync(target, token);
+        audit.Stage("account.roles_changed", target.Id); await database.SaveChangesAsync(token); await transaction.CommitAsync(token);
     }
 
     public async Task SetDisabledAsync(ClaimsPrincipal principal, string id, bool disabled, CancellationToken token)
@@ -108,7 +110,9 @@ public sealed class AdminAccountService(UpdateAdminDbContext database, UserManag
         await RequireActorAsync(principal, true, token); var target = await TargetAsync(id, token);
         if (disabled) await ProtectLastAdministratorAsync(target, token);
         target.Disabled = disabled; AdminBootstrap.Ensure(await users.UpdateAsync(target));
-        await InvalidateAsync(target, token); await transaction.CommitAsync(token);
+        await InvalidateAsync(target, token);
+        audit.Stage(disabled ? "account.disabled" : "account.enabled", target.Id);
+        await database.SaveChangesAsync(token); await transaction.CommitAsync(token);
     }
 
     public async Task ResetMfaAsync(ClaimsPrincipal principal, string id, CancellationToken token)
@@ -116,14 +120,16 @@ public sealed class AdminAccountService(UpdateAdminDbContext database, UserManag
         await using var transaction = await database.Database.BeginTransactionAsync(token);
         await RequireActorAsync(principal, true, token); var target = await TargetAsync(id, token);
         await ProtectLastAdministratorAsync(target, token);
-        await ResetMfaCoreAsync(target, token); await transaction.CommitAsync(token);
+        await ResetMfaCoreAsync(target, token);
+        audit.Stage("account.mfa_reset", target.Id); await database.SaveChangesAsync(token); await transaction.CommitAsync(token);
     }
 
     public async Task ResetMfaOfflineAsync(string name, CancellationToken token = default)
     {
         await using var transaction = await database.Database.BeginTransactionAsync(token);
         var target = await users.FindByNameAsync(name) ?? throw new AdminFailure("resource_not_found", 404, "账号不存在。");
-        await ResetMfaCoreAsync(target, token); await transaction.CommitAsync(token);
+        await ResetMfaCoreAsync(target, token);
+        audit.Stage("account.mfa_reset_offline", target.Id); await database.SaveChangesAsync(token); await transaction.CommitAsync(token);
     }
 
     private async Task ResetMfaCoreAsync(AdminUser target, CancellationToken token)
@@ -143,7 +149,8 @@ public sealed class AdminAccountService(UpdateAdminDbContext database, UserManag
         await using var transaction = await database.Database.BeginTransactionAsync(token);
         var actor = await RequireActorAsync(principal, false, token);
         AdminBootstrap.Ensure(await users.ChangePasswordAsync(actor.User, request.CurrentPassword, request.NewPassword));
-        await InvalidateAsync(actor.User, token); await transaction.CommitAsync(token);
+        await InvalidateAsync(actor.User, token);
+        audit.Stage("account.password_changed", actor.User.Id); await database.SaveChangesAsync(token); await transaction.CommitAsync(token);
     }
 
     public async Task<string[]> RegenerateRecoveryCodesAsync(ClaimsPrincipal principal, CancellationToken token)
@@ -155,6 +162,7 @@ public sealed class AdminAccountService(UpdateAdminDbContext database, UserManag
         // Keep only the current authenticated session; all other cookies become invalid immediately.
         actor.Session.RevokedUtcMs = null; actor.Session.SecurityStamp = await users.GetSecurityStampAsync(actor.User);
         database.Entry(actor.Session).Property(x => x.RevokedUtcMs).IsModified = true;
+        audit.Stage("account.recovery_codes_regenerated", actor.User.Id);
         await database.SaveChangesAsync(token); await transaction.CommitAsync(token); return codes;
     }
 }

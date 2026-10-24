@@ -78,6 +78,10 @@ MainViewModel.* 位于 Shell/Compatibility，仍是已有功能的兼容协调�
 
 `deploy/contracts/admin-api.v1.json` 由实际 API 导出；前端类型通过 openapi-typescript 生成，构建检查需比较实际契约及已生成类型。新增业务入口随对应功能任务加入契约，不将规划中的接口伪装为已经实现。
 
+管理数据位于独立 DataRoot 中的 SQLite，使用 EF Core 10 迁移、WAL、外键、短写事务和应用并发版本；认证由 ASP.NET Core Identity、持久 Data Protection 和数据库会话共同实现。密码仅进入受限认证阶段，完成 TOTP 及恢复码确认后才获得业务权限。每次请求重新核对账号、安全版本、会话撤销和期限，长连接可调用无跟踪的新鲜会话检查。Viewer/Uploader/Publisher/Administrator 的权限由服务端生成；敏感操作在短写事务内再次验证有效会话、管理员角色及近期强认证。
+
+安全变更与成功审计在同一事务提交；失败和拒绝请求在响应头发出前独立记录。审计只接受有界操作标识、资源 ID、账号 ID、结果、UTC 时间、可信远端地址和关联 ID，不接受请求体、查询串或异常正文。读取要求 audit.read 权限并有分页上限；默认保留 90 天且最多 100000 条，单次清理不超过 500 条。预期认证失败及内部异常均由统一处理器返回安全错误，日志只记录关联 ID 和异常类型。
+
 UpdateTool 仍通过 CLI 调用。管理侧约定可选 `--json-errors`、schema=1 的 code/message 错误封套，由 P3 工具适配任务落地；现有不带该选项的调用方保持原格式及退出码。P1 只固定该契约，不宣称 CLI 已支持新参数。
 
 用户 config.json、更新信任配置、注册表键、互斥体、EXE 名称与版本保持兼容。SettingsJsonContext 和 UpdateJsonContext 继续用于 AOT 序列化。

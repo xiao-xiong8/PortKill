@@ -13,10 +13,11 @@ public sealed record SessionView(string Id, SessionPhase Phase, string Authentic
 public sealed record CurrentSessionView(string UserId, string UserName, SessionPhase Phase, string CurrentSessionId,
     string[] Roles, string[] Permissions, long ExpiresUtcMs, long? StrongAuthenticationExpiresUtcMs);
 
-public sealed class AdminSessionService(UpdateAdminDbContext database, UserManager<AdminUser> users, AdminOptions options, TimeProvider clock)
+public sealed class AdminSessionService(UpdateAdminDbContext database, UserManager<AdminUser> users, AdminOptions options, TimeProvider clock, AdminAuditService audit)
 {
     public async Task<SessionTicket> CreateAsync(AdminUser user, SessionPhase phase, string method = "password", CancellationToken token = default)
     {
+        await using var transaction = database.Database.CurrentTransaction == null ? await database.Database.BeginTransactionAsync(token) : null;
         long now = clock.GetUtcNow().ToUnixTimeMilliseconds();
         var session = new AdminSession
         {
@@ -26,7 +27,9 @@ public sealed class AdminSessionService(UpdateAdminDbContext database, UserManag
             StrongAuthenticationUtcMs = method == "totp" ? now : null
         };
         database.AdminSessions.Add(session);
+        audit.Stage("session.created", session.Id, actorUserId: user.Id);
         await database.SaveChangesAsync(token);
+        if (transaction != null) await transaction.CommitAsync(token);
         return new(user, session);
     }
 
@@ -114,11 +117,14 @@ public sealed class AdminSessionService(UpdateAdminDbContext database, UserManag
 
     public async Task RevokeAsync(ClaimsPrincipal principal, string id, CancellationToken token)
     {
+        await using var transaction = await database.Database.BeginTransactionAsync(token);
         string? userId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
         long now = clock.GetUtcNow().ToUnixTimeMilliseconds();
         int changed = await database.AdminSessions.Where(x => x.Id == id && x.UserId == userId)
             .ExecuteUpdateAsync(update => update.SetProperty(x => x.RevokedUtcMs, now), token);
         if (changed == 0) throw new AdminFailure("resource_not_found", 404, "会话不存在。");
+        audit.Stage("session.revoked", id, actorUserId: userId);
+        await database.SaveChangesAsync(token); await transaction.CommitAsync(token);
     }
 
     public async Task CleanupAsync(CancellationToken token)

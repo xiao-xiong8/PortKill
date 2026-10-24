@@ -14,6 +14,7 @@ public sealed class SessionMaintenanceService(IServiceScopeFactory scopes, ILogg
                 {
                     await using var scope = scopes.CreateAsyncScope();
                     await scope.ServiceProvider.GetRequiredService<AdminSessionService>().CleanupAsync(stoppingToken);
+                    await scope.ServiceProvider.GetRequiredService<AdminAuditService>().PruneAsync(stoppingToken);
                 }
                 catch (Exception error) when (error is not OperationCanceledException)
                 { logger.LogWarning(error, "Session cleanup will be retried at the next maintenance interval"); }

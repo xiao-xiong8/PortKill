@@ -10,6 +10,7 @@ using PortKiller.UpdateManagement.Security;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
 namespace PortKiller.UpdateAdmin.Tests;
 
@@ -20,6 +21,7 @@ internal sealed class TestApplication : IAsyncDisposable
     public WebApplication App { get; private set; } = null!;
     public HttpClient Client { get; private set; } = null!;
     public ManualClock Clock { get; } = new();
+    public CapturedLogs Logs { get; } = new();
     private readonly CookieContainer _defaultCookies = new();
     public string DefaultCookieHeader => _defaultCookies.GetCookieHeader(new Uri("https://localhost"));
 
@@ -35,7 +37,7 @@ internal sealed class TestApplication : IAsyncDisposable
     }
 
     private WebApplication CreateApp() => AdminApiHost.Create(["--Administration:DataRoot", Root, "--urls", "https://localhost:0"], builder =>
-    { builder.WebHost.UseTestServer(); builder.Services.AddSingleton<TimeProvider>(Clock); });
+    { builder.WebHost.UseTestServer(); builder.Services.AddSingleton<TimeProvider>(Clock); builder.Logging.AddProvider(Logs); });
     public HttpClient NewClient(CookieContainer? cookies = null, bool autoCsrf = true) => new(new TestCookieHandler(App.GetTestServer().CreateHandler(), cookies ?? new(), autoCsrf)) { BaseAddress = new Uri("https://localhost") };
     public async Task RestartAsync()
     {
@@ -94,4 +96,19 @@ internal sealed class ManualClock : TimeProvider
     private long _ticks = DateTimeOffset.UtcNow.UtcTicks;
     public override DateTimeOffset GetUtcNow() => new(Interlocked.Read(ref _ticks), TimeSpan.Zero);
     public void Advance(TimeSpan duration) => Interlocked.Add(ref _ticks, duration.Ticks);
+}
+
+internal sealed class CapturedLogs : ILoggerProvider
+{
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _entries = new();
+    public string Text => string.Join('\n', _entries);
+    public ILogger CreateLogger(string categoryName) => new Collector(_entries);
+    public void Dispose() { }
+    private sealed class Collector(System.Collections.Concurrent.ConcurrentQueue<string> entries) : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel level) => true;
+        public void Log<TState>(LogLevel level, EventId id, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            => entries.Enqueue(formatter(state, exception) + exception?.ToString());
+    }
 }

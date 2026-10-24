@@ -13,6 +13,8 @@ public sealed class AdminOptions
     public int AbsoluteHours { get; set; } = 8;
     public int PendingMinutes { get; set; } = 10;
     public int StrongAuthenticationMinutes { get; set; } = 5;
+    public int AuditRetentionDays { get; set; } = 90;
+    public int AuditMaximumRows { get; set; } = 100_000;
 
     public void Validate()
     {
@@ -21,7 +23,8 @@ public sealed class AdminOptions
         DataRoot = Path.GetFullPath(DataRoot);
         if (Path.GetPathRoot(DataRoot) == DataRoot || IdleMinutes is < 1 or > 120
             || AbsoluteHours is < 1 or > 24 || PendingMinutes is < 1 or > 15
-            || StrongAuthenticationMinutes is < 1 or > 10)
+            || StrongAuthenticationMinutes is < 1 or > 10 || AuditRetentionDays is < 1 or > 3650
+            || AuditMaximumRows is < 100 or > 10_000_000)
             throw new InvalidOperationException("Administration storage or session limits are invalid.");
     }
 }

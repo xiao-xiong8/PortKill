@@ -63,6 +63,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ListAuditEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/csrf": {
         parameters: {
             query?: never;
@@ -350,6 +366,18 @@ export interface components {
             roles: string[];
             userName: string;
         };
+        AuditEvent: {
+            action?: string;
+            actorUserId?: string | null;
+            correlationId?: string;
+            /** Format: int64 */
+            createdUtcMs?: unknown;
+            /** Format: int64 */
+            id?: unknown;
+            remoteAddress?: string | null;
+            resourceId?: string | null;
+            result?: string;
+        };
         AuthenticationResponse: {
             next: string;
             phase: components["schemas"]["SessionPhase"];
@@ -403,6 +431,15 @@ export interface components {
         };
         PageResponseOfAccountView: {
             items: components["schemas"]["AccountView"][];
+            /** Format: int32 */
+            page: unknown;
+            /** Format: int32 */
+            pageSize: unknown;
+            /** Format: int64 */
+            total: unknown;
+        };
+        PageResponseOfAuditEvent: {
+            items: components["schemas"]["AuditEvent"][];
             /** Format: int32 */
             page: unknown;
             /** Format: int32 */
@@ -585,6 +622,57 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    ListAuditEvents: {
+        parameters: {
+            query?: {
+                action?: string;
+                page?: unknown;
+                pageSize?: unknown;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageResponseOfAuditEvent"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };

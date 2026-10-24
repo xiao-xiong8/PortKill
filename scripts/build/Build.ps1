@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
 Push-Location -LiteralPath $projectRoot
 try {
+    & (Join-Path $projectRoot 'scripts/checks/Test-Architecture.ps1')
     dotnet build (Join-Path $projectRoot 'PortKill.slnx') -c $Configuration -v minimal
     if ($LASTEXITCODE -ne 0) { throw "构建失败：$LASTEXITCODE" }
     if ($RunRegression -or $IncludeUi) {

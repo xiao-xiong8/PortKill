@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/Modules/PortKiller.UpdateProtocol/PortKiller.UpdateProtocol.csproj" />
+  <Project Path="src/Modules/PortKiller.UpdateManagement/PortKiller.UpdateManagement.csproj" />
+  <Project Path="src/Services/PortKiller.UpdateAdmin.Api/PortKiller.UpdateAdmin.Api.csproj" />
+  <Project Path="src/Services/PortKiller.UpdatePublisher.Worker/PortKiller.UpdatePublisher.Worker.csproj" />
+  <Project Path="src/Services/PortKiller.UpdateNotifier/PortKiller.UpdateNotifier.csproj" />
+  <Project Path="src/Tools/PortKiller.UpdateTool/PortKiller.UpdateTool.csproj" />
+</Solution>

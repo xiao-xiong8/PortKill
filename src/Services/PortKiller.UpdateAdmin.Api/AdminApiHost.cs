@@ -9,6 +9,7 @@ using PortKiller.UpdateManagement.Security;
 using PortKiller.UpdateManagement.Persistence.Entities;
 using PortKiller.UpdateManagement.Persistence;
 using PortKiller.UpdateAdmin.Api.Uploads;
+using PortKiller.UpdateAdmin.Api.Releases;
 
 namespace PortKiller.UpdateAdmin.Api;
 
@@ -81,6 +82,7 @@ public static class AdminApiHost
         app.MapAdminAuthentication();
         app.MapAdminAccounts();
         app.MapUploadEndpoints();
+        app.MapPublishEndpoints();
         app.MapGet("/api/v1/validation-tasks/{id}", async (string id, ValidationTaskQueue queue, HttpContext context)
             => await queue.GetAsync(context.User, id, context.RequestAborted))
             .RequireAuthorization(AdminPermissions.Read).WithName("GetValidationTask").ProducesProblem(404);

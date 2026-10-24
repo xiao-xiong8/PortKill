@@ -10,6 +10,16 @@ public sealed record CapabilitiesResponse(UploadState[] UploadStates, Validation
 public sealed record PageResponse<T>(IReadOnlyList<T> Items, int Page, int PageSize, long Total);
 public sealed record ReleaseToolError(int Schema, string Code, string Message);
 
+public sealed record PublishChallengeResponse(string Id, string DraftId, string Application, string Channel,
+    string Version, long Sequence, string ManifestSha256, string PackageSha256, string[] ReleaseNotes,
+    string ExpectedCurrentManifestSha256, long ExpiresUtcMs);
+
+public sealed record PublishConfirmationRequest(string ChallengeId, string? IdempotencyKey = null);
+
+public sealed record PublishJobResponse(string Id, string DraftId, string Application, string Channel,
+    PublishJobState State, string Version, long Sequence, string ManifestSha256, string PackageSha256,
+    string ExpectedCurrentManifestSha256, long CreatedUtcMs, string? ErrorCode = null);
+
 public static class AdminContract
 {
     public const int Version = 1;

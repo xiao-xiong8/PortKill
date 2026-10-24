@@ -50,7 +50,7 @@ public sealed class UpdateAdminDbContext(DbContextOptions<UpdateAdminDbContext> 
             entity.HasKey(x => x.Id); entity.Property(x => x.State).HasConversion<string>();
             entity.HasIndex(x => new { x.State, x.LeaseExpiresUtcMs, x.CreatedUtcMs });
             entity.HasIndex(x => new { x.Application, x.Channel }).IsUnique()
-                .HasFilter("\"Kind\" = 'publish' AND \"State\" IN ('Publishing','ManifestActivated','PublicVerifying')");
+                .HasFilter("\"Kind\" = 'publish' AND \"State\" IN ('Queued','Publishing','ManifestActivated','PublicVerifying')");
             entity.HasOne<ReleaseDraft>().WithMany().HasForeignKey(x => x.DraftId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<AdminUser>().WithMany().HasForeignKey(x => x.RequestedById).OnDelete(DeleteBehavior.Restrict);
         });

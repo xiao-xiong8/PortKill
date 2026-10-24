@@ -561,7 +561,7 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
 
                     b.HasIndex("Application", "Channel")
                         .IsUnique()
-                        .HasFilter("\"Kind\" = 'publish' AND \"State\" IN ('Publishing','ManifestActivated','PublicVerifying')");
+                        .HasFilter("\"Kind\" = 'publish' AND \"State\" IN ('Queued','Publishing','ManifestActivated','PublicVerifying')");
 
                     b.HasIndex("State", "LeaseExpiresUtcMs", "CreatedUtcMs");
 

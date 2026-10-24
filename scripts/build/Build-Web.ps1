@@ -15,9 +15,9 @@ try {
     & $Pnpm run check:api
     if ($LASTEXITCODE -ne 0) { throw 'Frontend contract check failed' }
     if ($Check) {
-        foreach ($check in @('lint','test:unit')) {
-            & $Pnpm run $check
-            if ($LASTEXITCODE -ne 0) { throw "Frontend $check failed" }
+        foreach ($checkName in @('lint','test:unit')) {
+            & $Pnpm run $checkName
+            if ($LASTEXITCODE -ne 0) { throw "Frontend $checkName failed" }
         }
     }
     & $Pnpm run build

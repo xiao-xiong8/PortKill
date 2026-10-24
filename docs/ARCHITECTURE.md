@@ -25,7 +25,7 @@ flowchart TD
   Regression --> Desktop
 ```
 
-八个生产项目。Core、Windows、Ports、Updates、UpdateProtocol、UpdateTool 和 UpdateNotifier 均不引用 Avalonia、CommunityToolkit 或桌面宿主。开发验证包括 Regression、UpdateRegression 和不随正式版本分发的 UpdateProbe。保留既有公开类型命名空间，将程序集拆分与命名空间改名分开处理。
+十一个生产项目，其中新增 UpdateManagement、UpdateAdmin.Api 和 UpdatePublisher.Worker。Core、Windows、Ports、Updates、UpdateProtocol、UpdateTool 和 UpdateNotifier 均不引用 Avalonia、CommunityToolkit 或桌面宿主。开发验证包括 Regression、UpdateRegression、UpdateAdmin.Tests 和不随正式版本分发的 UpdateProbe。保留既有公开类型命名空间，将程序集拆分与命名空间改名分开处理。
 
 | 项目 | 当前职责 |
 |---|---|

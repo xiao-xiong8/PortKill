@@ -10,6 +10,9 @@
     "typecheck": "vue-tsc --noEmit",
     "generate:api": "node scripts/check-contract.mjs --write",
     "check:api": "node scripts/check-contract.mjs",
+    "lint": "eslint .",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1"
   },
@@ -17,6 +20,12 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "6.0.10",
     "openapi-typescript": "7.13.0",
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.19.2",
+    "eslint": "10.13.0",
+    "eslint-plugin-vue": "10.11.1",
+    "typescript-eslint": "8.72.0",
+    "vitest": "5.0.5",
     "typescript": "5.9.3",
     "vite": "8.3.5",
     "vue-tsc": "3.3.13"

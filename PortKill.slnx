@@ -12,6 +12,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PortKiller.UpdateRegression/PortKiller.UpdateRegression.csproj" />
+    <Project Path="tests/PortKiller.UpdateAdmin.Tests/PortKiller.UpdateAdmin.Tests.csproj" />
     <Project Path="tests/PortKiller.UpdateProbe/PortKiller.UpdateProbe.csproj" />
     <Project Path="tests/PortKiller.Regression/PortKiller.Regression.csproj" />
   </Folder>

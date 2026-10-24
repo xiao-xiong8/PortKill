@@ -10,10 +10,11 @@ namespace PortKiller.UpdateAdmin.Api;
 
 public static class AdminApiHost
 {
-    public static WebApplication Create(string[] args)
+    public static WebApplication Create(string[] args, Action<WebApplicationBuilder>? configure = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         { Args = args, ContentRootPath = AppContext.BaseDirectory });
+        configure?.Invoke(builder);
         var administration = AdminHostConfiguration.Load(builder.Configuration, args);
         builder.Services.AddSingleton(administration);
         if (string.IsNullOrWhiteSpace(builder.Configuration["urls"]))

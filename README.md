@@ -107,7 +107,19 @@ pwsh -File scripts/build/Test-UpdatePipeline.ps1 -VcVarsAllPath C:/path/to/vcvar
 
 该入口包含 UI、真实 AOT 安装与恢复、隔离发布演练、性能检查及 Linux 服务端构建。结果写入 `.local/artifacts/update-validation/`。真实 Linux、Nginx、TLS 和公网部署仍需单独验收；过程记录保存在本地，不随源码分发。
 
-网页发布管理后台处于规划阶段，尚未实现。确定技术方案为 Vue 3 + TypeScript、ASP.NET Core 10 Web API、独立 Worker、SQLite + EF Core 10；前后端将放在同一仓库。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
+网页发布管理后台已提供独立的 Vue 前端、net10.0 API/Worker 骨架、接口契约和基础验证入口，完整发布业务仍在实施中。后续数据层采用 SQLite + EF Core 10。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
+
+```powershell
+# 后台测试、实际 OpenAPI 比对、前端检查与构建
+pwsh -File scripts/checks/Test-Admin.ps1
+
+# 首次浏览器验证先在前端目录运行 pnpm exec playwright install chromium
+pwsh -File scripts/checks/Test-Admin.ps1 -IncludeBrowser
+```
+
+浏览器默认使用 Playwright Chromium；若使用本机 Chrome，可在当前终端设置 `$env:PORTKILL_TEST_BROWSER_CHANNEL='chrome'`，测试仍使用独立临时浏览器配置。
+
+专用 Linux 环境使用 `bash scripts/checks/test-admin-linux.sh` 执行真实服务端测试。Windows 上的测试和 linux-x64 构建不能代替该运行结果；实际 Windows AOT 包在 Linux 上的验包测试属于 P3。
 
 ## 提交与发布文件
 

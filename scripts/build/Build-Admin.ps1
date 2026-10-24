@@ -9,6 +9,11 @@ if ($LASTEXITCODE -ne 0) { throw 'Server build failed' }
 if ($RunTests) {
     $testProject=Join-Path $repository 'tests/PortKiller.UpdateAdmin.Tests'
     if (-not (Test-Path -LiteralPath $testProject)) { throw 'Administration tests are not present' }
-    & dotnet test $testProject -c $Configuration --no-build --nologo
+    $results=Join-Path $repository '.local/artifacts/admin-tests/latest'
+    & dotnet test $testProject -c $Configuration --no-build --nologo --logger 'trx;LogFileName=admin-tests.trx' --results-directory $results
     if ($LASTEXITCODE -ne 0) { throw 'Administration tests failed' }
+    [xml]$trx=[IO.File]::ReadAllText((Join-Path $results 'admin-tests.trx'))
+    if ([int]$trx.TestRun.ResultSummary.Counters.total -lt 1 -or [int]$trx.TestRun.ResultSummary.Counters.notExecuted -gt 0) {
+        throw 'Administration test discovery was empty or tests were skipped'
+    }
 }

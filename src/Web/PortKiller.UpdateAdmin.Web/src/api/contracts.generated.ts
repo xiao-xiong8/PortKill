@@ -638,7 +638,16 @@ export interface components {
             id: string;
             /** Format: int64 */
             leaseExpiresUtcMs: unknown;
+            manifestSha256?: string | null;
+            packageSha256?: string | null;
+            releaseNotes?: string[] | null;
+            /** Format: int64 */
+            sequence?: unknown;
             state: components["schemas"]["PublishJobState"];
+            /** Format: int64 */
+            validatedUtcMs?: unknown;
+            validationState?: components["schemas"]["ValidationState"];
+            version?: string | null;
         };
     };
     responses: never;

@@ -422,6 +422,10 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ArchiveId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Channel")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -461,6 +465,9 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("ValidatedUtcMs")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("ValidationErrorCode")
                         .HasColumnType("TEXT");
 
@@ -472,6 +479,9 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ArchiveId")
+                        .IsUnique();
 
                     b.HasIndex("OwnerId");
 

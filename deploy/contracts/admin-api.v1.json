@@ -1918,6 +1918,38 @@
           "errorCode": {
             "type": "string",
             "nullable": true
+          },
+          "validationState": {
+            "$ref": "#/components/schemas/ValidationState"
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "sequence": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64",
+            "nullable": true
+          },
+          "manifestSha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "packageSha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "releaseNotes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "validatedUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64",
+            "nullable": true
           }
         }
       }

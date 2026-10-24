@@ -59,6 +59,7 @@ public sealed class ReleaseDraft : IVersionedEntity
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string OwnerId { get; set; } = "";
     public string UploadId { get; set; } = "";
+    public string ArchiveId { get; set; } = Guid.NewGuid().ToString("N");
     public string Application { get; set; } = "PortKill";
     public string Channel { get; set; } = "stable";
     public string Runtime { get; set; } = "win-x64";
@@ -69,6 +70,7 @@ public sealed class ReleaseDraft : IVersionedEntity
     public string ReleaseNotesJson { get; set; } = "[]";
     public ValidationState ValidationState { get; set; }
     public string? ValidationErrorCode { get; set; }
+    public long? ValidatedUtcMs { get; set; }
     public long? ManifestExpiresUtcMs { get; set; }
     public long CreatedUtcMs { get; set; }
     public long Revision { get; set; }

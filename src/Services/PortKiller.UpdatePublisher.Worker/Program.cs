@@ -14,6 +14,7 @@ builder.Services.AddAdminDatabase(options);
 builder.Services.AddHostedService<AdminRuntimeService>();
 builder.Services.AddScoped<PortKiller.UpdateManagement.Security.ValidationTaskQueue>();
 builder.Services.AddSingleton<UpdateToolClient>();
+builder.Services.AddHostedService<ValidationTaskWorker>();
 builder.Services.AddHostedService<PublisherWorker>();
 
 var host = builder.Build();

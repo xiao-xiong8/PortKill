@@ -6,7 +6,8 @@ using PortKiller.UpdateManagement.Persistence;
 
 namespace PortKiller.UpdateManagement.Security;
 
-public sealed record UpdateToolResult(bool Succeeded, string? ErrorCode, string? Version, long? Sequence, string? ExpiresUtc);
+public sealed record UpdateToolResult(bool Succeeded, string? ErrorCode, string? Version, long? Sequence,
+    string? ExpiresUtc, string? Runtime, long? PackageSize, string? PackageSha256, string? ManifestSha256, string[] ReleaseNotes);
 
 public sealed class UpdateToolClient(UpdateToolOptions options)
 {
@@ -81,9 +82,18 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
             string version = GetString(root, "Version", "version");
             long sequence = GetInt64(root, "Sequence", "sequence");
             string expires = GetString(root, "ExpiresUtc", "expiresUtc");
-            if (version.Length is < 1 or > 32 || sequence <= 0 || expires.Length is < 1 or > 64)
+            string runtime = GetString(root, "Runtime", "runtime");
+            long packageSize = GetInt64(root, "Size", "size");
+            string packageSha256 = GetString(root, "Sha256", "sha256");
+            string manifestSha256 = GetString(root, "ManifestSha256", "manifestSha256");
+            string[] releaseNotes = GetStrings(root, "ReleaseNotes", "releaseNotes");
+            if (version.Length is < 1 or > 32 || sequence <= 0 || expires.Length is < 1 or > 64
+                || runtime != "win-x64" || packageSize <= 0 || packageSha256.Length != 64
+                || !packageSha256.All(Uri.IsHexDigit) || manifestSha256.Length != 64 || !manifestSha256.All(Uri.IsHexDigit)
+                || releaseNotes.Length > 20
+                || releaseNotes.Any(note => string.IsNullOrWhiteSpace(note) || note.Length > 300))
                 return Failure("tool_protocol_error");
-            return new(true, null, version, sequence, expires);
+            return new(true, null, version, sequence, expires, runtime, packageSize, packageSha256, manifestSha256, releaseNotes);
         }
         catch (JsonException) { return Failure("tool_protocol_error"); }
         catch (InvalidOperationException) { return Failure("tool_protocol_error"); }
@@ -149,6 +159,13 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
         => root.TryGetProperty(primary, out JsonElement value) || root.TryGetProperty(alternate, out value)
             ? value.GetInt64() : 0;
 
+    private static string[] GetStrings(JsonElement root, string primary, string alternate)
+    {
+        if (!root.TryGetProperty(primary, out JsonElement value) && !root.TryGetProperty(alternate, out value)) return [];
+        if (value.ValueKind != JsonValueKind.Array) return [];
+        return value.EnumerateArray().Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() ?? "" : "\0").ToArray();
+    }
+
     private static void Kill(Process process)
     {
         try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
@@ -156,6 +173,6 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
         catch (System.ComponentModel.Win32Exception) { }
     }
 
-    private static UpdateToolResult Failure(string code) => new(false, code, null, null, null);
+    private static UpdateToolResult Failure(string code) => new(false, code, null, null, null, null, null, null, null, []);
     private sealed record CapturedOutput(string Text, bool Truncated);
 }

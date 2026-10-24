@@ -37,7 +37,7 @@ public sealed class PackageValidationTests
             var manifest = new UpdateManifest
             {
                 Version = UpdateManifest.ParseVersion(expectedVersion!).ToString(),
-                PackageUrl = "https://updates.example/stable/PortKiller-test-win-x64.zip",
+                PackageUrl = $"https://updates.example/stable/PortKiller-{UpdateManifest.ParseVersion(expectedVersion!).ToString()}-win-x64.zip",
                 Size = bytes.Length,
                 Sha256 = Convert.ToHexString(SHA256.HashData(bytes)),
                 Sequence = 1,

@@ -80,11 +80,11 @@ public sealed class UpdateToolClientTests
 
             var client = new UpdateToolClient(new UpdateToolOptions
             {
-                ExecutablePath = Path.Combine(root, "missing tool"), VerificationConfigPath = configPath
+                Enabled = true, ExecutablePath = Path.Combine(root, "missing tool"), VerificationConfigPath = configPath
             });
             Assert.Equal("tool_unavailable", (await client.VerifyAsync(manifestPath, packagePath, CancellationToken.None)).ErrorCode);
 
-            var invalid = new UpdateToolClient(new UpdateToolOptions { ExecutablePath = "relative-tool", VerificationConfigPath = configPath });
+            var invalid = new UpdateToolClient(new UpdateToolOptions { Enabled = true, ExecutablePath = "relative-tool", VerificationConfigPath = configPath });
             await Assert.ThrowsAsync<InvalidOperationException>(() => invalid.VerifyAsync(manifestPath, packagePath, CancellationToken.None));
         }
         finally

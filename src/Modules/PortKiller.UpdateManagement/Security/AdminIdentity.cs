@@ -50,6 +50,8 @@ public static class AdminIdentity
         services.AddScoped<AdminBackupService>();
         services.AddScoped<UploadManagementService>();
         services.AddScoped<ValidationTaskQueue>();
+        services.AddScoped<ValidationTaskExecutor>();
+        services.AddSingleton<ValidationArchiveService>();
         return services;
     }
 

@@ -14,6 +14,10 @@ public static class ReleasePackage
             throw new InvalidDataException("更新包长度或 SHA-256 不匹配。");
         input.Position = 0;
         using var zip = new ZipArchive(input, ZipArchiveMode.Read, leaveOpen: false);
+        string expectedPackageName = $"PortKiller-{manifest.Version}-win-x64.zip";
+        string packageName = Uri.UnescapeDataString(new Uri(manifest.PackageUrl).AbsolutePath.Split('/').Last());
+        if (!packageName.Equals(expectedPackageName, StringComparison.Ordinal))
+            throw new InvalidDataException("更新包分发路径与签名版本不匹配。");
         if (zip.Entries.Count != Files.Length || zip.Entries.Select(x => x.FullName).Distinct(StringComparer.OrdinalIgnoreCase).Count() != Files.Length
             || zip.Entries.Any(x => !Files.Contains(x.FullName, StringComparer.Ordinal) || x.Length is <= 0 or > 134217728)
             || zip.Entries.Sum(x => x.Length) > 268435456)

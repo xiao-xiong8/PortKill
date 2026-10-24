@@ -41,7 +41,7 @@ public sealed class UpdateAdminDbContext(DbContextOptions<UpdateAdminDbContext> 
         builder.Entity<ReleaseDraft>(entity =>
         {
             entity.HasKey(x => x.Id); entity.Property(x => x.ValidationState).HasConversion<string>();
-            entity.HasIndex(x => x.UploadId).IsUnique(); entity.HasIndex(x => new { x.CreatedUtcMs, x.Id });
+            entity.HasIndex(x => x.UploadId).IsUnique(); entity.HasIndex(x => x.ArchiveId).IsUnique(); entity.HasIndex(x => new { x.CreatedUtcMs, x.Id });
             entity.HasOne<UploadSession>().WithMany().HasForeignKey(x => x.UploadId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<AdminUser>().WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Restrict);
         });

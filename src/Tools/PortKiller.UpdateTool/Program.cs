@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Security.Cryptography;
 using PortKiller.Updates;
 using PortKiller.UpdateTool;
 
@@ -29,7 +30,9 @@ try
         case "verify":
             var manifest = UpdateManifest.Verify(ReleaseStore.ReadManifest(flags["--manifest"]), options);
             ReleasePackage.Verify(flags["--package"], manifest);
-            result = new { manifest.Version, manifest.Sequence, manifest.ExpiresUtc }; break;
+            result = new { manifest.Version, manifest.Sequence, manifest.ExpiresUtc, manifest.Runtime,
+                manifest.Size, manifest.Sha256, ManifestSha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(flags["--manifest"]))),
+                manifest.ReleaseNotes }; break;
         case "activate": result = new ReleaseStore(flags["--root"], options).Activate(flags["--manifest"], flags["--package"], flags["--expected"]); break;
         case "inspect": case "recover": result = new ReleaseStore(flags["--root"], options).Inspect(args[0] == "recover"); break;
         case "public-check":

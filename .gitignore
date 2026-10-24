@@ -73,6 +73,7 @@ id_ed25519*
 **/.ssh/
 
 # Non-secret deployment examples and implementation records.
+!/README.md
 !deploy/examples/update-settings.example.json
 !/docs/
 /docs/*
@@ -80,3 +81,5 @@ id_ed25519*
 !/docs/AUTO-UPDATE.md
 !/docs/AUTO-UPDATE-VALIDATION.md
 !/docs/ARCHITECTURE.md
+!/docs/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md
+!/docs/RELEASE-NOTES.txt

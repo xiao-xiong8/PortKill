@@ -41,6 +41,7 @@ public sealed class AdminOptions
     public long MaxReservedUploadBytesPerUser { get; set; } = 629_145_600;
     public long MaxReservedUploadBytesTotal { get; set; } = 2_147_483_648;
     public int UploadExpirationHours { get; set; } = 24;
+    public int RejectedArchiveRetentionDays { get; set; } = 30;
     public string StagingPath => Path.Combine(DataRoot, "staging");
     public string ArchivePath => Path.Combine(DataRoot, "archive");
 
@@ -56,7 +57,7 @@ public sealed class AdminOptions
             || MaxActiveUploadsPerUser is < 1 or > 20 || MaxActiveUploadsTotal is < 1 or > 1000
             || MaxReservedUploadBytesPerUser < MaxUploadPackageBytes || MaxReservedUploadBytesPerUser > 10_737_418_240
             || MaxReservedUploadBytesTotal < MaxUploadPackageBytes || MaxReservedUploadBytesTotal > 107_374_182_400
-            || UploadExpirationHours is < 1 or > 168)
+            || UploadExpirationHours is < 1 or > 168 || RejectedArchiveRetentionDays is < 1 or > 3650)
             throw new InvalidOperationException("Administration storage or session limits are invalid.");
     }
 }

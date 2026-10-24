@@ -422,6 +422,9 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("ArchiveCleanedUtcMs")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("ArchiveId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -626,6 +629,9 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                     b.Property<string>("State")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<long?>("StorageCleanedUtcMs")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("StorageId")
                         .IsRequired()

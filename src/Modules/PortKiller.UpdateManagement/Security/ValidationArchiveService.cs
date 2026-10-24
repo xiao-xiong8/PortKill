@@ -22,6 +22,17 @@ public sealed class ValidationArchiveService(AdminOptions options)
         if (Directory.Exists(archive))
         {
             AdminRuntimeLease.RequireLocalPath(archive);
+            string existingManifest = Path.Combine(archive, "manifest.envelope");
+            string existingPackage = Path.Combine(archive, "package.zip");
+            if (File.Exists(existingManifest) && File.Exists(existingPackage))
+            {
+                string existingManifestHash = Hash(existingManifest);
+                string existingPackageHash = Hash(existingPackage);
+                if (existingManifestHash.Equals(upload.ManifestSha256, StringComparison.OrdinalIgnoreCase)
+                    && existingPackageHash.Equals(upload.PackageSha256, StringComparison.OrdinalIgnoreCase))
+                    return new(upload.StorageId, existingManifest, existingPackage, existingManifestHash, existingPackageHash);
+                throw new AdminFailure("archive_conflict", 409, "封存副本与上传摘要不一致。");
+            }
             Directory.Delete(archive, recursive: true);
         }
         Directory.CreateDirectory(archive);

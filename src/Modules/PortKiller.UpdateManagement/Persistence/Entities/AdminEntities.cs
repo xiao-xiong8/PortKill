@@ -51,6 +51,7 @@ public sealed class UploadSession : IVersionedEntity
     public long CreatedUtcMs { get; set; }
     public long LastActivityUtcMs { get; set; }
     public long ExpiresUtcMs { get; set; }
+    public long? StorageCleanedUtcMs { get; set; }
     public long Revision { get; set; }
 }
 
@@ -72,6 +73,7 @@ public sealed class ReleaseDraft : IVersionedEntity
     public string? ValidationErrorCode { get; set; }
     public long? ValidatedUtcMs { get; set; }
     public long? ManifestExpiresUtcMs { get; set; }
+    public long? ArchiveCleanedUtcMs { get; set; }
     public long CreatedUtcMs { get; set; }
     public long Revision { get; set; }
 }

@@ -3,7 +3,7 @@
 param([string]$VcVarsAllPath,[switch]$ServerOnly,[switch]$SkipPerformance,[string]$OutputDirectory)
 $ErrorActionPreference='Stop'
 $repository=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
-if (-not $OutputDirectory) { $OutputDirectory=Join-Path $repository ('artifacts/update-validation/run-'+[DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmss')) }
+if (-not $OutputDirectory) { $OutputDirectory=Join-Path $repository ('.local/artifacts/update-validation/run-'+[DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmss')) }
 $OutputDirectory=[IO.Path]::GetFullPath($OutputDirectory)
 [IO.Directory]::CreateDirectory($OutputDirectory)|Out-Null
 Start-Transcript -Path (Join-Path $OutputDirectory 'pipeline.log')|Out-Null

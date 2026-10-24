@@ -1,6 +1,6 @@
 """Build the five static embedded faces from official variable font sources.
 
-Requires fonttools==4.67.0. Source binaries live in artifacts/font-sources and
+Requires fonttools==4.67.0. Source binaries live in .local/cache/font-sources and
 are verified against Assets/Fonts/font-manifest.json on subsequent runs.
 The subset keeps GB2312, interface text, punctuation and OpenType features.
 """
@@ -46,8 +46,8 @@ def characters():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--sources", type=Path, default=ROOT / "artifacts/font-sources")
-    parser.add_argument("--full-faces", type=Path, default=ROOT / "artifacts/font-install")
+    parser.add_argument("--sources", type=Path, default=ROOT / ".local/cache/font-sources")
+    parser.add_argument("--full-faces", type=Path, default=ROOT / ".local/artifacts/font-install")
     args = parser.parse_args()
     ASSETS.mkdir(parents=True, exist_ok=True)
     args.full_faces.mkdir(parents=True, exist_ok=True)

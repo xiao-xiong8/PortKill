@@ -27,7 +27,7 @@ internal static class PublisherChecks
         // A public probe failure occurs after the commit point; resume must reuse signed artifacts.
         fixture.BlockManifest = true;
         var failed = await Invoke(script, initial); That(failed.Exit != 0, "Public probe failure was ignored");
-        string root = Path.Combine(repository, "artifacts", "releases");
+        string root = Path.Combine(repository, ".local", "artifacts", "releases");
         string recordPath = Directory.EnumerateFiles(root, "release-record.json", SearchOption.AllDirectories)
             .Where(path => File.ReadAllText(path).Contains(fixture.Options.ManifestUrl.Replace("manifest.json", "")))
             .OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault() ?? throw new InvalidOperationException("Publisher did not record release: " + failed.Text);

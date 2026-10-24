@@ -13,7 +13,7 @@ param(
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
-$releaseRoot = Join-Path $projectRoot 'artifacts/releases'
+$releaseRoot = Join-Path $projectRoot '.local/artifacts/releases'
 [IO.Directory]::CreateDirectory($releaseRoot) | Out-Null
 $publisherLock = [IO.FileStream]::new((Join-Path $releaseRoot '.publisher.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
 $sequenceLock = $null
@@ -52,7 +52,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw '无法读取 Git 状态。' }
         if ($dirty.Count -gt 0 -and -not $AllowDirty) { throw '发布要求干净工作区；本地演练可显式使用 -AllowDirty，CI 禁止该选项。' }
         if (-not $ServerIp) {
-            $localConfig = Join-Path $projectRoot 'config/publisher.local.json'
+            $localConfig = Join-Path $projectRoot '.local/config/publisher.local.json'
             if (Test-Path -LiteralPath $localConfig) { $ServerIp = (Get-Content -LiteralPath $localConfig -Raw | ConvertFrom-Json).ServerIp }
         }
         if (-not $PublicBaseUrl) {

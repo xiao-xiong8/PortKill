@@ -2,7 +2,7 @@
 
 更新日期：2026-10-24。根目录：`C:\自用\项目\PortKill`。
 
-更新模块的实现依据见 [自动更新架构规划](AUTO-UPDATE-ARCHITECTURE-PLAN.md)，实际状态见 [操作说明](AUTO-UPDATE.md) 和 [验证记录](AUTO-UPDATE-VALIDATION.md)。协议库、发布工具、通知服务及独立验证项目已落地，正式部署另行执行。
+更新模块的使用和部署见 [自动更新操作说明](AUTO-UPDATE.md)。协议库、发布工具、通知服务及独立验证项目已落地，正式部署另行执行。实施计划与验证过程记录保存在本地 `.local/docs/`，不随源码分发。
 
 ## 项目依赖
 
@@ -23,10 +23,9 @@ flowchart TD
   Ports --> Core
   Windows --> Core
   Regression --> Desktop
-  MemoryProbe --> Desktop
 ```
 
-八个生产项目。Core、Windows、Ports、Updates、UpdateProtocol、UpdateTool 和 UpdateNotifier 均不引用 Avalonia、CommunityToolkit 或桌面宿主。开发验证包括 Regression、MemoryProbe、UpdateRegression 和不随正式版本分发的 UpdateProbe。保留既有公开类型命名空间，将程序集拆分与命名空间改名分开处理。
+八个生产项目。Core、Windows、Ports、Updates、UpdateProtocol、UpdateTool 和 UpdateNotifier 均不引用 Avalonia、CommunityToolkit 或桌面宿主。开发验证包括 Regression、UpdateRegression 和不随正式版本分发的 UpdateProbe。保留既有公开类型命名空间，将程序集拆分与命名空间改名分开处理。
 
 | 项目 | 当前职责 |
 |---|---|
@@ -75,6 +74,8 @@ MainViewModel.* 位于 Shell/Compatibility，仍是已有功能的兼容协调�
 
 ColumnSettingsMigrator 在读取规范化阶段将 7 项列配置幂等迁移到 8 项，逐字段保留合法列宽、列序和可见性，补入默认显示的应用名称列。异常列宽和重复/越界 ID 分别修复，现有原子保存流程负责持久化。
 
-应用名称功能与性能检查见 [修改方案](APP-NAME-SEARCH-NAV-PLAN.md) 和 [验证记录](APP-NAME-SEARCH-NAV-VALIDATION.md)。独立回归入口支持 `--application-name-ui` 和 `--application-name-probe 秒数 输出路径`；后者不启动托盘、不修改用户设置、不结束用户进程。
+应用名称独立回归入口支持 `--application-name-ui` 和 `--application-name-probe 秒数 输出路径`；后者不启动托盘、不修改用户设置、不结束用户进程。修改方案和验证记录分别归档在本地 `.local/docs/plans/` 和 `.local/docs/reports/`。
 
-构建与验证入口见根 README，实际结果和限制见 migration/EXECUTION.md。历史调查在 investigations 下，历史记录不代替本次验证。
+构建与验证入口见根 [README](../README.md)。源码、测试、脚本和部署示例保留原目录；公开文档仅维护本架构说明、自动更新操作说明和发布说明。本地文档、缓存、构建产物、配置和临时文件集中在 `.local/` 并分类存放，整个目录忽略提交。SDK/IDE 管理的 `bin/obj`、`.vs` 等保留默认位置。
+
+构建和验证产物默认写入 `.local/artifacts/`；本地发布配置位于 `.local/config/publisher.local.json`，非敏感示例位于 `deploy/examples/`。历史调查、迁移和验证过程统一归档在 `.local/docs/reports/`，历史结果不代替当前验证。

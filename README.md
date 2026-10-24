@@ -31,7 +31,7 @@ pwsh -File scripts/build/Build.ps1 -IncludeUi
 # 开发运行
 dotnet run --project src/PortKiller.Desktop/PortKiller.Desktop.csproj
 
-# 正式 AOT 发布，默认输出 artifacts/publish/win-x64
+# 正式 AOT 发布，默认输出 .local/artifacts/publish/win-x64
 pwsh -File scripts/build/Publish-Aot.ps1
 ```
 
@@ -53,9 +53,24 @@ pwsh -File scripts/build/Publish-Aot.ps1
 | `tests/` | 业务、UI、更新及 AOT 测试宿主 |
 | `scripts/` | 构建、发布、字体资源与诊断脚本 |
 | `deploy/` | 非敏感配置示例及 Linux、Nginx、systemd 部署文件 |
-| `docs/` | 正式架构、操作说明、验证记录、实施计划与发布说明 |
+| `docs/` | 正式架构、更新操作说明与发布说明 |
+| `.local/` | 仅本地使用的文档、缓存、构建产物、配置及临时文件，整目录忽略提交 |
 
 业务模块不依赖桌面 UI；新工具通过静态注册装配，保持 Native AOT 兼容。详细约束见[架构说明](docs/ARCHITECTURE.md)。
+
+本地工作资料按用途分类：
+
+| 路径 | 内容 |
+| --- | --- |
+| `.local/docs/plans/` | 实施计划、功能设计与分析 |
+| `.local/docs/reports/` | 回归记录、问题排查、迁移及历史调查 |
+| `.local/docs/references/` | 字体、部署及其他参考资料 |
+| `.local/cache/` | 下载和工具缓存，字体源文件位于 `font-sources/` |
+| `.local/artifacts/` | 构建包、发布记录、测试输出及诊断采样 |
+| `.local/config/` | 本地发布配置，例如 `publisher.local.json` |
+| `.local/tmp/` | 临时文件和预览图片 |
+
+项目内的 `bin/obj`、`.vs` 及前端 `node_modules` 保留开发工具默认位置，统一忽略提交。发布记录与本地配置应保留，需要清理缓存时按具体子目录处理。
 
 ## 自动更新
 
@@ -71,15 +86,15 @@ pwsh -File scripts/build/Publish-Aot.ps1
 pwsh -File scripts/build/Test-UpdatePipeline.ps1 -VcVarsAllPath C:/path/to/vcvarsall.bat
 ```
 
-该入口包含 UI、真实 AOT 安装与恢复、隔离发布演练、性能检查及 Linux 服务端构建。真实 Linux、Nginx、TLS 和公网部署仍需单独验收，详见[验证记录](docs/AUTO-UPDATE-VALIDATION.md)。
+该入口包含 UI、真实 AOT 安装与恢复、隔离发布演练、性能检查及 Linux 服务端构建。结果写入 `.local/artifacts/update-validation/`。真实 Linux、Nginx、TLS 和公网部署仍需单独验收；过程记录保存在本地，不随源码分发。
 
-网页发布管理后台处于规划阶段，尚未实现。确定技术方案为 Vue 3 + TypeScript、ASP.NET Core 10 Web API、独立 Worker、SQLite + EF Core 10；前后端将放在同一仓库。完整方案见[网页更新发布后台实施计划](docs/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md)。
+网页发布管理后台处于规划阶段，尚未实现。确定技术方案为 Vue 3 + TypeScript、ASP.NET Core 10 Web API、独立 Worker、SQLite + EF Core 10；前后端将放在同一仓库。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
 
 ## 提交与发布文件
 
 Git 跟踪源码、测试、构建配置、脚本、必要运行资源、部署示例和少量正式文档；`.gitignore` 按明确范围收录文件。
 
-- `bin/`、`obj/`、`artifacts/`、发布包、日志、数据库、IDE 配置和个人资料不进入仓库。
+- `.local/`、`bin/`、`obj/`、发布包、日志、数据库及其伴随文件、IDE 配置和个人资料不进入仓库。
 - 真实更新配置、服务器配置、密码、令牌、SSH 凭据和签名私钥不进入仓库。
 - 内嵌字体、图标及对应字体许可证是必要运行资源，需要随源码保留。
 - 新增正式文档需在 `.gitignore` 中加入准确例外，不开放整个资料目录。

@@ -6,7 +6,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
-if (-not $OutputDirectory) { $OutputDirectory = Join-Path $projectRoot 'artifacts/publish/win-x64' }
+if (-not $OutputDirectory) { $OutputDirectory = Join-Path $projectRoot '.local/artifacts/publish/win-x64' }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 if ($Version -and $Version -notmatch '^\d+\.\d+(\.\d+){0,2}$') { throw '仅支持两至四段数字正式版本。' }
 $publishArgs = @('publish', (Join-Path $projectRoot 'src/PortKiller.Desktop/PortKiller.Desktop.csproj'), '-c', 'Release', '-r', 'win-x64', '-o', $OutputDirectory, '-v', 'minimal')

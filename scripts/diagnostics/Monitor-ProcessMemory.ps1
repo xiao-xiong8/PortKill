@@ -2,11 +2,18 @@ param(
     [Parameter(Mandatory=$true)][int]$ProcessId,
     [int]$Seconds = 300,
     [int]$IntervalSeconds = 5,
-    [string]$OutputPath = 'process-memory.csv',
+    [string]$OutputPath,
     [string]$Phase = 'observe'
 )
 $ErrorActionPreference = 'Stop'
 if ($Seconds -lt 1 -or $IntervalSeconds -lt 1) { throw '采样时长和间隔必须大于零。' }
+if (-not $OutputPath) {
+    $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
+    $OutputPath = Join-Path $projectRoot ('.local/artifacts/diagnostics/process-memory-' + $ProcessId + '-' + [DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmss') + '.csv')
+}
+$OutputPath = [IO.Path]::GetFullPath($OutputPath)
+[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($OutputPath)) | Out-Null
+Write-Output "进程内存采样输出：$OutputPath"
 $timer = [System.Diagnostics.Stopwatch]::StartNew()
 $first = $true
 while ($timer.Elapsed.TotalSeconds -le $Seconds) {

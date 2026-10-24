@@ -15,11 +15,17 @@
 !/deploy/
 
 # Generated output and local tooling.
+/.local/
 **/bin/
 **/obj/
 **/__pycache__/
 **/.venv/
 **/node_modules/
+**/dist/
+**/.vite/
+**/coverage/
+**/playwright-report/
+**/test-results/
 **/.vs/
 **/.idea/
 **/.vscode/
@@ -37,7 +43,11 @@
 *.dmp
 *.dump
 *.db
+*.db-*
 *.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
 
 # Personal notes and reports. Font license texts are required runtime resources.
 *.md
@@ -72,14 +82,11 @@ id_rsa*
 id_ed25519*
 **/.ssh/
 
-# Non-secret deployment examples and implementation records.
+# Public documentation and non-secret deployment examples only.
 !/README.md
 !deploy/examples/update-settings.example.json
 !/docs/
 /docs/*
-!/docs/AUTO-UPDATE-ARCHITECTURE-PLAN.md
 !/docs/AUTO-UPDATE.md
-!/docs/AUTO-UPDATE-VALIDATION.md
 !/docs/ARCHITECTURE.md
-!/docs/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md
 !/docs/RELEASE-NOTES.txt

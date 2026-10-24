@@ -1,6 +1,6 @@
 # 自动更新实现与操作
 
-2026-10-24。设计依据见 [架构规划](AUTO-UPDATE-ARCHITECTURE-PLAN.md)，实际本地测试及外部边界见 [验证记录](AUTO-UPDATE-VALIDATION.md)。新增能力需要部署通知服务并发布新客户端，代码完成不等于线上已经生效。
+2026-10-24。项目依赖与目录职责见 [架构说明](ARCHITECTURE.md)。新增能力需要部署通知服务并发布新客户端，代码完成不等于线上已经生效。内部实施计划及历史验证记录保存在本地 `.local/docs/`，不随源码分发。
 
 ## 客户端流程
 
@@ -32,7 +32,7 @@ HTTP 不提供传输加密或服务器身份，签名不能阻止持续断网；
 pwsh -File scripts/build/Publish-UpdateServer.ps1 -Runtime linux-x64
 ```
 
-生成 `artifacts/update-server/linux-x64/tool` 和 `notifier`，均为自包含非 AOT 服务端程序，无需服务器安装 SDK。按服务器 CPU 选择 linux-arm64 或 linux-x64。
+生成 `.local/artifacts/update-server/linux-x64/tool` 和 `notifier`，均为自包含非 AOT 服务端程序，无需服务器安装 SDK。按服务器 CPU 选择 linux-arm64 或 linux-x64。
 
 上传产物目录与含真实公钥的验证配置，在 Ubuntu 上以管理员执行：
 
@@ -49,6 +49,8 @@ sudo bash deploy/ubuntu/install-update-server.sh updatepublisher /path/to/server
 ## 发布、恢复与续签
 
 新发布默认要求干净 Git 工作区，CI 使用明确版本。本地隔离演练可以显式 `-AllowDirty`，记录会保留 Dirty 状态。版本未指定时基于项目和服务端已激活版本递增；不修改项目源文件版本。
+
+本地发布记录、锁和签名产物保存在 `.local/artifacts/releases/`，恢复和续签继续从此目录读取，不应作为可随意清空的缓存。本地兼容配置读取 `.local/config/publisher.local.json`；非敏感配置示例位于 `deploy/examples/`。签名私钥仍使用原有受保护位置，不因项目目录整理迁入仓库。
 
 ```powershell
 pwsh -File scripts/release/Publish-Update.ps1 -Version 0.2.0 `
@@ -78,6 +80,6 @@ pwsh -File scripts/release/Publish-Update.ps1 -Resume <ReleaseId> -SshUser updat
 pwsh -File scripts/build/Test-UpdatePipeline.ps1 -VcVarsAllPath C:/path/to/vcvarsall.bat
 ```
 
-一次执行 solution 构建、39 项原后端回归、完整深浅主题 UI、跨平台更新回归、真实两个 AOT 版本安装/回滚/恢复、临时密钥的 loopback 发布/恢复/续签、100 次实时发现测量、1000 连接阶梯及 linux-x64 服务端构建。日志和机器/SDK/提交记录保存在独立产物目录。Linux 流水线可执行 `-ServerOnly`；`-SkipPerformance` 只供快速开发，完整验收不使用。
+一次执行 solution 构建、39 项原后端回归、完整深浅主题 UI、跨平台更新回归、真实两个 AOT 版本安装/回滚/恢复、临时密钥的 loopback 发布/恢复/续签、100 次实时发现测量、1000 连接阶梯及 linux-x64 服务端构建。日志和机器/SDK/提交记录默认保存在 `.local/artifacts/update-validation/run-时间戳/`，可用 `-OutputDirectory` 指定其他位置。Linux 流水线可执行 `-ServerOnly`；`-SkipPerformance` 只供快速开发，完整验收不使用。
 
 这是可复用 CI 入口，未绑定外部 CI 平台，也未创建生产自动发布任务。上线顺序：先部署服务端工具和只读通知服务，再经旧轮询链发布新客户端，最后依据公网与普通/管理员安装演练结果启用运维监测。

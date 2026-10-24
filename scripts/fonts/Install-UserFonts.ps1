@@ -4,7 +4,7 @@ param([string]$FontDirectory)
 $ErrorActionPreference = 'Stop'
 if (-not $IsWindows) { throw '此脚本只用于 Windows 当前用户字体安装。' }
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
-if (-not $FontDirectory) { $FontDirectory = Join-Path $projectRoot 'artifacts/font-install' }
+if (-not $FontDirectory) { $FontDirectory = Join-Path $projectRoot '.local/artifacts/font-install' }
 $fontNames = @('NotoSansSC-Regular', 'NotoSansSC-Medium', 'NotoSansSC-SemiBold', 'Inter-Medium', 'Inter-SemiBold')
 foreach ($name in $fontNames) {
     if (-not (Test-Path -LiteralPath (Join-Path $FontDirectory "$name.ttf"))) { throw "缺少静态字体 $name.ttf，请先构建字体。" }

@@ -21,6 +21,12 @@ public static class AdminIdentity
         services.AddAdminDatabase(options);
         services.TryAddSingleton(TimeProvider.System);
         services.AddHttpContextAccessor();
+        if (!OperatingSystem.IsWindows())
+        {
+            var permissions = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+            Directory.CreateDirectory(options.DataProtectionPath, permissions);
+            File.SetUnixFileMode(options.DataProtectionPath, permissions);
+        }
         services.AddDataProtection().SetApplicationName("PortKill.UpdateAdmin")
             .PersistKeysToFileSystem(new DirectoryInfo(options.DataProtectionPath));
         services.AddIdentityCore<AdminUser>(identity =>

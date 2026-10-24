@@ -17,20 +17,29 @@ internal sealed class TestApplication : IAsyncDisposable
     public string Root { get; } = Path.Combine(TestRoot, Guid.NewGuid().ToString("N"));
     public WebApplication App { get; private set; } = null!;
     public HttpClient Client { get; private set; } = null!;
+    public ManualClock Clock { get; } = new();
+    private readonly CookieContainer _defaultCookies = new();
+    public string DefaultCookieHeader => _defaultCookies.GetCookieHeader(new Uri("https://localhost"));
 
     public static async Task<TestApplication> StartAsync()
     {
         var fixture = new TestApplication();
-        fixture.App = AdminApiHost.Create(["--Administration:DataRoot", fixture.Root, "--urls", "https://localhost:0"],
-            builder => builder.WebHost.UseTestServer());
+        fixture.App = fixture.CreateApp();
         using (var scope = fixture.App.Services.CreateScope())
             await AdminDatabase.MigrateAsync(scope.ServiceProvider.GetRequiredService<UpdateAdminDbContext>());
         await fixture.App.StartAsync();
-        fixture.Client = fixture.NewClient();
+        fixture.Client = fixture.NewClient(fixture._defaultCookies);
         return fixture;
     }
 
-    public HttpClient NewClient() => new(new TestCookieHandler(App.GetTestServer().CreateHandler())) { BaseAddress = new Uri("https://localhost") };
+    private WebApplication CreateApp() => AdminApiHost.Create(["--Administration:DataRoot", Root, "--urls", "https://localhost:0"], builder =>
+    { builder.WebHost.UseTestServer(); builder.Services.AddSingleton<TimeProvider>(Clock); });
+    public HttpClient NewClient(CookieContainer? cookies = null) => new(new TestCookieHandler(App.GetTestServer().CreateHandler(), cookies ?? new())) { BaseAddress = new Uri("https://localhost") };
+    public async Task RestartAsync()
+    {
+        Client.Dispose(); await App.DisposeAsync();
+        App = CreateApp(); await App.StartAsync(); Client = NewClient(_defaultCookies);
+    }
     public async Task<string> SeedAdminAsync(string name = "operator", string password = "Test-Only-Password!492")
     {
         using var scope = App.Services.CreateScope();
@@ -50,16 +59,22 @@ internal sealed class TestApplication : IAsyncDisposable
     }
 }
 
-internal sealed class TestCookieHandler(HttpMessageHandler inner) : DelegatingHandler(inner)
+internal sealed class TestCookieHandler(HttpMessageHandler inner, CookieContainer cookies) : DelegatingHandler(inner)
 {
-    private readonly CookieContainer _cookies = new();
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
     {
-        string cookies = _cookies.GetCookieHeader(request.RequestUri!);
-        if (cookies.Length != 0) { request.Headers.Remove("Cookie"); request.Headers.Add("Cookie", cookies); }
+        string cookieHeader = cookies.GetCookieHeader(request.RequestUri!);
+        if (cookieHeader.Length != 0) { request.Headers.Remove("Cookie"); request.Headers.Add("Cookie", cookieHeader); }
         var response = await base.SendAsync(request, token);
         if (response.Headers.TryGetValues("Set-Cookie", out var values))
-            foreach (string value in values) _cookies.SetCookies(request.RequestUri!, value);
+            foreach (string value in values) cookies.SetCookies(request.RequestUri!, value);
         return response;
     }
+}
+
+internal sealed class ManualClock : TimeProvider
+{
+    private long _ticks = DateTimeOffset.UtcNow.UtcTicks;
+    public override DateTimeOffset GetUtcNow() => new(Interlocked.Read(ref _ticks), TimeSpan.Zero);
+    public void Advance(TimeSpan duration) => Interlocked.Add(ref _ticks, duration.Ticks);
 }

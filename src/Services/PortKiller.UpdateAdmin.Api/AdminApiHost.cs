@@ -4,7 +4,6 @@ using System.Text.Json.Serialization;
 using PortKiller.UpdateManagement;
 using PortKiller.UpdateManagement.Contracts;
 using PortKiller.UpdateManagement.Configuration;
-using Microsoft.AspNetCore.DataProtection;
 using PortKiller.UpdateAdmin.Api.Authentication;
 using PortKiller.UpdateManagement.Security;
 using PortKiller.UpdateManagement.Persistence.Entities;
@@ -23,6 +22,7 @@ public static class AdminApiHost
         builder.Services.AddSingleton(administration);
         builder.Services.AddAdminIdentity(administration);
         builder.Services.AddScoped<AdminCookieEvents>();
+        builder.Services.AddHostedService<SessionMaintenanceService>();
         if (string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
             builder.WebHost.UseUrls("http://127.0.0.1:5081");
         string urls = builder.Configuration["urls"] ?? "http://127.0.0.1:5081";
@@ -30,8 +30,6 @@ public static class AdminApiHost
             !Uri.TryCreate(address, UriKind.Absolute, out var uri) || !uri.IsLoopback
             || uri.Scheme is not ("http" or "https")))
             throw new InvalidOperationException("Management API must bind to loopback; expose it through the configured reverse proxy.");
-        builder.Services.AddDataProtection().SetApplicationName("PortKill.UpdateAdmin")
-            .PersistKeysToFileSystem(new DirectoryInfo(administration.DataProtectionPath));
         builder.Services.AddAuthentication("admin")
             .AddCookie("admin", options =>
             {
@@ -61,13 +59,13 @@ public static class AdminApiHost
             else
                 await ApiProblems.WriteAsync(context, 500, AdminErrorCodes.InternalError, "请求暂时无法完成，请稍后重试。");
         }));
-        app.UseAuthentication();
-        app.UseAuthorization();
         app.Use(async (context, next) =>
         {
             if (context.Request.Path.StartsWithSegments("/api/v1")) context.Response.Headers.CacheControl = "no-store";
             await next(context);
         });
+        app.UseAuthentication();
+        app.UseAuthorization();
         app.MapGet("/health/live", () => new LiveHealthResponse("ok", "admin-api")).AllowAnonymous().WithName("GetLiveHealth");
         app.MapGet("/api/v1/system/status", () => new SystemStatusResponse(
             AdminApplication.Name, AdminApplication.Version, AdminContract.Version))

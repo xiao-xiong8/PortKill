@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication;
+using System.Security.Claims;
 using PortKiller.UpdateManagement.Security;
 using PortKiller.UpdateManagement.Persistence.Entities;
 
@@ -64,6 +65,25 @@ public static class AuthenticationEndpoints
             await SignInAsync(context, sessions, ticket);
             return new AuthenticationResponse("complete", ticket.Session.Phase);
         }).WithName("Reauthenticate").ProducesProblem(401).ProducesProblem(403);
+
+        app.MapGet("/api/v1/auth/me", async (AdminSessionService sessions, HttpContext context)
+            => await sessions.CurrentAsync(context.User, context.RequestAborted))
+            .RequireAuthorization(AdminIdentity.PendingPolicy).WithName("GetCurrentSession").ProducesProblem(401);
+        app.MapGet("/api/v1/auth/sessions", async (AdminSessionService sessions, HttpContext context, int page = 1, int pageSize = 20)
+            => await sessions.ListAsync(context.User, page, pageSize, context.RequestAborted))
+            .WithName("ListOwnSessions").ProducesProblem(400).ProducesProblem(401).ProducesProblem(403);
+        app.MapDelete("/api/v1/auth/sessions/{id}", async (string id, AdminSessionService sessions, HttpContext context) =>
+        {
+            await sessions.RevokeAsync(context.User, id, context.RequestAborted);
+            if (id == context.User.FindFirstValue(AdminIdentity.SessionClaim)) await context.SignOutAsync(AdminIdentity.Scheme);
+            return Results.NoContent();
+        }).WithName("RevokeOwnSession").ProducesProblem(401).ProducesProblem(403).ProducesProblem(404);
+        app.MapPost("/api/v1/auth/logout", async (AdminSessionService sessions, HttpContext context) =>
+        {
+            await sessions.RevokeAsync(context.User, context.User.FindFirstValue(AdminIdentity.SessionClaim)!, context.RequestAborted);
+            await context.SignOutAsync(AdminIdentity.Scheme);
+            return Results.NoContent();
+        }).RequireAuthorization(AdminIdentity.PendingPolicy).WithName("Logout").ProducesProblem(401);
     }
 
     internal static async Task SignInAsync(HttpContext context, AdminSessionService sessions, SessionTicket ticket)

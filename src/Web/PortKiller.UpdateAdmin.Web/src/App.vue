@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { Button, ConfigProvider, Switch, theme } from 'ant-design-vue';
+import { getSystemStatus } from './api/client';
 
 const dark = ref(false);
 const selected = ref('overview');
@@ -15,10 +16,7 @@ const status = computed(() => ({ loading: '正在连接', locked: '需要登录'
 
 async function refresh() {
   state.value = 'loading';
-  try {
-    const response = await fetch('/api/v1/system/status', { credentials: 'same-origin', redirect: 'error' });
-    state.value = response.status === 401 || response.status === 403 ? 'locked' : response.ok ? 'ready' : 'error';
-  } catch { state.value = 'error'; }
+  state.value = (await getSystemStatus()).kind;
 }
 onMounted(refresh);
 </script>

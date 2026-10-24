@@ -70,6 +70,16 @@ MainViewModel.* 位于 Shell/Compatibility，仍是已有功能的兼容协调�
 
 ## 配置及验证
 
+### 管理后台契约边界
+
+管理 API、Publisher Worker 和 UpdateManagement 是独立于桌面的宿主与业务模块；Vue 位于 `src/Web/PortKiller.UpdateAdmin.Web`。管理侧上传、校验和发布状态不复用客户端 UpdateSnapshot。
+
+管理 API 使用 `/api/v1`、camelCase JSON 和字符串枚举；分页统一为 page/pageSize/total/items。错误使用 Problem Details，并附稳定 code 和 correlationId，不返回堆栈或运行目录。`/health/live` 仅提供存活信息，管理接口默认需要认证。
+
+`deploy/contracts/admin-api.v1.json` 由实际 API 导出；前端类型通过 openapi-typescript 生成，构建检查需比较实际契约及已生成类型。新增业务入口随对应功能任务加入契约，不将规划中的接口伪装为已经实现。
+
+UpdateTool 仍通过 CLI 调用。管理侧约定可选 `--json-errors`、schema=1 的 code/message 错误封套，由 P3 工具适配任务落地；现有不带该选项的调用方保持原格式及退出码。P1 只固定该契约，不宣称 CLI 已支持新参数。
+
 用户 config.json、更新信任配置、注册表键、互斥体、EXE 名称与版本保持兼容。SettingsJsonContext 和 UpdateJsonContext 继续用于 AOT 序列化。
 
 ColumnSettingsMigrator 在读取规范化阶段将 7 项列配置幂等迁移到 8 项，逐字段保留合法列宽、列序和可见性，补入默认显示的应用名称列。异常列宽和重复/越界 ID 分别修复，现有原子保存流程负责持久化。

@@ -8,12 +8,15 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "typecheck": "vue-tsc --noEmit",
+    "generate:api": "node scripts/check-contract.mjs --write",
+    "check:api": "node scripts/check-contract.mjs",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": { "ant-design-vue": "4.2.6", "vue": "3.5.44" },
   "devDependencies": {
     "@vitejs/plugin-vue": "6.0.10",
+    "openapi-typescript": "7.13.0",
     "typescript": "5.9.3",
     "vite": "8.3.5",
     "vue-tsc": "3.3.13"

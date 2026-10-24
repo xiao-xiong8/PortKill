@@ -9,7 +9,7 @@ using PortKiller.UpdateManagement.Persistence.Entities;
 
 namespace PortKiller.UpdateManagement.Security;
 
-public sealed class UploadManagementService(UpdateAdminDbContext database, AdminOptions options, TimeProvider clock)
+public sealed class UploadManagementService(UpdateAdminDbContext database, AdminOptions options, TimeProvider clock, ValidationTaskQueue tasks)
 {
     private const long ManifestLimit = 65_536;
     private long Now => clock.GetUtcNow().ToUnixTimeMilliseconds();
@@ -154,6 +154,20 @@ public sealed class UploadManagementService(UpdateAdminDbContext database, Admin
         await using var sessionLock = AcquireSessionLock(lockPath);
         await using var transaction = await database.Database.BeginTransactionAsync(token);
         var upload = await OwnedAsync(principal, id, token);
+        if (upload.State == UploadState.Uploaded)
+        {
+            var existing = await database.ReleaseJobs.AsNoTracking().Where(job => job.Kind == "validate")
+                .Join(database.ReleaseDrafts, job => job.DraftId, draft => draft.Id, (job, draft) => new { Job = job, Draft = draft })
+                .Where(item => item.Draft.UploadId == upload.Id)
+                .Select(item => new { DraftId = item.Draft.Id, JobId = item.Job.Id })
+                .FirstOrDefaultAsync(token);
+            if (existing != null)
+            {
+                await transaction.CommitAsync(token);
+                return new(upload.Id, upload.State, existing.DraftId, existing.JobId);
+            }
+            throw new AdminFailure("upload_task_missing", 409, "上传状态与验证任务记录不一致。");
+        }
         if (upload.State != UploadState.Uploading || upload.ExpiresUtcMs <= Now)
             throw new AdminFailure("upload_closed", 409, "上传会话已关闭或过期。");
         string manifestPath = Path.Combine(directory, "manifest.envelope");
@@ -165,8 +179,9 @@ public sealed class UploadManagementService(UpdateAdminDbContext database, Admin
             || new FileInfo(packagePath).Length != upload.PackageExpectedBytes)
             throw new AdminFailure("upload_parts_missing", 409, "清单和更新包尚未完整接收。");
         upload.State = UploadState.Uploaded; upload.LastActivityUtcMs = Now;
+        var queued = await tasks.EnqueueAsync(upload, token);
         await database.SaveChangesAsync(token); await transaction.CommitAsync(token);
-        return new(upload.Id, upload.State);
+        return new(upload.Id, upload.State, queued.DraftId, queued.JobId);
     }
 
     public async Task CancelAsync(ClaimsPrincipal principal, string id, CancellationToken token)

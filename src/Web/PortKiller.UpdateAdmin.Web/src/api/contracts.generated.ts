@@ -415,6 +415,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/validation-tasks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetValidationTask"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -589,6 +605,8 @@ export interface components {
             version: string;
         };
         UploadCompletionResponse: {
+            draftId: string;
+            jobId: string;
             state: components["schemas"]["UploadState"];
             uploadId: string;
         };
@@ -610,6 +628,18 @@ export interface components {
         UploadState: "uploading" | "uploaded" | "cancelled" | "expired";
         /** @enum {unknown} */
         ValidationState: "pending" | "validating" | "readyForApproval" | "rejected";
+        ValidationTaskResponse: {
+            /** Format: int32 */
+            attempts: unknown;
+            /** Format: int64 */
+            createdUtcMs: unknown;
+            draftId: string;
+            errorCode: string | null;
+            id: string;
+            /** Format: int64 */
+            leaseExpiresUtcMs: unknown;
+            state: components["schemas"]["PublishJobState"];
+        };
     };
     responses: never;
     parameters: never;
@@ -1576,6 +1606,37 @@ export interface operations {
             };
             /** @description Payload Too Large */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetValidationTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationTaskResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -448,6 +448,46 @@
         }
       }
     },
+    "/api/v1/validation-tasks/{id}": {
+      "get": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "GetValidationTask",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationTaskResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/audit": {
       "get": {
         "tags": [
@@ -1765,7 +1805,9 @@
       "UploadCompletionResponse": {
         "required": [
           "uploadId",
-          "state"
+          "state",
+          "draftId",
+          "jobId"
         ],
         "type": "object",
         "properties": {
@@ -1774,6 +1816,12 @@
           },
           "state": {
             "$ref": "#/components/schemas/UploadState"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "jobId": {
+            "type": "string"
           }
         }
       },
@@ -1832,6 +1880,46 @@
           "readyForApproval",
           "rejected"
         ]
+      },
+      "ValidationTaskResponse": {
+        "required": [
+          "id",
+          "draftId",
+          "state",
+          "attempts",
+          "createdUtcMs",
+          "leaseExpiresUtcMs",
+          "errorCode"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/PublishJobState"
+          },
+          "attempts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int32"
+          },
+          "createdUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "leaseExpiresUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64",
+            "nullable": true
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true
+          }
+        }
       }
     }
   },

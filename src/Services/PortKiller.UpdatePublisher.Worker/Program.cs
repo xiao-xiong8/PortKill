@@ -8,6 +8,7 @@ var options = AdminHostConfiguration.Load(builder.Configuration, args);
 builder.Services.AddSingleton(options);
 builder.Services.AddAdminDatabase(options);
 builder.Services.AddHostedService<AdminRuntimeService>();
+builder.Services.AddScoped<PortKiller.UpdateManagement.Security.ValidationTaskQueue>();
 builder.Services.AddHostedService<PublisherWorker>();
 
 var host = builder.Build();

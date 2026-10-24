@@ -35,6 +35,137 @@ public sealed class UploadTests
         var content = new ByteArrayContent(value); content.Headers.ContentType = new("application/octet-stream"); return content;
     }
 
+    private static async Task<JsonElement> EnqueueValidationAsync(TestApplication app)
+    {
+        var created = await CreateAsync(app.Client, 4, 4);
+        string id = created.GetProperty("id").GetString()!;
+        using (var response = await PutAsync(app.Client, $"/api/v1/uploads/{id}/manifest", Bytes([1, 2, 3, 4])))
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using (var response = await PutAsync(app.Client, $"/api/v1/uploads/{id}/package", Bytes([5, 6, 7, 8])))
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var completion = await app.Client.PostAsync($"/api/v1/uploads/{id}/complete", JsonContent.Create(new { }));
+        Assert.Equal(HttpStatusCode.OK, completion.StatusCode);
+        return await completion.Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    [Fact]
+    public async Task CompletionEnqueuesOnePersistentTaskAndReturnsTheSameReferenceOnRetry()
+    {
+        await using var app = await TestApplication.StartAsync(); await MfaTests.EnrollAsync(app);
+        var completion = await EnqueueValidationAsync(app);
+        string uploadId = completion.GetProperty("uploadId").GetString()!;
+        string draftId = completion.GetProperty("draftId").GetString()!;
+        string taskId = completion.GetProperty("jobId").GetString()!;
+
+        using (var repeated = await app.Client.PostAsync($"/api/v1/uploads/{uploadId}/complete", JsonContent.Create(new { })))
+        {
+            Assert.Equal(HttpStatusCode.OK, repeated.StatusCode);
+            var response = await repeated.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(draftId, response.GetProperty("draftId").GetString());
+            Assert.Equal(taskId, response.GetProperty("jobId").GetString());
+        }
+
+        using (var scope = app.App.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<UpdateAdminDbContext>();
+            Assert.Equal(1, await db.ReleaseDrafts.CountAsync(item => item.UploadId == uploadId));
+            Assert.Equal(1, await db.ReleaseJobs.CountAsync(item => item.Id == taskId && item.Kind == "validate"
+                && item.State == PublishJobState.Queued && item.Attempts == 0));
+            Assert.Equal("queued", await db.JobEvents.Where(item => item.JobId == taskId)
+                .Select(item => item.Stage).SingleAsync());
+        }
+
+        await app.RestartAsync();
+        var persisted = await app.Client.GetFromJsonAsync<JsonElement>($"/api/v1/validation-tasks/{taskId}");
+        Assert.Equal(taskId, persisted.GetProperty("id").GetString());
+        Assert.Equal("queued", persisted.GetProperty("state").GetString());
+    }
+
+    [Fact]
+    public async Task CompetingWorkersCannotClaimTheSameValidationTask()
+    {
+        await using var app = await TestApplication.StartAsync(); await MfaTests.EnrollAsync(app);
+        await EnqueueValidationAsync(app);
+        await using var firstScope = app.App.Services.CreateAsyncScope();
+        await using var secondScope = app.App.Services.CreateAsyncScope();
+        var firstQueue = firstScope.ServiceProvider.GetRequiredService<ValidationTaskQueue>();
+        var secondQueue = secondScope.ServiceProvider.GetRequiredService<ValidationTaskQueue>();
+
+        var claims = await Task.WhenAll(firstQueue.ClaimAsync("worker-a", CancellationToken.None),
+            secondQueue.ClaimAsync("worker-b", CancellationToken.None));
+
+        var claimed = Assert.Single(claims, claim => claim != null);
+        Assert.Single(claims, claim => claim == null);
+        Assert.Equal(PublishJobState.Publishing, claimed!.State);
+        Assert.Equal(1, claimed.Attempts);
+    }
+
+    [Fact]
+    public async Task ExpiredLeaseCanBeReclaimedAfterWorkerRestartAndRenewalRequiresTheOwner()
+    {
+        await using var app = await TestApplication.StartAsync(); await MfaTests.EnrollAsync(app);
+        await EnqueueValidationAsync(app);
+        string taskId;
+        await using (var scope = app.App.Services.CreateAsyncScope())
+        {
+            var queue = scope.ServiceProvider.GetRequiredService<ValidationTaskQueue>();
+            var first = await queue.ClaimAsync("worker-before-restart", CancellationToken.None);
+            Assert.NotNull(first);
+            taskId = first!.Id;
+            Assert.False(await queue.RenewAsync(taskId, "another-worker", CancellationToken.None));
+            Assert.True(await queue.RenewAsync(taskId, "worker-before-restart", CancellationToken.None));
+            app.Clock.Advance(TimeSpan.FromMinutes(2));
+            Assert.False(await queue.RenewAsync(taskId, "worker-before-restart", CancellationToken.None));
+        }
+
+        await app.RestartAsync();
+        await using var restartedScope = app.App.Services.CreateAsyncScope();
+        var restarted = await restartedScope.ServiceProvider.GetRequiredService<ValidationTaskQueue>()
+            .ClaimAsync("worker-after-restart", CancellationToken.None);
+        Assert.NotNull(restarted);
+        Assert.Equal(taskId, restarted!.Id);
+        Assert.Equal(2, restarted.Attempts);
+    }
+
+    [Fact]
+    public async Task ExpiredMaximumAttemptLeaseFailsTaskAndRejectsDraft()
+    {
+        await using var app = await TestApplication.StartAsync(); await MfaTests.EnrollAsync(app);
+        var completion = await EnqueueValidationAsync(app);
+        string taskId = completion.GetProperty("jobId").GetString()!;
+        string draftId = completion.GetProperty("draftId").GetString()!;
+
+        for (int attempt = 1; attempt <= ValidationTaskQueue.MaximumAttempts; attempt++)
+        {
+            await using var scope = app.App.Services.CreateAsyncScope();
+            var queue = scope.ServiceProvider.GetRequiredService<ValidationTaskQueue>();
+            var claimed = await queue.ClaimAsync("worker-retry", CancellationToken.None);
+            Assert.NotNull(claimed);
+            Assert.Equal(attempt, claimed!.Attempts);
+            if (attempt < ValidationTaskQueue.MaximumAttempts)
+                Assert.True(await queue.ReleaseAsync(taskId, "worker-retry", "validation_failed", CancellationToken.None));
+            else
+                app.Clock.Advance(TimeSpan.FromMinutes(2));
+        }
+
+        await using (var scope = app.App.Services.CreateAsyncScope())
+        {
+            var queue = scope.ServiceProvider.GetRequiredService<ValidationTaskQueue>();
+            Assert.Null(await queue.ClaimAsync("worker-retry", CancellationToken.None));
+        }
+        await using (var scope = app.App.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<UpdateAdminDbContext>();
+            var job = await db.ReleaseJobs.SingleAsync(item => item.Id == taskId);
+            var draft = await db.ReleaseDrafts.SingleAsync(item => item.Id == draftId);
+            Assert.Equal(PublishJobState.Failed, job.State);
+            Assert.Equal("validation_retry_exhausted", job.ErrorCode);
+            Assert.Equal(ValidationState.Rejected, draft.ValidationState);
+            Assert.Equal("validation_retry_exhausted", draft.ValidationErrorCode);
+            Assert.Equal(11, await db.JobEvents.CountAsync(item => item.JobId == taskId));
+        }
+    }
+
     [Fact]
     public async Task UploadStreamsBothBoundedFilesAndCompletesWithoutReturningStoragePaths()
     {

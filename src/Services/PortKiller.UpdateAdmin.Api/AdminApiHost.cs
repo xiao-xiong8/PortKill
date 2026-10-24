@@ -81,6 +81,9 @@ public static class AdminApiHost
         app.MapAdminAuthentication();
         app.MapAdminAccounts();
         app.MapUploadEndpoints();
+        app.MapGet("/api/v1/validation-tasks/{id}", async (string id, ValidationTaskQueue queue, HttpContext context)
+            => await queue.GetAsync(context.User, id, context.RequestAborted))
+            .RequireAuthorization(AdminPermissions.Read).WithName("GetValidationTask").ProducesProblem(404);
         app.MapGet("/api/v1/audit", async (AdminAuditService audit, HttpContext context, int page = 1, int pageSize = 20, string? action = null)
             => await audit.ListAsync(page, pageSize, action, context.RequestAborted))
             .RequireAuthorization(AdminPermissions.Audit).WithName("ListAuditEvents").ProducesProblem(400).ProducesProblem(401).ProducesProblem(403);

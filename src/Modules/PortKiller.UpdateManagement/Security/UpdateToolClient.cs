@@ -14,7 +14,8 @@ public sealed record UpdateToolActivationResult(bool Succeeded, string? ErrorCod
     string? ExpiresUtc, string? ManifestSha256, string? PackageSha256, string? ReceiptSha256);
 
 public sealed record UpdateToolInspectionResult(bool Succeeded, string? ErrorCode, bool HasCurrent,
-    string? Version, long? Sequence, string? ManifestSha256, string? PackageSha256, string? ExpiresUtc);
+    string? Version, long? Sequence, string? ManifestSha256, string? PackageSha256, string? ExpiresUtc,
+    string? ReceiptSha256 = null);
 
 public sealed class UpdateToolClient(UpdateToolOptions options)
 {
@@ -133,7 +134,7 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
             if (version.Length is < 1 or > 32 || sequence <= 0 || expires.Length is < 1 or > 64
                 || !IsDigest(manifest) || !IsDigest(package)) return ActivationFailure("tool_protocol_error");
             return new(true, null, version, sequence, expires, manifest.ToUpperInvariant(), package.ToUpperInvariant(),
-                Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(invocation.Output))));
+                Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(root.GetRawText()))));
         }
         catch (JsonException) { return ActivationFailure("tool_protocol_error"); }
         catch (InvalidOperationException) { return ActivationFailure("tool_unavailable"); }
@@ -164,9 +165,11 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
             string manifest = GetString(root, "ManifestSha256", "manifestSha256");
             string package = GetString(root, "PackageSha256", "packageSha256");
             string expires = GetString(root, "ExpiresUtc", "expiresUtc");
-            if (version.Length is < 1 or > 32 || sequence <= 0 || expires.Length is < 1 or > 64
+            // A trusted schema-1 release can be the baseline for the first schema-2 publication.
+            if (version.Length is < 1 or > 32 || sequence < 0 || expires.Length is < 1 or > 64
                 || !IsDigest(manifest) || !IsDigest(package)) return InspectionFailure("tool_protocol_error");
-            return new(true, null, true, version, sequence, manifest.ToUpperInvariant(), package.ToUpperInvariant(), expires);
+            return new(true, null, true, version, sequence, manifest.ToUpperInvariant(), package.ToUpperInvariant(), expires,
+                Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(root.GetRawText()))));
         }
         catch (JsonException) { return InspectionFailure("tool_protocol_error"); }
         catch (InvalidOperationException) { return InspectionFailure("tool_unavailable"); }
@@ -175,6 +178,11 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
 
     private async Task<ToolInvocation> InvokeAsync(string command, (string Name, string Value)[] arguments, CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
+        AdminRuntimeLease.RequireLocalPath(options.ExecutablePath);
+        AdminRuntimeLease.RequireLocalPath(options.VerificationConfigPath);
+        if (!File.Exists(options.ExecutablePath)) return new(false, "tool_unavailable", "", false);
+        if (!File.Exists(options.VerificationConfigPath)) return new(false, "file_unavailable", "", false);
         var start = new ProcessStartInfo(options.ExecutablePath)
         {
             UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
@@ -187,6 +195,12 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
             foreach (string name in new[] { "SYSTEMROOT", "WINDIR", "TEMP", "TMP" }) CopyEnvironment(name, start);
         start.ArgumentList.Add(command);
         foreach ((string name, string value) in arguments) AddArgument(start, name, value);
+        using (var owner = Process.GetCurrentProcess())
+        {
+            AddArgument(start, "--owner-pid", owner.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            AddArgument(start, "--owner-start-ticks", owner.StartTime.ToUniversalTime().Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            AddArgument(start, "--max-runtime-seconds", (options.TimeoutSeconds + 3).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
         start.ArgumentList.Add("--json-errors");
         using var process = new Process { StartInfo = start, EnableRaisingEvents = true };
         try
@@ -196,24 +210,51 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
         { return new(false, "tool_unavailable", "", false); }
 
-        Task<CapturedOutput> stdout = CaptureAsync(process.StandardOutput, options.MaximumOutputBytes, token);
-        Task<CapturedOutput> stderr = CaptureAsync(process.StandardError, options.MaximumOutputBytes, token);
+        // Keep draining bounded buffers until the killed process exits; request cancellation must not strand a pipe.
+        using var outputCancellation = new CancellationTokenSource();
+        Task<CapturedOutput> stdout = CaptureAsync(process.StandardOutput, options.MaximumOutputBytes, outputCancellation.Token);
+        Task<CapturedOutput> stderr = CaptureAsync(process.StandardError, options.MaximumOutputBytes, outputCancellation.Token);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(options.TimeoutSeconds));
-        try { await process.WaitForExitAsync(timeout.Token); }
-        catch (OperationCanceledException)
+        try
         {
-            Kill(process); await process.WaitForExitAsync(CancellationToken.None); await Task.WhenAll(stdout, stderr);
-            token.ThrowIfCancellationRequested(); return new(false, "tool_timeout", "", false);
+            try { await process.WaitForExitAsync(timeout.Token); }
+            catch (OperationCanceledException)
+            {
+                bool stopped = await StopAsync(process);
+                outputCancellation.Cancel();
+                await IgnoreCaptureFailureAsync(stdout, stderr);
+                token.ThrowIfCancellationRequested();
+                return new(false, stopped ? "tool_timeout" : "tool_termination_pending", "", false);
+            }
+            CapturedOutput[] captured = await Task.WhenAll(stdout, stderr).WaitAsync(TimeSpan.FromSeconds(5), token);
+            if (captured.Any(item => item.Truncated)) return new(false, "tool_output_limit", captured[0].Text, true);
+            if (process.ExitCode != 0)
+            {
+                UpdateToolResult error = ParseError(captured[0].Text);
+                return new(false, error.ErrorCode ?? "tool_execution_failed", captured[0].Text, false);
+            }
+            return new(true, null, captured[0].Text, false);
         }
-        CapturedOutput output = await stdout; _ = await stderr;
-        if (output.Truncated) return new(false, "tool_output_limit", output.Text, true);
-        if (process.ExitCode != 0)
+        finally
         {
-            UpdateToolResult error = ParseError(output.Text);
-            return new(false, error.ErrorCode ?? "tool_execution_failed", output.Text, false);
+            if (!process.HasExited) await StopAsync(process);
+            outputCancellation.Cancel();
+            await IgnoreCaptureFailureAsync(stdout, stderr);
         }
-        return new(true, null, output.Text, false);
+    }
+
+    private static async Task<bool> StopAsync(Process process)
+    {
+        Kill(process);
+        try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5)); return true; }
+        catch (TimeoutException) { return false; }
+    }
+
+    private static async Task IgnoreCaptureFailureAsync(params Task<CapturedOutput>[] tasks)
+    {
+        try { await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(5)); }
+        catch (Exception exception) when (exception is OperationCanceledException or IOException or TimeoutException) { }
     }
 
     private static void AddArgument(ProcessStartInfo start, string name, string value)

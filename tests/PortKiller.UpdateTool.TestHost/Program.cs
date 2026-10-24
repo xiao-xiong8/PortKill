@@ -1,5 +1,28 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using PortKiller.UpdateManagement.Configuration;
+using PortKiller.UpdateManagement.Persistence;
+using PortKiller.UpdateManagement.Security;
+using PortKiller.UpdateTool;
+using PortKiller.Updates;
+
+// Fault controls exist only in this test executable; the production tool exposes no fault switches.
+if (args is ["publish-worker", var workerConfig])
+{
+    var settings = JsonSerializer.Deserialize<TestPublisherConfiguration>(await File.ReadAllTextAsync(workerConfig))!;
+    var services = new ServiceCollection();
+    services.AddLogging();
+    services.AddSingleton(new AdminOptions { DataRoot = settings.DataRoot });
+    services.AddSingleton(settings.Tool);
+    services.AddSingleton<UpdateToolClient>();
+    services.AddAdminDatabase(new AdminOptions { DataRoot = settings.DataRoot });
+    services.AddAdminWorkerServices();
+    await using var provider = services.BuildServiceProvider();
+    await using var scope = provider.CreateAsyncScope();
+    await scope.ServiceProvider.GetRequiredService<PublishTaskExecutor>().ExecuteOnceAsync("process-test-worker", default);
+    return;
+}
 
 if (args.Contains("--portkill-test-child-hang", StringComparer.Ordinal))
 {
@@ -10,7 +33,41 @@ if (args.Contains("--portkill-test-child-hang", StringComparer.Ordinal))
 int configIndex = Array.IndexOf(args, "--config");
 if (configIndex < 0 || configIndex + 1 >= args.Length) return;
 using var config = JsonDocument.Parse(await File.ReadAllTextAsync(args[configIndex + 1]));
-string mode = config.RootElement.GetProperty("testMode").GetString() ?? "";
+string mode = config.RootElement.TryGetProperty("testMode", out var testMode) ? testMode.GetString() ?? "" : "";
+if (mode == "publish-fault")
+{
+    try
+    {
+        var flags = new Dictionary<string, string>(StringComparer.Ordinal);
+        for (int index = 1; index + 1 < args.Length; index += 2) flags.Add(args[index], args[index + 1]);
+        using var owner = ToolProcessGuard.FromArguments(flags);
+        Action? ensureOwner = owner is null ? null : owner.Check;
+        var verification = JsonSerializer.Deserialize(await File.ReadAllTextAsync(flags["--config"]),
+            ProtocolJsonContext.Default.ManifestVerificationOptions)!;
+        var store = new ReleaseStore(flags["--root"], verification);
+        object? result = args[0] switch
+        {
+            "activate" => store.Activate(flags["--manifest"], flags["--package"], flags["--expected"], phase =>
+            {
+                if (phase != config.RootElement.GetProperty("faultPhase").GetString()) return;
+                ReleaseStore.DurableWrite(config.RootElement.GetProperty("signalPath").GetString()!,
+                    JsonSerializer.SerializeToUtf8Bytes(new { pid = Environment.ProcessId, phase }));
+                Thread.Sleep(Timeout.Infinite);
+            }, flags["--manifest-sha256"], flags["--package-sha256"], ensureOwner),
+            "inspect" => store.Inspect(false, ensureOwner),
+            "recover" => store.Inspect(true, ensureOwner),
+            _ => throw new ArgumentException("Unsupported test command.")
+        };
+        Console.WriteLine(JsonSerializer.Serialize(result));
+    }
+    catch (Exception exception)
+    {
+        string code = exception is IOException ? "io_failure" : "internal_error";
+        Console.WriteLine(JsonSerializer.Serialize(new { schema = 1, code, message = "Injected tool failure." }));
+        Environment.ExitCode = 1;
+    }
+    return;
+}
 if (mode == "output")
 {
     Console.Write(new string('x', 2_000_000));
@@ -28,3 +85,5 @@ if (mode == "spawn")
     await File.WriteAllTextAsync(pidPath, child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
     await Task.Delay(Timeout.InfiniteTimeSpan);
 }
+
+internal sealed record TestPublisherConfiguration(string DataRoot, UpdateToolOptions Tool);

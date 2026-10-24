@@ -18,17 +18,24 @@ public sealed class ReleaseStore(string root, ManifestVerificationOptions option
         Directory.CreateDirectory(Root); Directory.CreateDirectory(State);
         return new FileStream(Path.Combine(State, "lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
     }
-    public ReleaseReceipt? Inspect(bool repair = false)
+    public ReleaseReceipt? Inspect(bool repair = false, Action? ensureOwner = null)
     {
         using var lease = Lock();
+        ensureOwner?.Invoke();
         var receipt = ReadCurrent();
-        if (repair && receipt != null) SaveReceipt(receipt);
+        ensureOwner?.Invoke();
+        if (repair)
+        {
+            if (receipt != null) SaveReceipt(receipt);
+            else File.Delete(Path.Combine(State, "transaction.json"));
+        }
         return receipt;
     }
     public ReleaseReceipt Activate(string manifestPath, string package, string expected, Action<string>? fault = null,
-        string? approvedManifestSha256 = null, string? approvedPackageSha256 = null)
+        string? approvedManifestSha256 = null, string? approvedPackageSha256 = null, Action? ensureOwner = null)
     {
         using var lease = Lock();
+        ensureOwner?.Invoke();
         byte[] envelope = ReadManifest(manifestPath);
         var manifest = UpdateManifest.Verify(envelope, options);
         if (approvedManifestSha256 != null && !Convert.ToHexString(SHA256.HashData(envelope)).Equals(approvedManifestSha256, StringComparison.OrdinalIgnoreCase)
@@ -38,6 +45,7 @@ public sealed class ReleaseStore(string root, ManifestVerificationOptions option
         var candidate = Receipt(envelope, manifest);
         ReleasePackage.Verify(package, manifest);
         var current = ReadCurrent();
+        ensureOwner?.Invoke();
         if (current?.ManifestSha256 == candidate.ManifestSha256) { SaveReceipt(current); return current; }
         if ((current?.ManifestSha256 ?? "none") != expected) throw new InvalidOperationException("发布冲突：当前清单与预期不一致，请检查服务器状态。");
         if (current != null && (manifest.Sequence <= current.Sequence
@@ -60,14 +68,17 @@ public sealed class ReleaseStore(string root, ManifestVerificationOptions option
                 using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 { source.CopyTo(output); output.Flush(true); }
                 ReleasePackage.Verify(temporary, manifest);
+                ensureOwner?.Invoke();
                 MakePublic(temporary);
                 File.Move(temporary, target);
             }
             finally { File.Delete(temporary); }
         }
         fault?.Invoke("package-published");
+        ensureOwner?.Invoke();
         DurableWrite(Manifest, envelope, publicAccess: true);
         fault?.Invoke("manifest-activated");
+        ensureOwner?.Invoke();
         SaveReceipt(candidate);
         fault?.Invoke("receipt-written");
         return candidate;

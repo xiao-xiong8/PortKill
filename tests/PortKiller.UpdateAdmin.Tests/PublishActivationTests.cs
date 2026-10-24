@@ -49,7 +49,7 @@ public sealed class PublishActivationTests
     }
 
     [Fact]
-    public async Task ExternalPublisherWinsCasAndTheQueuedJobCannotOverwriteIt()
+    public async Task ExternalNewerPublisherSupersedesTheQueuedJobWithoutOverwritingIt()
     {
         await using var fixture = await PublishFixture.StartAsync();
         var upload = await fixture.UploadAsync(fixture.Sign(1));
@@ -58,7 +58,7 @@ public sealed class PublishActivationTests
         Assert.True((await fixture.ActivateOutsideApiAsync(external, "none")).Succeeded);
         Assert.True(await fixture.ExecuteAsync());
         var job = await fixture.App.Client.GetFromJsonAsync<JsonElement>($"/api/v1/publish-jobs/{jobId}");
-        Assert.Equal("conflict", job.GetProperty("state").GetString());
+        Assert.Equal("superseded", job.GetProperty("state").GetString());
         Assert.Equal(external, await File.ReadAllBytesAsync(Path.Combine(fixture.Options.ReleaseRoot, "manifest.json")));
     }
 
@@ -83,6 +83,7 @@ public sealed class PublishActivationTests
             Assert.True(await fixture.ExecuteAsync());
             Assert.False(File.Exists(Path.Combine(fixture.Options.ReleaseRoot, "manifest.json")));
         }
+        fixture.App.Clock.Advance(TimeSpan.FromSeconds(6));
         Assert.True(await fixture.ExecuteAsync());
         Assert.True(File.Exists(Path.Combine(fixture.Options.ReleaseRoot, "manifest.json")));
     }

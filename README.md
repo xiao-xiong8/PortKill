@@ -107,9 +107,9 @@ pwsh -File scripts/build/Test-UpdatePipeline.ps1 -VcVarsAllPath C:/path/to/vcvar
 
 该入口包含 UI、真实 AOT 安装与恢复、隔离发布演练、性能检查及 Linux 服务端构建。结果写入 `.local/artifacts/update-validation/`。真实 Linux、Nginx、TLS 和公网部署仍需单独验收；过程记录保存在本地，不随源码分发。
 
-网页发布管理后台由独立 Vue 前端、net10.0 API/Worker 和 SQLite + EF Core 10 业务模块组成。上传、严格验签、产物封存、单次发布确认及由 Worker 调用 UpdateTool 原子激活已实现；后续仍需完成中断恢复、公网验证、管理事件流、前端完整流程和生产部署验收。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
+网页发布管理后台由独立 Vue 前端、net10.0 API/Worker 和 SQLite + EF Core 10 业务模块组成。上传、严格验签、产物封存、单次发布确认、原子激活和中断恢复已实现；后续仍需完成公网验证、管理事件流、前端完整流程和生产部署验收。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
 
-发布配置由 API 和 Worker 各自的配置提供。API 需要 `UpdateTool:ExecutablePath`、`UpdateTool:VerificationConfigPath` 和 `UpdateTool:ReleaseRoot`，用于验证上传产物并读取当前签名清单；Worker 使用相同的工具、验签配置和正式分发目录，并设置 `UpdateTool:Enabled=true`。两个进程必须共享相同的管理数据库、验签配置和 `ReleaseRoot`；API 对正式目录只需读取权限，Worker 需要按 UpdateTool 的原子发布流程写入。生产环境建议通过服务环境变量注入路径：
+发布配置由 API 和 Worker 各自的配置提供。API 使用 `UpdateTool:VerificationConfigPath` 和 `UpdateTool:ReleaseRoot` 读取当前签名清单；Worker 还需配置 `UpdateTool:ExecutablePath` 并设置 `UpdateTool:Enabled=true`，负责验证上传产物和执行发布。两个进程必须共享相同的管理数据库、验签配置和 `ReleaseRoot`；API 对正式目录只需读取权限，Worker 需要按 UpdateTool 的原子发布流程写入。生产环境建议通过服务环境变量注入路径：
 
 ```text
 UpdateTool__ExecutablePath=/opt/portkiller-updates/tool/PortKiller.UpdateTool
@@ -118,6 +118,8 @@ UpdateTool__ReleaseRoot=/srv/portkiller-updates/stable
 ```
 
 在 API 进程中保持 `UpdateTool__Enabled=false`；仅发布 Worker 设置为 `true`。Windows 开发机应使用对应的绝对路径。`VerificationConfigPath` 只包含验证公钥及公开 URL，不放置发布私钥；签名私钥继续留在受控 Windows 制作环境。正式部署的服务账户、共享目录权限和恢复流程在 P7 阶段验收。
+
+Worker 先核对正式签名清单和实际包，再决定恢复任务或激活。清单已提交而回执或数据库写入失败时，`recover` 修复回执和 ManifestActivated 状态；已有更新版本时旧任务成为 Superseded。核对受阻时任务保持 Publishing，延迟重试核对。执行锁覆盖整个发布操作，工具绑定父进程身份和运行时限；Worker 退出后遗留工具会退出，重启后核对提交事实。调用未带父进程参数的原 CLI 发布流程继续使用相同的服务端提交锁和 CAS。
 
 ```powershell
 # 后台测试、实际 OpenAPI 比对、前端检查与构建

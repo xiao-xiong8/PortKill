@@ -46,13 +46,13 @@ internal sealed class PublishFixture : IAsyncDisposable
         return fixture;
     }
 
-    public byte[] Sign(long sequence, byte[]? package = null, DateTimeOffset? expires = null)
+    public byte[] Sign(long sequence, byte[]? package = null, DateTimeOffset? expires = null, int schema = 2)
     {
         var verification = JsonSerializer.Deserialize(File.ReadAllText(Options.VerificationConfigPath),
             ProtocolJsonContext.Default.ManifestVerificationOptions)!;
         var manifest = new UpdateManifest
         {
-            Version = Version, Sequence = sequence, PublishedUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+            Schema = schema, Version = Version, Sequence = sequence, PublishedUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
             ExpiresUtc = expires ?? DateTimeOffset.UtcNow.AddDays(30),
             PackageUrl = new Uri(new Uri(verification.ManifestUrl), $"PortKiller-{Version}-win-x64.zip").AbsoluteUri,
             Size = (package ?? Package).Length, Sha256 = Convert.ToHexString(SHA256.HashData(package ?? Package)),
@@ -92,10 +92,10 @@ internal sealed class PublishFixture : IAsyncDisposable
         return (await confirmed.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString()!;
     }
 
-    public async Task<bool> ExecuteAsync()
+    public async Task<bool> ExecuteAsync(CancellationToken token = default)
     {
         await using var scope = App.App.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<PublishTaskExecutor>().ExecuteOnceAsync("fixture-publisher", default);
+        return await scope.ServiceProvider.GetRequiredService<PublishTaskExecutor>().ExecuteOnceAsync("fixture-publisher", token);
     }
 
     public async Task<UpdateToolActivationResult> ActivateOutsideApiAsync(byte[] manifest, string expected)

@@ -19,8 +19,11 @@ try
     }
     if (!flags.TryGetValue("--config", out string? configPath)) throw new ArgumentException("The verification configuration is required.");
     foreach (string name in flags.Keys)
-        if (name is not ("--config" or "--root" or "--manifest" or "--package" or "--expected" or "--manifest-sha256" or "--package-sha256"))
+        if (name is not ("--config" or "--root" or "--manifest" or "--package" or "--expected" or "--manifest-sha256" or "--package-sha256"
+            or "--owner-pid" or "--owner-start-ticks" or "--max-runtime-seconds"))
             throw new ArgumentException("An unsupported command option was provided.");
+    using var owner = ToolProcessGuard.FromArguments(flags);
+    Action? ensureOwner = owner is null ? null : owner.Check;
     var options = JsonSerializer.Deserialize(File.ReadAllText(configPath), ProtocolJsonContext.Default.ManifestVerificationOptions)
         ?? throw new InvalidDataException("验证配置无效。");
     options.Validate();
@@ -38,8 +41,8 @@ try
             flags.TryGetValue("--package-sha256", out string? approvedPackage);
             if ((approvedManifest == null) != (approvedPackage == null)) throw new ArgumentException("Both approved digests are required.");
             result = new ReleaseStore(flags["--root"], options).Activate(flags["--manifest"], flags["--package"], flags["--expected"],
-                approvedManifestSha256: approvedManifest, approvedPackageSha256: approvedPackage); break;
-        case "inspect": case "recover": result = new ReleaseStore(flags["--root"], options).Inspect(args[0] == "recover"); break;
+                approvedManifestSha256: approvedManifest, approvedPackageSha256: approvedPackage, ensureOwner: ensureOwner); break;
+        case "inspect": case "recover": result = new ReleaseStore(flags["--root"], options).Inspect(command == "recover", ensureOwner); break;
         case "public-check":
             using (var http = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(5) }) { Timeout = TimeSpan.FromMinutes(5) })
             {

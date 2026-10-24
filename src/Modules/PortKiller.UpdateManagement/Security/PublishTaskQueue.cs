@@ -21,17 +21,16 @@ public sealed class PublishTaskQueue(UpdateAdminDbContext database, TimeProvider
     public async Task<PublishTaskContext?> ClaimAsync(string workerId, CancellationToken token)
     {
         ValidateWorkerId(workerId);
-        long now = Now;
-        await FailExhaustedAsync(now, token);
         for (int conflict = 0; conflict < 8; conflict++)
         {
             try
             {
+                long now = Now;
                 await using var transaction = await database.Database.BeginTransactionAsync(IsolationLevel.Serializable, token);
                 var candidate = await database.ReleaseJobs.AsNoTracking()
-                    .Where(job => job.Kind == "publish" && job.Attempts < MaximumAttempts
+                    .Where(job => job.Kind == "publish"
                         && (job.State == PublishJobState.Queued
-                            || job.State == PublishJobState.Publishing && job.LeaseExpiresUtcMs <= now))
+                            || job.State == PublishJobState.Publishing && (job.LeaseExpiresUtcMs == null || job.LeaseExpiresUtcMs <= now)))
                     .OrderBy(job => job.CreatedUtcMs).ThenBy(job => job.Id)
                     .Select(job => new { job.Id, job.DraftId }).FirstOrDefaultAsync(token);
                 if (candidate == null)
@@ -42,12 +41,10 @@ public sealed class PublishTaskQueue(UpdateAdminDbContext database, TimeProvider
 
                 long until = checked(now + LeaseSeconds * 1000L);
                 int claimed = await database.ReleaseJobs.Where(job => job.Id == candidate.Id && job.Kind == "publish"
-                        && job.Attempts < MaximumAttempts
                         && (job.State == PublishJobState.Queued
-                            || job.State == PublishJobState.Publishing && job.LeaseExpiresUtcMs <= now))
+                            || job.State == PublishJobState.Publishing && (job.LeaseExpiresUtcMs == null || job.LeaseExpiresUtcMs <= now)))
                     .ExecuteUpdateAsync(update => update.SetProperty(job => job.State, PublishJobState.Publishing)
                         .SetProperty(job => job.LeaseOwner, workerId).SetProperty(job => job.LeaseExpiresUtcMs, until)
-                        .SetProperty(job => job.Attempts, job => job.Attempts + 1)
                         .SetProperty(job => job.Revision, job => job.Revision + 1), token);
                 if (claimed == 0)
                 {
@@ -77,6 +74,37 @@ public sealed class PublishTaskQueue(UpdateAdminDbContext database, TimeProvider
         return changed == 1;
     }
 
+    public async Task<bool> BeginActivationAsync(string id, string workerId, CancellationToken token)
+    {
+        await using var transaction = await database.Database.BeginTransactionAsync(token);
+        long now = Now;
+        int changed = await database.ReleaseJobs.Where(job => job.Id == id && job.Kind == "publish"
+                && job.State == PublishJobState.Publishing && job.LeaseOwner == workerId && job.LeaseExpiresUtcMs > now
+                && job.Attempts < MaximumAttempts)
+            .ExecuteUpdateAsync(update => update.SetProperty(job => job.Attempts, job => job.Attempts + 1)
+                .SetProperty(job => job.ErrorCode, (string?)null).SetProperty(job => job.Revision, job => job.Revision + 1), token);
+        if (changed != 1) return false;
+        await AddEventAsync(id, "activating", "activation_started", token);
+        await transaction.CommitAsync(token);
+        return true;
+    }
+
+    public async Task<bool> DeferRecoveryAsync(string id, string workerId, string code, CancellationToken token)
+    {
+        ValidateCode(code);
+        await using var transaction = await database.Database.BeginTransactionAsync(token);
+        long now = Now;
+        int changed = await database.ReleaseJobs.Where(job => job.Id == id && job.Kind == "publish"
+                && job.State == PublishJobState.Publishing && job.LeaseOwner == workerId && job.LeaseExpiresUtcMs > now)
+            .ExecuteUpdateAsync(update => update.SetProperty(job => job.ErrorCode, code)
+                .SetProperty(job => job.LeaseOwner, (string?)null).SetProperty(job => job.LeaseExpiresUtcMs, now + 5000)
+                .SetProperty(job => job.Revision, job => job.Revision + 1), token);
+        if (changed != 1) return false;
+        await AddEventAsync(id, "recovery_pending", code, token);
+        await transaction.CommitAsync(token);
+        return true;
+    }
+
     public async Task<bool> CompleteAsync(string id, string workerId, UpdateToolActivationResult result, CancellationToken token)
     {
         if (!result.Succeeded || result.Version is null || result.Sequence is not > 0
@@ -100,6 +128,9 @@ public sealed class PublishTaskQueue(UpdateAdminDbContext database, TimeProvider
 
     public Task<bool> FailAsync(string id, string workerId, string code, CancellationToken token)
         => FinishAsync(id, workerId, PublishJobState.Failed, code, "failed", token);
+
+    public Task<bool> SupersedeAsync(string id, string workerId, CancellationToken token)
+        => FinishAsync(id, workerId, PublishJobState.Superseded, "publish_superseded", "superseded", token);
 
     public async Task<bool> ReleaseAsync(string id, string workerId, string code, CancellationToken token)
     {
@@ -138,26 +169,6 @@ public sealed class PublishTaskQueue(UpdateAdminDbContext database, TimeProvider
         await AddEventAsync(id, stage, code, token);
         await transaction.CommitAsync(token);
         return true;
-    }
-
-    private async Task FailExhaustedAsync(long now, CancellationToken token)
-    {
-        var expired = await database.ReleaseJobs.AsNoTracking()
-            .Where(job => job.Kind == "publish" && job.State == PublishJobState.Publishing
-                && job.LeaseExpiresUtcMs <= now && job.Attempts >= MaximumAttempts)
-            .Select(job => job.Id).Take(32).ToListAsync(token);
-        foreach (string id in expired)
-        {
-            await using var transaction = await database.Database.BeginTransactionAsync(token);
-            int changed = await database.ReleaseJobs.Where(job => job.Id == id && job.Kind == "publish"
-                    && job.State == PublishJobState.Publishing && job.LeaseExpiresUtcMs <= now && job.Attempts >= MaximumAttempts)
-                .ExecuteUpdateAsync(update => update.SetProperty(job => job.State, PublishJobState.Failed)
-                    .SetProperty(job => job.ErrorCode, "publish_retry_exhausted")
-                    .SetProperty(job => job.LeaseOwner, (string?)null).SetProperty(job => job.LeaseExpiresUtcMs, (long?)null)
-                    .SetProperty(job => job.Revision, job => job.Revision + 1), token);
-            if (changed == 1) await AddEventAsync(id, "failed", "publish_retry_exhausted", token);
-            await transaction.CommitAsync(token);
-        }
     }
 
     private async Task AddEventAsync(string id, string stage, string message, CancellationToken token)

@@ -2,15 +2,29 @@ using System.Text.Json;
 using PortKiller.Updates;
 using PortKiller.UpdateTool;
 
+bool jsonErrors = args.LastOrDefault() == "--json-errors";
 try
 {
-    if (args.Length < 3 || args.Length % 2 != 1) throw new ArgumentException("Usage: verify|activate|inspect|recover|public-check --config file [--root dir --manifest file --package file --expected hash|none]");
-    var flags = Enumerable.Range(0, (args.Length - 1) / 2).ToDictionary(i => args[i * 2 + 1], i => args[i * 2 + 2]);
-    var options = JsonSerializer.Deserialize(File.ReadAllText(flags["--config"]), ProtocolJsonContext.Default.ManifestVerificationOptions)
+    string[] commandArgs = jsonErrors ? args[..^1] : args;
+    if (commandArgs.Length < 3 || commandArgs.Length % 2 != 1) throw new ArgumentException("Invalid command arguments.");
+    string command = commandArgs[0];
+    var flags = new Dictionary<string, string>(StringComparer.Ordinal);
+    for (int index = 1; index < commandArgs.Length; index += 2)
+    {
+        string name = commandArgs[index];
+        if (!name.StartsWith("--", StringComparison.Ordinal) || index + 1 >= commandArgs.Length
+            || !flags.TryAdd(name, commandArgs[index + 1]))
+            throw new ArgumentException("Invalid command arguments.");
+    }
+    if (!flags.TryGetValue("--config", out string? configPath)) throw new ArgumentException("The verification configuration is required.");
+    foreach (string name in flags.Keys)
+        if (name is not ("--config" or "--root" or "--manifest" or "--package" or "--expected"))
+            throw new ArgumentException("An unsupported command option was provided.");
+    var options = JsonSerializer.Deserialize(File.ReadAllText(configPath), ProtocolJsonContext.Default.ManifestVerificationOptions)
         ?? throw new InvalidDataException("验证配置无效。");
     options.Validate();
     object? result;
-    switch (args[0])
+    switch (command)
     {
         case "verify":
             var manifest = UpdateManifest.Verify(ReleaseStore.ReadManifest(flags["--manifest"]), options);
@@ -66,4 +80,36 @@ try
     Console.WriteLine(JsonSerializer.Serialize(result));
     return 0;
 }
-catch (Exception ex) { Console.Error.WriteLine(ex.GetType().Name + ": " + ex.Message); return 1; }
+catch (Exception ex)
+{
+    if (!jsonErrors)
+    {
+        Console.Error.WriteLine(ex.GetType().Name + ": " + ex.Message);
+        return 1;
+    }
+
+    string code = ex switch
+    {
+        ArgumentException or KeyNotFoundException => "invalid_arguments",
+        FileNotFoundException or DirectoryNotFoundException => "file_unavailable",
+        UnauthorizedAccessException => "access_denied",
+        HttpRequestException => "remote_check_failed",
+        InvalidDataException or System.Security.Cryptography.CryptographicException => "validation_failed",
+        InvalidOperationException => "operation_conflict",
+        IOException => "io_failure",
+        _ => "internal_error"
+    };
+    string message = code switch
+    {
+        "invalid_arguments" => "工具参数无效。",
+        "file_unavailable" => "验证所需文件不可用。",
+        "access_denied" => "工具无权访问验证文件。",
+        "remote_check_failed" => "远端更新源验证失败。",
+        "validation_failed" => "签名清单或更新包验证失败。",
+        "operation_conflict" => "更新操作与当前状态冲突。",
+        "io_failure" => "读取或写入更新文件失败。",
+        _ => "更新工具内部错误。"
+    };
+    Console.Out.WriteLine(JsonSerializer.Serialize(new { schema = 1, code, message }));
+    return 1;
+}

@@ -2,6 +2,24 @@ using Microsoft.Extensions.Configuration;
 
 namespace PortKiller.UpdateManagement.Configuration;
 
+public sealed class UpdateToolOptions
+{
+    public string ExecutablePath { get; set; } = "";
+    public string VerificationConfigPath { get; set; } = "";
+    public int TimeoutSeconds { get; set; } = 45;
+    public int MaximumOutputBytes { get; set; } = 65_536;
+
+    public void Validate()
+    {
+        if (string.IsNullOrWhiteSpace(ExecutablePath) || !Path.IsPathFullyQualified(ExecutablePath)
+            || string.IsNullOrWhiteSpace(VerificationConfigPath) || !Path.IsPathFullyQualified(VerificationConfigPath)
+            || TimeoutSeconds is < 1 or > 55 || MaximumOutputBytes is < 1024 or > 1_048_576)
+            throw new InvalidOperationException("Publisher UpdateTool configuration is invalid.");
+        ExecutablePath = Path.GetFullPath(ExecutablePath);
+        VerificationConfigPath = Path.GetFullPath(VerificationConfigPath);
+    }
+}
+
 public sealed class AdminOptions
 {
     public string DataRoot { get; set; } = Path.Combine(

@@ -2,6 +2,7 @@
   <Project Path="src/Modules/PortKiller.UpdateProtocol/PortKiller.UpdateProtocol.csproj" />
   <Folder Name="/tests/">
     <Project Path="tests/PortKiller.UpdateAdmin.Tests/PortKiller.UpdateAdmin.Tests.csproj" />
+    <Project Path="tests/PortKiller.UpdateTool.TestHost/PortKiller.UpdateTool.TestHost.csproj" />
   </Folder>
   <Project Path="src/Modules/PortKiller.UpdateManagement/PortKiller.UpdateManagement.csproj" />
   <Project Path="src/Services/PortKiller.UpdateAdmin.Api/PortKiller.UpdateAdmin.Api.csproj" />

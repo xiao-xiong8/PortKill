@@ -17,6 +17,8 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <ProjectReference Include="../../src/Services/PortKiller.UpdateAdmin.Api/PortKiller.UpdateAdmin.Api.csproj" />
+    <ProjectReference Include="../PortKiller.UpdateTool.TestHost/PortKiller.UpdateTool.TestHost.csproj"
+                      ReferenceOutputAssembly="false" SetConfiguration="Configuration=$(Configuration)" />
     <ProjectReference Include="../../src/Modules/PortKiller.UpdateProtocol/PortKiller.UpdateProtocol.csproj" />
   </ItemGroup>
 

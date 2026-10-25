@@ -1,0 +1,16 @@
+{
+  "phase": "P8-04",
+  "requiredMarkers": [
+    "PASS key lifecycle: old client accepted initial release",
+    "PASS key lifecycle: old client accepted same-key renewal",
+    "PASS key lifecycle: higher-version remediation accepted without downgrade",
+    "PASS key lifecycle: rollback and trust transition rejected",
+    "PASS key lifecycle: old key rejected rotated manifest; new key accepted after coordinated config migration",
+    "PASS first-install boundary: five-file setup archive rejected by update verifier"
+  ],
+  "releaseGates": {
+    "firstInstallAuthenticode": "external-certificate-required",
+    "oldClientKeyMigration": "coordinated-client-config-required",
+    "privateKeyLocation": "windows-signing-environment-only"
+  }
+}

@@ -3,6 +3,7 @@ using PortKiller.UpdateRegression;
 
 try
 {
+    if (args.Contains("--key-lifecycle")) { await KeyLifecycleChecks.Run(); return 0; }
     if (args.Contains("--manual-only")) { await ServerChecks.ManualLatency(); return 0; }
     var checks = new (string Name, Func<Task> Run)[] {
         ("A/B/304、失败恢复、续签缓存与安装租约", ClientChecks.IdentityAndLease),

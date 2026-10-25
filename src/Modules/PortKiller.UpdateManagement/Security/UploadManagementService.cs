@@ -69,8 +69,7 @@ public sealed class UploadManagementService(UpdateAdminDbContext database, Admin
         };
         AdminRuntimeLease.EnsureDataDirectory(options.StagingPath);
         string directory = DirectoryFor(upload);
-        if (OperatingSystem.IsWindows()) Directory.CreateDirectory(directory);
-        else Directory.CreateDirectory(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        AdminRuntimeLease.EnsureSharedDirectory(directory);
         try
         {
             database.UploadSessions.Add(upload); await database.SaveChangesAsync(token); await transaction.CommitAsync(token);

@@ -2,6 +2,7 @@
 set -euo pipefail
 repository="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd -- "$repository"
+bash scripts/checks/test-admin-deployment.sh
 results="$repository/.local/artifacts/admin-tests/linux"
 mkdir -p -- "$results"
 dotnet build PortKill.Server.slnx -c Release --nologo

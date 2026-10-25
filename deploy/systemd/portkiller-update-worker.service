@@ -1,0 +1,41 @@
+[Unit]
+Description=PortKiller update publisher worker
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User=portkiller-update-worker
+Group=portkiller-admin
+SupplementaryGroups=portkiller-publish
+EnvironmentFile=-/etc/portkiller-updates/worker.env
+ExecStart=/opt/portkiller-updates/worker/PortKiller.UpdatePublisher.Worker
+WorkingDirectory=/opt/portkiller-updates/worker
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=30
+TimeoutStopSec=30
+UMask=0007
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+LockPersonality=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/portkiller-updates/admin /srv/portkiller-updates/stable /srv/portkiller-updates/.stable-update-state
+InaccessiblePaths=/var/lib/portkiller-updates/admin/auth-keys
+ReadOnlyPaths=/opt/portkiller-updates/worker /opt/portkiller-updates/tool /etc/portkiller-updates
+LimitNOFILE=8192
+
+[Install]
+WantedBy=multi-user.target
+Alias=portkiller-update-publisher.service

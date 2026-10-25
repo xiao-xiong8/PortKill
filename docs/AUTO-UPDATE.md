@@ -32,15 +32,36 @@ HTTP 不提供传输加密或服务器身份，签名不能阻止持续断网；
 pwsh -File scripts/build/Publish-UpdateServer.ps1 -Runtime linux-x64
 ```
 
-生成 `.local/artifacts/update-server/linux-x64/tool` 和 `notifier`，均为自包含非 AOT 服务端程序，无需服务器安装 SDK。按服务器 CPU 选择 linux-arm64 或 linux-x64。
+生成 `.local/artifacts/update-server/linux-x64/api`、`worker`、`notifier`、`tool` 和 `web`，均为自包含非 AOT 服务端程序，无需服务器安装 SDK。按服务器 CPU 选择 linux-arm64 或 linux-x64。
 
-上传产物目录与含真实公钥的验证配置，在 Ubuntu 上以管理员执行：
+上传完整产物目录与含真实公钥的验证配置，在 Ubuntu 上以管理员执行：
 
 ```bash
-sudo bash deploy/ubuntu/install-update-server.sh updatepublisher /path/to/server-bundle /path/to/verification.json
+sudo bash deploy/ubuntu/install-update-server.sh <existing-ssh-user> \
+  /path/to/server-bundle /path/to/verification.json
 ```
 
-脚本安装 Nginx、只读低权限通知服务和目录权限。工具位于 `/opt/portkiller-updates/tool/PortKiller.UpdateTool`，配置 `/etc/portkiller-updates/verification.json`，静态根目录 `/srv/portkiller-updates/stable`。已有服务在显式安装新 bundle 时先停止，再启用新进程。真实公钥必须与已分发客户端一致。
+脚本安装 Nginx、三个独立的 systemd 服务账号和受限服务单元。API 使用 `portkiller-update-api`，Worker 使用 `portkiller-update-worker`，通知服务使用 `portkiller-update-notifier`；账号均为 `nologin`，程序目录由 root 只读拥有。API 和 Worker 只通过 `portkiller-admin` 组共享 SQLite、WAL/SHM 和上传暂存目录，封存区由 Worker 独占；API 没有封存区或正式目录的写权限，Notifier 只有正式目录读权限。旧 SSH 发布用户仅加入 `portkiller-publish`，不获得管理数据库权限。
+
+工具位于 `/opt/portkiller-updates/tool/PortKiller.UpdateTool`，服务端程序和前端位于 `/opt/portkiller-updates/{api,worker,notifier,web}`，验证配置位于 `/etc/portkiller-updates/verification.json`，SQLite、Data Protection 密钥和非公开封存位于 `/var/lib/portkiller-updates/admin`，静态根目录位于 `/srv/portkiller-updates/stable`。服务单元使用 `ProtectSystem=strict`、`NoNewPrivileges`、私有临时目录、固定回环 API 监听和受限读写路径。已有服务在显式安装新 bundle 时先停止，再启用新进程。真实公钥必须与已分发客户端一致。
+
+本阶段安装的 Nginx 模板先保持旧客户端使用的静态下载和 `/stable/events` 路径；管理网页/API 的 HTTPS 代理和独立管理域名在 P7-03 配置，不能把当前 `8080` 下载入口当作管理登录入口。
+
+首次部署或迁移版本后，先停止 API 与 Worker，再运行维护迁移；服务不会在启动时自动迁移：
+
+```bash
+sudo systemctl stop portkiller-update-api.service portkiller-update-worker.service
+sudo -u portkiller-update-api /bin/sh -c 'set -a; . /etc/portkiller-updates/api.env; set +a; exec /opt/portkiller-updates/api/PortKiller.UpdateAdmin.Api db migrate'
+sudo systemctl start portkiller-update-api.service portkiller-update-worker.service
+```
+
+随后在受控终端初始化首位管理员，密码只通过交互输入：
+
+```bash
+sudo -u portkiller-update-api /bin/sh -c 'set -a; . /etc/portkiller-updates/api.env; set +a; exec /opt/portkiller-updates/api/PortKiller.UpdateAdmin.Api admin init --user <admin>'
+```
+
+升级时先备份 `/var/lib/portkiller-updates/admin`、`/var/lib/portkiller-updates/admin/archive`、`/srv/portkiller-updates/stable`、`/srv/portkiller-updates/.stable-update-state` 和 `/etc/portkiller-updates`，再重复安装脚本和迁移步骤。恢复前必须停止 API、Worker 和 Notifier；恢复后重新执行权限核对、迁移检查和已激活清单/包摘要检查。
 
 通知服务仅监听 `127.0.0.1:8091`，由 Nginx 精确路由 `/stable/events` 代理，关闭缓冲、缓存和压缩，读超时 90 秒。心跳 25 秒，客户端闲置超时 75 秒，单行 4 KiB、单事件 8 KiB。客户端在 404/405/501、401/403 时约 30 分钟后再探测，继续轮询；其他断开指数退避并遵守 Retry-After。
 

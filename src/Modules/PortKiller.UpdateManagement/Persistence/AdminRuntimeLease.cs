@@ -9,6 +9,11 @@ namespace PortKiller.UpdateManagement.Persistence;
 
 public sealed class AdminRuntimeLease : IDisposable
 {
+    private const UnixFileMode SharedDirectoryPermissions =
+        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+        UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+        UnixFileMode.SetGroup;
+
     private readonly FileStream _handle;
     private AdminRuntimeLease(FileStream handle) => _handle = handle;
     public static AdminRuntimeLease Shared(AdminOptions options) => Acquire(options, false);
@@ -39,10 +44,18 @@ public sealed class AdminRuntimeLease : IDisposable
         if (OperatingSystem.IsWindows()) Directory.CreateDirectory(path);
         else
         {
-            Directory.CreateDirectory(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            // API and Worker use a dedicated Unix group for the database and staging tree.
+            Directory.CreateDirectory(path, SharedDirectoryPermissions);
             if ((File.GetUnixFileMode(path) & (UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute)) != 0)
                 throw new AdminFailure("private_storage_required", 400, "管理数据目录不能对其他系统用户开放，请先设置专用账号或组权限。");
         }
+    }
+
+    public static void EnsureSharedDirectory(string path)
+    {
+        RequireLocalPath(path);
+        if (OperatingSystem.IsWindows()) Directory.CreateDirectory(path);
+        else Directory.CreateDirectory(path, SharedDirectoryPermissions);
     }
 
     public static void RequireLocalPath(string path)

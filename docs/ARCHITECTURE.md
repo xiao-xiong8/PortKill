@@ -88,6 +88,8 @@ MainViewModel.* 位于 Shell/Compatibility，仍是已有功能的兼容协调�
 
 服务端交付使用 `scripts/build/Publish-UpdateServer.ps1`，按 `api/`、`worker/`、`notifier/`、`tool/` 和 `web/` 分目录生成 Linux self-contained CoreCLR 产物及静态前端。服务端发布明确关闭 Native AOT；桌面 Native AOT 仍由 Windows 独立入口负责。输出的 `bundle.json` 记录管理后台版本、契约版本、运行时、Git 状态、外部配置要求和文件 SHA-256。DataRoot、Data Protection 密钥、验签配置及发布存储不进入交付包，签名私钥也不进入 Linux。`scripts/checks/Test-AdminBundle.ps1` 在复制到服务器前检查组件、静态入口、私钥/本地配置和 `node_modules` 隔离；实际 Linux 启动、权限和 Nginx 路径由后续 P7 验收。
 
+Ubuntu 安装入口 `deploy/ubuntu/install-update-server.sh` 创建 `portkiller-update-api`、`portkiller-update-worker` 和 `portkiller-update-notifier` 三个 `nologin` 服务账号。API 与 Worker 通过 `portkiller-admin` 组共享 SQLite、WAL/SHM 和上传暂存区；封存区由 Worker 所有，正式目录由 Worker 和受控旧 SSH 发布组写入，API 和 Notifier 只读。`deploy/systemd/` 中的三个服务单元启用 `ProtectSystem=strict`、`NoNewPrivileges`、固定回环监听及受限读写路径。安装或升级不会自动迁移数据库，需停止 API/Worker 后以 API 服务账号执行 `db migrate`；真实 Linux、权限、Nginx、TLS 和公网路径仍需 P7 后续验收。
+
 管理 API 使用 `/api/v1`、camelCase JSON 和字符串枚举；分页统一为 page/pageSize/total/items。错误使用 Problem Details，并附稳定 code 和 correlationId，不返回堆栈或运行目录。`/health/live` 仅提供存活信息，管理接口默认需要认证。
 
 `deploy/contracts/admin-api.v1.json` 由实际 API 导出；前端类型通过 openapi-typescript 生成，构建检查需比较实际契约及已生成类型。新增业务入口随对应功能任务加入契约，不将规划中的接口伪装为已经实现。

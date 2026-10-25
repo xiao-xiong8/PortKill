@@ -1,20 +1,36 @@
 [Unit]
 Description=PortKiller signed release notifications
-After=network.target
+Wants=network-online.target
+After=network-online.target
 
 [Service]
-Type=simple
-User=portkiller-notifier
-Group=www-data
+Type=exec
+User=portkiller-update-notifier
+Group=portkiller-update-notifier
 ExecStart=/opt/portkiller-updates/notifier/PortKiller.UpdateNotifier /srv/portkiller-updates/stable /etc/portkiller-updates/verification.json
+WorkingDirectory=/opt/portkiller-updates/notifier
 Restart=on-failure
 RestartSec=5
+TimeoutStartSec=30
+TimeoutStopSec=30
+UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+LockPersonality=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
 ReadOnlyPaths=/srv/portkiller-updates /etc/portkiller-updates
-WorkingDirectory=/opt/portkiller-updates/notifier
+LimitNOFILE=4096
 
 [Install]
 WantedBy=multi-user.target

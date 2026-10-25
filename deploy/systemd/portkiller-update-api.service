@@ -1,0 +1,40 @@
+[Unit]
+Description=PortKiller update administration API
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User=portkiller-update-api
+Group=portkiller-admin
+EnvironmentFile=-/etc/portkiller-updates/api.env
+ExecStart=/opt/portkiller-updates/api/PortKiller.UpdateAdmin.Api
+WorkingDirectory=/opt/portkiller-updates/api
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=30
+TimeoutStopSec=30
+UMask=0007
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+LockPersonality=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadWritePaths=/var/lib/portkiller-updates/admin
+InaccessiblePaths=/var/lib/portkiller-updates/admin/archive
+ReadOnlyPaths=/opt/portkiller-updates/api /srv/portkiller-updates/stable /etc/portkiller-updates
+LimitNOFILE=8192
+
+[Install]
+WantedBy=multi-user.target
+Alias=portkiller-update-admin-api.service

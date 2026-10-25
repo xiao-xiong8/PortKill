@@ -44,9 +44,11 @@ public static class AdminApiHost
         if (string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
             builder.WebHost.UseUrls("http://127.0.0.1:5081");
         string urls = builder.Configuration["urls"] ?? "http://127.0.0.1:5081";
+        bool dockerBinding = string.Equals(Environment.GetEnvironmentVariable("PORTKILL_DOCKER_MODE"), "true", StringComparison.OrdinalIgnoreCase);
         if (urls.Split(';', StringSplitOptions.RemoveEmptyEntries).Any(address =>
-            !Uri.TryCreate(address, UriKind.Absolute, out var uri) || !uri.IsLoopback
-            || uri.Scheme is not ("http" or "https")))
+            !Uri.TryCreate(address, UriKind.Absolute, out var uri)
+            || uri.Scheme is not ("http" or "https")
+            || (!uri.IsLoopback && !(dockerBinding && uri.Host is "0.0.0.0" or "::"))))
             throw new InvalidOperationException("Management API must bind to loopback; expose it through the configured reverse proxy.");
         builder.Services.AddAuthentication("admin")
             .AddCookie("admin", options =>

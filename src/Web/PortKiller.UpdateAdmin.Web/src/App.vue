@@ -3,6 +3,9 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { ConfigProvider, Switch, theme } from 'ant-design-vue';
 import AuthPanel from './components/AuthPanel.vue';
 import StrongAuthentication from './components/StrongAuthentication.vue';
+import OverviewPage from './pages/OverviewPage.vue';
+import HistoryPage from './pages/HistoryPage.vue';
+import JobPage from './pages/JobPage.vue';
 import { useAuth } from './state/auth';
 import { errorText } from './api/http';
 
@@ -47,7 +50,10 @@ onBeforeUnmount(() => { window.removeEventListener('hashchange', onHash); window
           <AuthPanel v-else-if="!full" :key="session?.currentSessionId ?? 'anonymous'" />
           <template v-else>
             <div class="page-heading"><div><p class="eyebrow">PORTKILL / STABLE</p><h1>{{ title }}</h1><p class="muted">客户端由用户确认下载与安装。</p></div><button @click="refresh">刷新会话</button></div>
-            <section class="surface empty-workspace"><h2>会话已连接</h2><p class="muted">{{ session?.userName }} · {{ session?.roles.join(' / ') }}</p></section>
+            <OverviewPage v-if="selected === 'overview'" />
+            <HistoryPage v-else-if="selected === 'history'" />
+            <JobPage v-else-if="selected === 'job'" :id="location.slice(4)" :key="location" />
+            <section v-else class="surface empty-workspace"><h2>会话已连接</h2><p class="muted">{{ session?.userName }} · {{ session?.roles.join(' / ') }}</p></section>
           </template>
         </main>
         <footer class="page-footer"><span>PortKill Update Administration</span><span>版本发布工作空间</span></footer>

@@ -303,6 +303,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ListJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs/{id}": {
         parameters: {
             query?: never;
@@ -695,6 +711,19 @@ export interface components {
             id: string;
             stage: string;
         };
+        JobListItem: {
+            /** Format: int64 */
+            createdUtcMs: unknown;
+            draftId: string;
+            errorCode: string | null;
+            id: string;
+            kind: string;
+            /** Format: int64 */
+            sequence: unknown;
+            state: components["schemas"]["PublishJobState"];
+            validationState: components["schemas"]["ValidationState"];
+            version: string | null;
+        };
         JobSnapshotResponse: {
             eventId: string;
             id: string;
@@ -725,6 +754,15 @@ export interface components {
         };
         PageResponseOfAuditEvent: {
             items: components["schemas"]["AuditEvent"][];
+            /** Format: int32 */
+            page: unknown;
+            /** Format: int32 */
+            pageSize: unknown;
+            /** Format: int64 */
+            total: unknown;
+        };
+        PageResponseOfJobListItem: {
+            items: components["schemas"]["JobListItem"][];
             /** Format: int32 */
             page: unknown;
             /** Format: int32 */
@@ -1548,6 +1586,57 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ListJobs: {
+        parameters: {
+            query?: {
+                kind?: string;
+                page?: unknown;
+                pageSize?: unknown;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageResponseOfJobListItem"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

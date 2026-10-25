@@ -5,11 +5,21 @@ using Microsoft.Extensions.DependencyInjection;
 using PortKiller.UpdateAdmin.Api;
 using PortKiller.UpdateManagement.Persistence;
 using PortKiller.UpdateManagement.Security;
+using PortKiller.UpdateManagement.Configuration;
+using PortKiller.Updates;
+using System.Text.Json;
 
 // Only the browser test runner launches this executable. Production API has no seed or test endpoint.
 if (args.Length != 1 || !Path.IsPathFullyQualified(args[0])) throw new ArgumentException("Browser evidence directory required.");
 string runtime = args[0]; Directory.CreateDirectory(runtime);
 string root = Path.Combine(runtime, "run-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(root);
+using var signing = RSA.Create(2048);
+var tool = new UpdateToolOptions { ReleaseRoot = Path.Combine(root, "public"), VerificationConfigPath = Path.Combine(root, "verification.json") };
+Directory.CreateDirectory(tool.ReleaseRoot);
+await File.WriteAllTextAsync(tool.VerificationConfigPath, JsonSerializer.Serialize(new ManifestVerificationOptions {
+    ManifestUrl = "http://127.0.0.1:15082/stable/manifest.json", AllowHttp = true, PublicKeyPem = signing.ExportSubjectPublicKeyInfoPem()
+}, ProtocolJsonContext.Default.ManifestVerificationOptions));
 using var key = RSA.Create(2048);
 var request = new CertificateRequest("CN=127.0.0.1", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
 var names = new SubjectAlternativeNameBuilder(); names.AddIpAddress(IPAddress.Loopback); request.CertificateExtensions.Add(names.Build());
@@ -21,6 +31,7 @@ await using var app = AdminApiHost.Create(["--urls", "https://127.0.0.1:15081", 
 {
     builder.WebHost.ConfigureKestrel(options => options.ConfigureHttpsDefaults(https => https.ServerCertificate = certificate));
     builder.Logging.ClearProviders();
+    builder.Services.AddSingleton(tool);
 });
 using (var scope = app.Services.CreateScope())
 {

@@ -6,3 +6,6 @@ public sealed record JobSnapshotResponse(string Id, string Kind, string EventId,
 public sealed record JobEventResponse(string Id, string Stage, string Code, long CreatedUtcMs);
 public sealed record JobEventPageResponse(JobSnapshotResponse Snapshot, bool Reset, string Cursor, bool HasMore,
     IReadOnlyList<JobEventResponse> Events);
+
+public sealed record JobListItem(string Id, string DraftId, string Kind, PublishJobState State,
+    ValidationState ValidationState, string? Version, long? Sequence, long CreatedUtcMs, string? ErrorCode);

@@ -12,6 +12,35 @@ namespace PortKiller.UpdateManagement.Security;
 public sealed class JobEventQuery(UpdateAdminDbContext database, AdminSessionService sessions,
     AdminOptions options, TimeProvider clock)
 {
+    public async Task<PageResponse<JobListItem>> ListAsync(ClaimsPrincipal principal, int page, int pageSize, string? kind, CancellationToken token)
+    {
+        if (page is < 1 or > 10000 || pageSize is < 1 or > 100 || kind is not (null or "validate" or "publish"))
+            throw new AdminFailure("invalid_pagination", 400, "分页或任务类型超出范围。");
+        await database.Database.OpenConnectionAsync(token);
+        await using var sqlite = ((SqliteConnection)database.Database.GetDbConnection()).BeginTransaction(deferred: true);
+        await using var transaction = await database.Database.UseTransactionAsync(sqlite, token);
+        string userId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        string sessionId = principal.FindFirstValue(AdminIdentity.SessionClaim) ?? "";
+        if (!await sessions.IsActiveAsync(sessionId, userId, SessionPhase.Full, token))
+            throw new AdminFailure("authentication_required", 401, "会话已失效。");
+        string[] roles = await database.UserRoles.Where(link => link.UserId == userId)
+            .Join(database.Roles, link => link.RoleId, role => role.Id, (link, role) => role.Name!).ToArrayAsync(token);
+        if (!AdminPermissions.ForRoles(roles).Contains(AdminPermissions.Read))
+            throw new AdminFailure("permission_denied", 403, "当前账号无权读取任务。");
+        bool administrator = roles.Contains("Administrator");
+        var query = database.ReleaseJobs.AsNoTracking()
+            .Where(job => job.Application == "PortKill" && job.Channel == "stable" && (job.Kind == "validate" || job.Kind == "publish") && (kind == null || job.Kind == kind))
+            .Join(database.ReleaseDrafts.AsNoTracking(), job => job.DraftId, draft => draft.Id, (job, draft) => new { job, draft })
+            .Where(row => administrator || row.job.RequestedById == userId || row.draft.OwnerId == userId);
+        long total = await query.LongCountAsync(token);
+        var items = await query.OrderByDescending(row => row.job.CreatedUtcMs).ThenBy(row => row.job.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Select(row => new JobListItem(row.job.Id, row.draft.Id, row.job.Kind, row.job.State, row.draft.ValidationState,
+                row.draft.Version, row.draft.Sequence, row.job.CreatedUtcMs, row.job.ErrorCode ?? row.draft.ValidationErrorCode)).ToArrayAsync(token);
+        await transaction!.CommitAsync(token);
+        return new(items, page, pageSize, total);
+    }
+
     public async Task<JobSnapshotResponse> SnapshotAsync(ClaimsPrincipal principal, string id, CancellationToken token)
         => (await ReadAsync(principal, id, null, 1, token)).Snapshot;
 

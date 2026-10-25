@@ -25,10 +25,10 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await page.getByRole('button', { name: '验证并继续' }).click();
     await expect(page.getByRole('heading', { name: '保存恢复码' })).toBeVisible();
     const recovery = (await page.locator('.recovery-codes').innerText()).trim().split('\n');
-    await expect(page.getByRole('heading', { name: '会话已连接' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: '当前正式版本' })).toHaveCount(0);
     await page.getByLabel('我已安全保存恢复码').check();
     await page.getByRole('button', { name: '已保存，进入工作空间' }).click();
-    await expect(page.getByRole('heading', { name: '会话已连接' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '当前正式版本' })).toBeVisible();
     await page.reload(); await expect(page.locator('.identity')).toHaveText('browser-admin');
     await page.getByRole('button', { name: '退出', exact: true }).click();
     await expect(page.getByRole('heading', { name: '登录发布管理' })).toBeVisible();
@@ -39,7 +39,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await page.getByRole('button', { name: '使用恢复码登录' }).click();
     await page.getByLabel('恢复码', { exact: true }).fill(recovery[0]);
     await page.getByRole('button', { name: '验证并继续' }).click();
-    await expect(page.getByRole('heading', { name: '会话已连接' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '当前正式版本' })).toBeVisible();
     await page.getByRole('button', { name: '再次认证', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('当前密码').fill('Browser-Test-Only!492');
@@ -48,5 +48,13 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await expect(dialog).toHaveCount(0);
     expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key !== 'portkill.theme'))).toEqual([]);
     expect(await page.evaluate(() => Object.keys(sessionStorage))).toEqual([]);
+  });
+  test('overview and paginated history use actual empty server responses', async () => {
+    await expect(page.getByRole('heading', { name: '尚未发布正式版本' })).toBeVisible();
+    await page.getByRole('button', { name: '发布历史', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '暂无任务记录' })).toBeVisible();
+    await page.getByLabel('任务类型').selectOption('publish');
+    await expect(page.getByRole('button', { name: '下一页' })).toBeDisabled();
+    await expect(page.locator('.pagination')).toContainText('共 0 条');
   });
 });

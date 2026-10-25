@@ -7,6 +7,9 @@ public static class JobEventEndpoints
 {
     public static void MapJobEventEndpoints(this WebApplication app)
     {
+        app.MapGet("/api/v1/jobs", async (JobEventQuery query, HttpContext context, int page = 1, int pageSize = 20, string? kind = null)
+            => await query.ListAsync(context.User, page, pageSize, kind, context.RequestAborted))
+            .RequireAuthorization(AdminPermissions.Read).WithName("ListJobs").ProducesProblem(400).ProducesProblem(401).ProducesProblem(403);
         var jobs = app.MapGroup("/api/v1/jobs/{id}").RequireAuthorization(AdminPermissions.Read);
         jobs.MapGet("", async (string id, JobEventQuery query, HttpContext context)
             => await query.SnapshotAsync(context.User, id, context.RequestAborted))

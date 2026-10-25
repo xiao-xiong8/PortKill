@@ -107,7 +107,7 @@ pwsh -File scripts/build/Test-UpdatePipeline.ps1 -VcVarsAllPath C:/path/to/vcvar
 
 该入口包含 UI、真实 AOT 安装与恢复、隔离发布演练、性能检查及 Linux 服务端构建。结果写入 `.local/artifacts/update-validation/`。真实 Linux、Nginx、TLS 和公网部署仍需单独验收；过程记录保存在本地，不随源码分发。
 
-网页发布管理后台由独立 Vue 前端、net10.0 API/Worker 和 SQLite + EF Core 10 业务模块组成。上传、严格验签、产物封存、单次发布确认、原子激活、中断恢复、分发下载验证、当前版本查询及持久管理事件流已实现。Windows 发布脚本提供 `-PrepareOnly`，生成可上传的签名清单与真实 AOT 四文件 ZIP；P4 故障竞争和 P5 产物发布闭环在 Windows 隔离环境验收。前端完整业务页面和生产部署仍待后续阶段完成。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
+网页发布管理后台由独立 Vue 前端、net10.0 API/Worker 和 SQLite + EF Core 10 业务模块组成。上传、严格验签、产物封存、单次发布确认、原子激活、中断恢复、分发下载验证、当前版本查询及持久管理事件流已实现。Windows 发布脚本提供 `-PrepareOnly`，生成可上传的签名清单与真实 AOT 四文件 ZIP；P4 故障竞争、P5 产物发布闭环和 P6 浏览器业务页面已在 Windows 隔离环境验收。Linux/systemd/Nginx/TLS/公网部署仍需专用服务器验收。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
 
 部署按一台现有服务器设计，网页静态文件、API、Worker、Notifier、SQLite 和 Nginx 共用此服务器并各自独立运行；桌面构建和 RSA 签名留在 Windows 本机。使用免费自托管组件，不依赖付费数据库、存储、CI 或签名服务；已有服务器、带宽和域名费用按现有资源计算。自有更新签名不等于 Windows 已信任首装发布者。
 

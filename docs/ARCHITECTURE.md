@@ -88,7 +88,7 @@ MainViewModel.* 位于 Shell/Compatibility，仍是已有功能的兼容协调�
 
 服务端交付使用 `scripts/build/Publish-UpdateServer.ps1`，按 `api/`、`worker/`、`notifier/`、`tool/` 和 `web/` 分目录生成 Linux self-contained CoreCLR 产物及静态前端。服务端发布明确关闭 Native AOT；桌面 Native AOT 仍由 Windows 独立入口负责。输出的 `bundle.json` 记录管理后台版本、契约版本、运行时、Git 状态、外部配置要求和文件 SHA-256。DataRoot、Data Protection 密钥、验签配置及发布存储不进入交付包，签名私钥也不进入 Linux。`scripts/checks/Test-AdminBundle.ps1` 在复制到服务器前检查组件、静态入口、私钥/本地配置和 `node_modules` 隔离；实际 Linux 启动、权限和 Nginx 路径由后续 P7 验收。
 
-Ubuntu 安装入口 `deploy/ubuntu/install-update-server.sh` 创建 `portkiller-update-api`、`portkiller-update-worker` 和 `portkiller-update-notifier` 三个 `nologin` 服务账号。API 与 Worker 通过 `portkiller-admin` 组共享 SQLite、WAL/SHM 和上传暂存区；封存区由 Worker 所有，正式目录由 Worker 和受控旧 SSH 发布组写入，API 和 Notifier 只读。`deploy/systemd/` 中的三个服务单元启用 `ProtectSystem=strict`、`NoNewPrivileges`、固定回环监听及受限读写路径。安装或升级不会自动迁移数据库，需停止 API/Worker 后以 API 服务账号执行 `db migrate`；真实 Linux、权限、Nginx、TLS 和公网路径仍需 P7 后续验收。
+Ubuntu 安装入口 `deploy/ubuntu/install-update-server.sh` 创建 `portkiller-update-api`、`portkiller-update-worker`、`portkiller-update-notifier` 和 `portkiller-update-monitor` 四个 `nologin` 服务账号。API 与 Worker 通过 `portkiller-admin` 组共享 SQLite、WAL/SHM 和上传暂存区；封存区由 Worker 所有，正式目录由 Worker 和受控旧 SSH 发布组写入，API 和 Notifier 只读，Monitor 只读健康接口和目录容量。`deploy/systemd/` 中的服务单元启用 `ProtectSystem=strict`、`NoNewPrivileges`、固定回环监听及受限读写路径。安装或升级不会自动迁移数据库，需停止 API/Worker 后以 API 服务账号执行 `db migrate`；真实 Linux、权限、Nginx、TLS 和公网路径仍需专用服务器验收。
 
 Nginx 的管理和下载 TLS 模板分别位于 `deploy/nginx/portkiller-admin.conf.example` 与 `deploy/nginx/portkiller-download-tls.conf.example`。管理站点代理 `/api/v1/`、流式上传和受认证管理 SSE，API 错误不回退到 SPA；下载站点只提供签名清单、不可变 ZIP、Range 和只读 UpdateNotifier SSE。旧 HTTP 下载入口继续保留，避免用客户端不接受的重定向破坏已有更新源。模板中的域名、证书和私钥路径必须在服务器上替换，不能提交真实值。
 

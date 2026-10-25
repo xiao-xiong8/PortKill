@@ -105,6 +105,55 @@ internal static class ApplicationNameUiChecks
             }
             header.Offset = new Vector(50, 0); await Pump(window);
             Program.Assert(Math.Abs(header.Offset.X - body.Offset.X) < 1, "从表头横向滚动未同步数据行。");
+
+            // 八个业务列都必须是同一套可拖拽像素宽度；调整后表头和虚拟化数据行
+            // 仍要保持同一坐标系。
+            Program.Assert(Math.Abs(MainWindow.ComputeColumnWidth(78, 100, 132, 72, 8192) - 110) < .1,
+                "列宽向右拖拽没有增加宽度。");
+            int layoutVersionBeforeResize = vm.ColumnLayoutVersion;
+            foreach (var (logical, width) in new[] { (3, 280d), (4, 132d), (5, 240d), (6, 168d) })
+            {
+                vm.SetColumnWidth(logical, width);
+                await Pump(window);
+                var headerGrid = window.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "HeaderGrid");
+                var sample = window.GetVisualDescendants().OfType<Border>()
+                    .Where(b => b.Classes.Contains("row") && b.IsVisible).First();
+                var rowGrid = sample.GetVisualDescendants().OfType<Grid>().Single(g => g.ColumnDefinitions.Count == 9);
+                int column = logical switch
+                {
+                    3 => vm.ColIdx3,
+                    4 => vm.ColIdx4,
+                    5 => vm.ColIdx5,
+                    6 => vm.ColIdx6,
+                    _ => throw new InvalidOperationException()
+                };
+                Program.Assert(Math.Abs(headerGrid.ColumnDefinitions[column].ActualWidth - width) < 1
+                    && Math.Abs(rowGrid.ColumnDefinitions[column].ActualWidth - width) < 1,
+                    $"逻辑列 {logical} 的新宽度没有同时应用到表头和数据行："
+                    + $"{headerGrid.ColumnDefinitions[column].ActualWidth}/{rowGrid.ColumnDefinitions[column].ActualWidth}/{width}。");
+            }
+            Program.Assert(vm.ColumnLayoutVersion == layoutVersionBeforeResize,
+                "连续拖动列宽不应重建虚拟化行槽位。");
+            vm.ResetColumnsCommand.Execute(null);
+            await Pump(window);
+
+            // 精简列模式必须重新压紧可见列：隐藏服务分类和本地地址后，
+            // 应用名称、进程名、PID、操作等列连续落位，不能在中间留下零宽镜像列。
+            vm.ToggleColumnMode();
+            await Pump(window);
+            var compactHeader = window.GetVisualDescendants().OfType<Grid>().Single(g => g.Name == "HeaderGrid");
+            AssertContiguousVisibleColumns(compactHeader, "精简模式表头");
+            var compactRow = window.GetVisualDescendants().OfType<Border>()
+                .Where(b => b.Classes.Contains("row") && b.IsVisible).First();
+            var compactRowGrid = compactRow.GetVisualDescendants().OfType<Grid>()
+                .Single(g => g.ColumnDefinitions.Count == 9);
+            AssertContiguousVisibleColumns(compactRowGrid, "精简模式数据行");
+            Program.Assert(compactHeader.ColumnDefinitions[7].ActualWidth < 0.1
+                && compactHeader.ColumnDefinitions[8].ActualWidth < 0.1,
+                "精简模式隐藏列没有收敛到表格尾部。");
+            vm.ToggleColumnMode();
+            await Pump(window);
+
             foreach (double font in new[] { 11.0, 12.0, 14.0, 16.0 })
             {
                 foreach (var pair in TypographyService.Compute(font, Math.Min(14, font), true)) app.Resources[pair.Key] = pair.Value;
@@ -181,6 +230,19 @@ internal static class ApplicationNameUiChecks
             foreach (var pair in typographyBefore) app.Resources[pair.Key] = pair.Value;
         }
     }
+
+    private static void AssertContiguousVisibleColumns(Grid grid, string label)
+    {
+        var positions = grid.Children
+            .Where(c => c.IsEffectivelyVisible && Grid.GetColumn(c) >= 1)
+            .Select(Grid.GetColumn)
+            .Distinct()
+            .OrderBy(x => x)
+            .ToArray();
+        Program.Assert(positions.Length > 0 && positions.SequenceEqual(Enumerable.Range(1, positions.Length)),
+            $"{label}存在可见列空洞：{string.Join(',', positions)}。");
+    }
+
     private static async Task QueryIntentsSurviveMetadataUpdates()
     {
         using var provider = new FakeProvider();

@@ -9,9 +9,10 @@ internal static class ColumnSettingsMigrator
 {
     internal const int Count = 8;
     internal const double MaximumWidth = 8192;
-    internal static readonly double[] DefaultWidths = { 96, 132, 132, 0, 78, 180, 132, 144 };
+    // All business columns use pixel widths so every header can be resized.
+    internal static readonly double[] DefaultWidths = { 96, 132, 132, 220, 78, 180, 132, 144 };
     internal static readonly int[] DefaultOrder = { 0, 1, 2, 7, 3, 4, 5, 6 };
-    internal const string Widths = "96,132,132,0,78,180,132,144";
+    internal const string Widths = "96,132,132,220,78,180,132,144";
     internal const string Order = "0,1,2,7,3,4,5,6";
     internal const string Visible = "True,True,True,True,True,True,True,True";
 
@@ -21,7 +22,7 @@ internal static class ColumnSettingsMigrator
         var widths = (double[])DefaultWidths.Clone();
         for (int i = 0; i < Math.Min(sourceWidths.Length, Count); i++)
             if (double.TryParse(sourceWidths[i], NumberStyles.Float, CultureInfo.InvariantCulture, out double value)
-                && double.IsFinite(value) && value >= 0 && value <= MaximumWidth && (i == 3 || value > 0)) widths[i] = value;
+                && double.IsFinite(value) && value > 0 && value <= MaximumWidth) widths[i] = value;
         settings.ColWidths = string.Join(',', widths.Select(x => x.ToString(CultureInfo.InvariantCulture)));
 
         var order = (settings.ColOrder ?? "").Split(',')

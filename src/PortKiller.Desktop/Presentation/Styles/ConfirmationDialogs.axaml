@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:PortKiller.Presentation.Controls">
     <Styles.Resources>
         <ResourceDictionary>
             <ResourceDictionary.ThemeDictionaries>
@@ -46,24 +47,22 @@
                 <Setter Property="BorderThickness" Value="2" />
                 <Setter Property="BorderBrush" Value="{DynamicResource DialogOutline}" />
                 <Setter Property="Background" Value="{DynamicResource DialogSurface}" />
-                <Setter Property="ClipToBounds" Value="False" />
+                <!-- 只有一个圆角表面；在现有 ContentPresenter 上裁剪内容，
+                     保留完整圆弧和外部阴影，不额外叠加裁剪 Border 或描边层。 -->
+                <Setter Property="UseLayoutRounding" Value="True" />
                 <Setter Property="Template">
                     <ControlTemplate>
-                        <Grid>
-                            <Border CornerRadius="{TemplateBinding CornerRadius}"
-                                    Background="{TemplateBinding Background}" BoxShadow="{DynamicResource DialogShadow}"
-                                    IsHitTestVisible="False" />
-                            <!-- 内容沿描边内沿裁剪，矩形标题/底栏不会覆盖外圆角。 -->
-                            <Border x:Name="DialogClip" Margin="2" CornerRadius="10" ClipToBounds="True"
-                                    Background="{TemplateBinding Background}">
-                                <ContentPresenter Name="PART_ContentPresenter"
-                                                  Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
-                                                  HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
-                            </Border>
-                            <Border x:Name="DialogOutlineLayer" CornerRadius="{TemplateBinding CornerRadius}"
-                                    BorderThickness="{TemplateBinding BorderThickness}" BorderBrush="{TemplateBinding BorderBrush}"
-                                    UseLayoutRounding="False" IsHitTestVisible="False" />
-                        </Grid>
+                        <controls:DialogSurfaceBorder x:Name="DialogSurface"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                BoxShadow="{DynamicResource DialogShadow}"
+                                UseLayoutRounding="True">
+                            <ContentPresenter Name="PART_ContentPresenter"
+                                              Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
+                        </controls:DialogSurfaceBorder>
                     </ControlTemplate>
                 </Setter>
             </ControlTheme>

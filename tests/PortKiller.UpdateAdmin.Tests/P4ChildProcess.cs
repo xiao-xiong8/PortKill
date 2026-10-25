@@ -23,7 +23,7 @@ internal sealed class P4ChildProcess : IAsyncDisposable
             "--Logging:LogLevel:Default", "Warning"]);
     }
 
-    public static P4ChildProcess Start(string executable, IEnumerable<string> arguments)
+    public static P4ChildProcess Start(string executable, IEnumerable<string> arguments, IReadOnlyDictionary<string, string>? environment = null)
     {
         var start = new ProcessStartInfo(executable)
         { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
@@ -32,6 +32,7 @@ internal sealed class P4ChildProcess : IAsyncDisposable
         foreach (string name in OperatingSystem.IsWindows() ? new[] { "SYSTEMROOT", "WINDIR", "TEMP", "TMP" } : new[] { "TMPDIR" })
             if (Environment.GetEnvironmentVariable(name) is { } value) start.Environment[name] = value;
         foreach (string value in arguments) start.ArgumentList.Add(value);
+        if (environment != null) foreach (var item in environment) start.Environment[item.Key] = item.Value;
         return new(Process.Start(start) ?? throw new InvalidOperationException("Test child did not start."));
     }
 

@@ -1,6 +1,6 @@
 # 自动更新实现与操作
 
-2026-10-24。项目依赖与目录职责见 [架构说明](ARCHITECTURE.md)。新增能力需要部署通知服务并发布新客户端，代码完成不等于线上已经生效。内部实施计划及历史验证记录保存在本地 `.local/docs/`，不随源码分发。
+2026-10-25。项目依赖与目录职责见 [架构说明](ARCHITECTURE.md)。新增能力需要部署通知服务并发布新客户端，代码完成不等于线上已经生效。内部实施计划及历史验证记录保存在本地 `.local/docs/`，不随源码分发。
 
 ## 客户端流程
 
@@ -73,7 +73,7 @@ pwsh -File scripts/release/Publish-Update.ps1 -Version 0.2.0 `
   -ReleaseNotesPath C:/release/notes.txt -VcVarsAllPath C:/path/to/vcvarsall.bat
 ```
 
-SSH 主机和公网源独立配置。旧 ServerIp/HttpPort 兼容模式继续生成显式 HTTP 配置。不要将示例域名直接用于发布。构建前校验公私钥配对。每次发布独立 ReleaseId 目录，包含原始签名清单、四文件更新 ZIP、五文件首装 ZIP（含 update-settings）、发布记录和回执；记录 Git 提交、脏状态、公钥指纹、版本、序号和摘要。预构建 CI 产物可用 `-PreparedPublishDirectory`，仍复核 EXE 版本、四文件结构、长度和摘要。
+SSH 主机和公网源独立配置，可用 `-SshConfigPath C:/private/publisher-ssh.conf` 为 ssh/scp 选择专用客户端配置；主机密钥应提前核对并写入可信 known_hosts。旧 ServerIp/HttpPort 兼容模式继续生成显式 HTTP 配置。不要将示例域名直接用于发布。构建前校验公私钥配对。每次发布独立 ReleaseId 目录，包含原始签名清单、四文件更新 ZIP、五文件首装 ZIP（含 update-settings）、发布记录和回执；记录 Git 提交、脏状态、公钥指纹、版本、序号和摘要。预构建 CI 产物可用 `-PreparedPublishDirectory`，仍复核 EXE 版本、四文件结构、长度和摘要。
 
 本地排他锁保护发布和序号。服务端工具持排他锁，校验预期当前 manifest 摘要（CAS），拒绝序号/版本倒退及同版本不同 ZIP；已存在同摘要版本包可复用，不同摘要拒绝覆盖。包先公开，清单原子切换是提交点。事务和回执在静态目录之外；提交后丢失回执可从签名清单重建。
 
@@ -81,9 +81,9 @@ SSH 主机和公网源独立配置。旧 ServerIp/HttpPort 兼容模式继续生
 pwsh -File scripts/release/Publish-Update.ps1 -Resume <ReleaseId> -SshUser updatepublisher -ServerIp updates.example.com
 ```
 
-恢复同一 ReleaseId 不重新编译、分配序号或签名，先核对保留的两个摘要。公网检测失败时保留 ManifestActivated 状态；恢复重新核对激活结果和公网，不换回旧清单。全量公网检测包括清单签名与期望摘要、整包 hash/长度/EXE 版本及 Range 的首字节和范围。过期产物不能直接恢复，应续签或创建新发布。
+恢复同一 ReleaseId 不重新编译、分配序号或签名，先核对保留的两个摘要，再调用服务端 `recover` 读取提交事实并修复回执。原清单已经生效时不重复上传或激活，只重新检查下载；网站或其他 CLI 已发布更新版本时，将旧记录标记为 Superseded 并拒绝恢复。公网检测失败时保留 ManifestActivated 状态。全量公网检测包括清单签名与期望摘要、整包 hash/长度/EXE 版本及 Range 的首字节和范围。过期产物不能直接恢复，应续签或创建新发布。
 
-同版本续签通过 `-Version <原版本> -ResignRelease <原ReleaseId>`，其他地址、密钥等参数与新发布一致。复用原 ZIP，只更新序号和有效期并签名。`Renew-UpdateManifest.ps1` 也可单独生成原签名有效、更高序号的新清单。通知服务无需管理 HTTP API，激活始终通过 SSH 工具。
+同版本续签通过 `-Version <原版本> -ResignRelease <原ReleaseId>`，其他地址、密钥等参数与新发布一致。复用原 ZIP，只更新序号和有效期并签名；增加 `-PrepareOnly` 可制作待网站上传的续签产物。`Renew-UpdateManifest.ps1` 也可单独生成原签名有效、更高序号的新清单。网站由 Worker 调用同一发布工具，旧入口通过 SSH 调用；两者共用服务端提交锁和 CAS。只读通知服务不负责管理或签名。
 
 工具命令：`verify`、`inspect`、`activate`、`recover`、`public-check`，参数帮助运行不带参数查看。`public-check` JSON 输出 Warning（少于14天）与 Critical（少于7天），签名/网络/摘要错误返回非零；运维监控应按 Critical 字段升级处理。
 

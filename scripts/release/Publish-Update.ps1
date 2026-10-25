@@ -9,20 +9,23 @@ param(
     [string]$SigningKeyPath, [string]$PublicKeyPath, [string]$ReleaseNotesPath,
     [string]$VcVarsAllPath, [string]$PreparedPublishDirectory,
     [string]$LocalRoot, [switch]$AllowDirty, [string]$ResignRelease,
-    [switch]$PrepareOnly
+    [switch]$PrepareOnly, [string]$SshConfigPath
 )
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
-if ($PrepareOnly -and ($LocalRoot -or $SshUser -or $PSBoundParameters.ContainsKey('ServerIp') -or $PSBoundParameters.ContainsKey('SshPort'))) {
+if ($PrepareOnly -and ($LocalRoot -or $SshUser -or $SshConfigPath -or $PSBoundParameters.ContainsKey('ServerIp') -or $PSBoundParameters.ContainsKey('SshPort'))) {
     throw 'PrepareOnly 仅制作本地签名产物，不能同时指定 SSH 或 LocalRoot 交付参数。'
 }
 if ($PrepareOnly -and -not $Resume -and -not $PublicBaseUrl) { throw 'PrepareOnly 需要明确指定 PublicBaseUrl，不从 SSH 主机推断更新源。' }
+$sshClientArguments = @()
+if ($SshConfigPath) { $sshClientArguments = @('-F', (Resolve-Path -LiteralPath $SshConfigPath).Path) }
 $releaseRoot = Join-Path $projectRoot '.local/artifacts/releases'
 [IO.Directory]::CreateDirectory($releaseRoot) | Out-Null
 $publisherLock = [IO.FileStream]::new((Join-Path $releaseRoot '.publisher.lock'), [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
 $sequenceLock = $null
 $explicitVersion = [bool]$Version
+function Normalized([version]$v) { return [version]::new($v.Major,$v.Minor,[Math]::Max(0,$v.Build),[Math]::Max(0,$v.Revision)) }
 function Save-Record {
     $temporary = $recordPath + '.tmp'
     [IO.File]::WriteAllText($temporary, ($record | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
@@ -37,7 +40,7 @@ function Invoke-Server([string[]]$Arguments) {
     if ($PrepareOnly) { throw 'PrepareOnly 禁止执行服务端命令。' }
     if ($LocalRoot) { return Invoke-Tool $Arguments }
     # Remote paths are fixed; dynamic identifiers/digests are validated before use.
-    $output = & ssh -p $SshPort $target ("/opt/portkiller-updates/tool/PortKiller.UpdateTool " + ($Arguments -join ' '))
+    $output = & ssh @sshClientArguments -p $SshPort $target ("/opt/portkiller-updates/tool/PortKiller.UpdateTool " + ($Arguments -join ' '))
     if ($LASTEXITCODE -ne 0) { throw '服务端操作失败；使用同一 ReleaseId 和 -Resume 恢复。' }
     return ($output -join "`n")
 }
@@ -53,6 +56,7 @@ try {
         $record = Get-Content -LiteralPath $recordPath -Raw | ConvertFrom-Json
         $preparedRecord = $record.PSObject.Properties['Mode'] -and $record.Mode -eq 'PrepareOnly'
         if ([bool]$PrepareOnly -ne [bool]$preparedRecord) { throw '准备记录只能使用 -PrepareOnly -Resume 复核；原发布记录保持原交付模式。' }
+        if ($record.Phase -eq 'Superseded') { throw '本次发布已被更新的正式清单取代，不能恢复旧版本。' }
         if ($record.Phase -notin @('Verified','Staged','ManifestActivated','PublicVerified','Completed')) { throw '本次尚未完成签名验证，请创建新记录。' }
         $Version = $record.Version; $PublicBaseUrl = [uri]$record.PublicBaseUrl; $AllowHttp = $record.AllowHttp
     } else {
@@ -84,7 +88,6 @@ try {
         $current = [version]$project.SelectSingleNode('/Project/PropertyGroup/Version').InnerText
         if (-not $Version) { $Version = "$($current.Major).$($current.Minor).$([Math]::Max(0,$current.Build)+1)" }
         if ($Version -notmatch '^\d+\.\d+(\.\d+){0,2}$') { throw '版本格式错误。' }
-        function Normalized([version]$v) { return [version]::new($v.Major,$v.Minor,[Math]::Max(0,$v.Build),[Math]::Max(0,$v.Revision)) }
         if (-not $ResignRelease -and (Normalized ([version]$Version)) -le (Normalized $current)) { throw "版本必须高于项目版本 $current。" }
         $releaseId = "$([DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmss'))-$([guid]::NewGuid().ToString('N').Substring(0,8))"
         $releaseDirectory = Join-Path $releaseRoot $releaseId
@@ -169,18 +172,32 @@ try {
         Write-Output "准备验证完成：$($record.ReleaseId)；网站上传文件：$manifest 和 $package；记录：$recordPath"
         return
     }
-    if ($LocalRoot) { $remoteManifest=$manifest; $remotePackage=$package } else {
-        $stage='/srv/portkiller-updates/.staging/'+$record.ReleaseId
-        & ssh -p $SshPort $target "mkdir -p -m 700 $stage"
-        if ($LASTEXITCODE -ne 0) { throw '创建暂存目录失败。' }
-        & scp -P $SshPort -- $manifest $package "${target}:$stage/"
-        if ($LASTEXITCODE -ne 0) { throw '上传失败；使用同一 ReleaseId 恢复。' }
-        $remoteManifest="$stage/manifest.json"; $remotePackage="$stage/$packageName"
+    $alreadyActivated = $false
+    if ($Resume) {
+        $currentReceipt = (Invoke-Server @('recover','--root',$serverRoot,'--config',$serverConfig)) | ConvertFrom-Json
+        if ($currentReceipt -and $currentReceipt.ManifestSha256 -eq $record.ManifestSha256) {
+            $alreadyActivated = $true; $record.Phase='ManifestActivated'; Save-Record
+            [IO.File]::WriteAllText((Join-Path $releaseDirectory 'server-receipt.json'), ($currentReceipt | ConvertTo-Json -Depth 5))
+        }
+        elseif ($currentReceipt -and [long]$currentReceipt.Sequence -gt [long]$record.Sequence -and (Normalized ([version]$currentReceipt.Version)) -ge (Normalized ([version]$record.Version))) {
+            $record.Phase='Superseded'; Save-Record
+            throw '本次发布已被更新的正式清单取代，不能恢复旧版本。'
+        }
     }
-    $record.Phase='Staged'; Save-Record
-    $receipt=Invoke-Server @('activate','--root',$serverRoot,'--config',$serverConfig,'--manifest',$remoteManifest,'--package',$remotePackage,'--expected',$record.Expected)
-    [IO.File]::WriteAllText((Join-Path $releaseDirectory 'server-receipt.json'),$receipt)
-    $record.Phase='ManifestActivated'; Save-Record
+    if (-not $alreadyActivated) {
+        if ($LocalRoot) { $remoteManifest=$manifest; $remotePackage=$package } else {
+            $stage='/srv/portkiller-updates/.staging/'+$record.ReleaseId
+            & ssh @sshClientArguments -p $SshPort $target "mkdir -p -m 700 $stage"
+            if ($LASTEXITCODE -ne 0) { throw '创建暂存目录失败。' }
+            & scp @sshClientArguments -P $SshPort -- $manifest $package "${target}:$stage/"
+            if ($LASTEXITCODE -ne 0) { throw '上传失败；使用同一 ReleaseId 恢复。' }
+            $remoteManifest="$stage/manifest.json"; $remotePackage="$stage/$packageName"
+        }
+        $record.Phase='Staged'; Save-Record
+        $receipt=Invoke-Server @('activate','--root',$serverRoot,'--config',$serverConfig,'--manifest',$remoteManifest,'--package',$remotePackage,'--expected',$record.Expected)
+        [IO.File]::WriteAllText((Join-Path $releaseDirectory 'server-receipt.json'),$receipt)
+        $record.Phase='ManifestActivated'; Save-Record
+    }
     Invoke-Tool @('public-check','--config',$config,'--expected',$record.ManifestSha256)|Out-Null
     $record.Phase='PublicVerified'; Save-Record
     $record.Phase='Completed'; Save-Record

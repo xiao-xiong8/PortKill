@@ -17,10 +17,11 @@ internal sealed class PreparationFixture : IAsyncDisposable
     public string Fingerprint { get; }
     public string NetworkGuard => Path.Combine(Root, "unexpected-network.txt");
     public string RecordsRoot => Path.Combine(Repository, ".local", "artifacts", "releases");
-    public PreparationFixture()
+    public PreparationFixture(string? signingKey = null)
     {
         Directory.CreateDirectory(Root);
         using var key = RSA.Create(2048);
+        if (signingKey != null) key.ImportFromPem(signingKey);
         File.WriteAllText(PrivateKey, key.ExportRSAPrivateKeyPem()); File.WriteAllText(PublicKey, key.ExportSubjectPublicKeyInfoPem());
         Fingerprint = Convert.ToHexString(SHA256.HashData(key.ExportSubjectPublicKeyInfo()));
     }
@@ -29,8 +30,9 @@ internal sealed class PreparationFixture : IAsyncDisposable
         "-PublicKeyPath", PublicKey, "-PublicBaseUrl", source, "-ReleaseNotesPath",
         Path.Combine(Repository, "deploy", "examples", "release-notes.txt"), "-AllowDirty"];
 
-    public async Task<(int Code, string Text)> RunAsync(string[] arguments, bool networkGuard = true)
+    public async Task<(int Code, string Text)> RunAsync(string[] arguments, bool networkGuard = true, string? sshConfig = null)
     {
+        if (sshConfig != null) arguments = [.. arguments, "-SshConfigPath", sshConfig];
         string argumentsFile = Path.Combine(Root, Guid.NewGuid().ToString("N") + ".json");
         await File.WriteAllTextAsync(argumentsFile, JsonSerializer.Serialize(arguments));
         string wrapper = Path.ChangeExtension(argumentsFile, ".ps1");
@@ -57,7 +59,8 @@ internal sealed class PreparationFixture : IAsyncDisposable
             & $env:PORTKILL_RELEASE_TEST_SCRIPT @p5Bound
             """);
         var start = new ProcessStartInfo("pwsh")
-        { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, WorkingDirectory = Repository };
+        { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8, WorkingDirectory = Repository };
         start.ArgumentList.Add("-NoProfile"); start.ArgumentList.Add("-File"); start.ArgumentList.Add(wrapper);
         start.Environment["PORTKILL_RELEASE_TEST_ARGUMENTS"] = argumentsFile;
         start.Environment["PORTKILL_RELEASE_TEST_SCRIPT"] = Path.Combine(Repository, "scripts", "release", "Publish-Update.ps1");

@@ -17,8 +17,9 @@ internal sealed class PublishFixture : IAsyncDisposable
     private readonly RSA _key = RSA.Create(2048);
     public byte[] Package { get; private set; } = [];
     public string Version { get; private set; } = "";
+    internal string ExportTestSigningKey() => _key.ExportRSAPrivateKeyPem();
 
-    public static async Task<PublishFixture> StartAsync(string? manifestUrl = null, bool realHttp = false)
+    public static async Task<PublishFixture> StartAsync(string? manifestUrl = null, bool realHttp = false, string? preparedDirectory = null)
     {
         var fixture = new PublishFixture();
         fixture.App = await TestApplication.StartAsync(services => services.AddSingleton(fixture.Options), realHttp);
@@ -32,13 +33,15 @@ internal sealed class PublishFixture : IAsyncDisposable
             AllowHttp = manifestUrl?.StartsWith("http:", StringComparison.Ordinal) == true,
             PublicKeyPem = fixture._key.ExportSubjectPublicKeyInfoPem()
         }, ProtocolJsonContext.Default.ManifestVerificationOptions));
-        fixture.Version = UpdateManifest.ParseVersion(System.Diagnostics.FileVersionInfo.GetVersionInfo(FindTool()).FileVersion!).ToString();
+        fixture.Version = UpdateManifest.ParseVersion(System.Diagnostics.FileVersionInfo.GetVersionInfo(
+            preparedDirectory == null ? FindTool() : Path.Combine(preparedDirectory, "PortKiller.exe")).FileVersion!).ToString();
         using var output = new MemoryStream();
         using (var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
             foreach (string name in ReleasePackage.Files)
             {
                 using Stream target = zip.CreateEntry(name).Open();
-                if (name == "PortKiller.exe") using (var input = File.OpenRead(FindTool())) input.CopyTo(target);
+                if (preparedDirectory != null) using (var input = File.OpenRead(Path.Combine(preparedDirectory, name))) input.CopyTo(target);
+                else if (name == "PortKiller.exe") using (var input = File.OpenRead(FindTool())) input.CopyTo(target);
                 else target.Write([1, 2, 3, 4]);
             }
         fixture.Package = output.ToArray();
@@ -67,13 +70,14 @@ internal sealed class PublishFixture : IAsyncDisposable
         }, ProtocolJsonContext.Default.SignedUpdate);
     }
 
-    public async Task<(string DraftId, string JobId)> UploadAsync(byte[] manifest, bool executeValidation = true)
+    public async Task<(string DraftId, string JobId)> UploadAsync(byte[] manifest, bool executeValidation = true, byte[]? package = null)
     {
-        using var created = await App.Client.PostAsJsonAsync("/api/v1/uploads/", new { ManifestBytes = manifest.Length, PackageBytes = Package.Length });
+        byte[] uploadPackage = package ?? Package;
+        using var created = await App.Client.PostAsJsonAsync("/api/v1/uploads/", new { ManifestBytes = manifest.Length, PackageBytes = uploadPackage.Length });
         created.EnsureSuccessStatusCode();
         string id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString()!;
         using (var content = Binary(manifest)) (await App.Client.PutAsync($"/api/v1/uploads/{id}/manifest", content)).EnsureSuccessStatusCode();
-        using (var content = Binary(Package)) (await App.Client.PutAsync($"/api/v1/uploads/{id}/package", content)).EnsureSuccessStatusCode();
+        using (var content = Binary(uploadPackage)) (await App.Client.PutAsync($"/api/v1/uploads/{id}/package", content)).EnsureSuccessStatusCode();
         using var complete = await App.Client.PostAsJsonAsync($"/api/v1/uploads/{id}/complete", new { });
         complete.EnsureSuccessStatusCode();
         var value = await complete.Content.ReadFromJsonAsync<JsonElement>();

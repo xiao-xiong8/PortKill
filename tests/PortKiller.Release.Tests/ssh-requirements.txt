@@ -1,0 +1,7 @@
+# Isolated loopback acceptance tool only; not a server/runtime dependency.
+# AsyncSSH is EPL-2.0 OR GPL-2.0-or-later: https://pypi.org/project/asyncssh/
+asyncssh==2.24.1
+cryptography==50.0.2
+cffi==2.1.1
+pycparser==3.12
+typing_extensions==4.16.0

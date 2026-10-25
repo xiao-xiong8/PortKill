@@ -22,7 +22,7 @@ internal sealed class PublicDistributionFixture : IAsyncDisposable
     public TaskCompletionSource Continue { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public TaskCompletionSource Disconnected { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    public static async Task<PublicDistributionFixture> StartAsync(bool realHttp = false)
+    public static async Task<PublicDistributionFixture> StartAsync(bool realHttp = false, string? preparedDirectory = null)
     {
         var fixture = new PublicDistributionFixture();
         var builder = WebApplication.CreateBuilder();
@@ -34,7 +34,7 @@ internal sealed class PublicDistributionFixture : IAsyncDisposable
         fixture._server.MapGet("/redirect-target", () => { Interlocked.Increment(ref fixture.RedirectHits); return Results.Ok(); });
         await fixture._server.StartAsync();
         string address = fixture._server.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
-        fixture.Publication = await PublishFixture.StartAsync(address + "/stable/manifest.json", realHttp);
+        fixture.Publication = await PublishFixture.StartAsync(address + "/stable/manifest.json", realHttp, preparedDirectory);
         return fixture;
     }
 

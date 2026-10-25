@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <InternalsVisibleTo Include="PortKiller.Release.Tests" />
     <ProjectReference Include="../../src/Services/PortKiller.UpdateAdmin.Api/PortKiller.UpdateAdmin.Api.csproj" />
     <ProjectReference Include="../../src/Services/PortKiller.UpdatePublisher.Worker/PortKiller.UpdatePublisher.Worker.csproj"
                       ReferenceOutputAssembly="false" SetConfiguration="Configuration=$(Configuration)" />

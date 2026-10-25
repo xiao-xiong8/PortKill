@@ -86,6 +86,8 @@ MainViewModel.* 位于 Shell/Compatibility，仍是已有功能的兼容协调�
 
 部署按一台现有服务器设计：Nginx 提供管理网页和更新静态文件，API、Worker 与只读 Notifier 作为独立本机进程运行，SQLite 保存在本机磁盘。Windows 本机执行桌面 AOT 构建和自有 RSA 签名，私钥留在 Windows；本地备份可另存 Windows 机器。软件和发布流程使用免费、自托管组件，费用边界为已有服务器、带宽及域名；商业代码签名证书不是更新验签链的依赖，自有更新签名也不代表 Windows 已信任首装发布者。
 
+服务端交付使用 `scripts/build/Publish-UpdateServer.ps1`，按 `api/`、`worker/`、`notifier/`、`tool/` 和 `web/` 分目录生成 Linux self-contained CoreCLR 产物及静态前端。服务端发布明确关闭 Native AOT；桌面 Native AOT 仍由 Windows 独立入口负责。输出的 `bundle.json` 记录管理后台版本、契约版本、运行时、Git 状态、外部配置要求和文件 SHA-256。DataRoot、Data Protection 密钥、验签配置及发布存储不进入交付包，签名私钥也不进入 Linux。`scripts/checks/Test-AdminBundle.ps1` 在复制到服务器前检查组件、静态入口、私钥/本地配置和 `node_modules` 隔离；实际 Linux 启动、权限和 Nginx 路径由后续 P7 验收。
+
 管理 API 使用 `/api/v1`、camelCase JSON 和字符串枚举；分页统一为 page/pageSize/total/items。错误使用 Problem Details，并附稳定 code 和 correlationId，不返回堆栈或运行目录。`/health/live` 仅提供存活信息，管理接口默认需要认证。
 
 `deploy/contracts/admin-api.v1.json` 由实际 API 导出；前端类型通过 openapi-typescript 生成，构建检查需比较实际契约及已生成类型。新增业务入口随对应功能任务加入契约，不将规划中的接口伪装为已经实现。

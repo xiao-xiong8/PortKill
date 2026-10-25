@@ -1,0 +1,49 @@
+{
+  "phase": "P8-03",
+  "requiredMarkers": [
+    {
+      "id": "client-discovery-and-continuous-versions",
+      "requirement": "客户端发现更新、连续版本、缓存身份和通知恢复保持兼容",
+      "markers": [
+        "PASS A/B/304、失败恢复、续签缓存与安装租约",
+        "PASS 忙时合并、自动开关与有界检查意图",
+        "PASS 暂停不被通知恢复，继续后处理待检查版本",
+        "PASS SSE 畸形/断开重连及 404 轮询降级",
+        "PASS 更新签名下载、缓存、ETag 与并发去重",
+        "PASS 更新先检测后下载、进度与签名说明"
+      ]
+    },
+    {
+      "id": "pause-resume-and-range",
+      "requirement": "下载暂停、续传、Range 回退及失败清理保持兼容",
+      "markers": [
+        "PASS 发布各提交点故障恢复、CAS 和防倒退",
+        "PASS 后台执行边界与 Retry-After",
+        "PASS 更新暂停续传、Range 回退与并发下载",
+        "PASS 断网有限重试与恢复"
+      ]
+    },
+    {
+      "id": "install-confirmation-and-recovery",
+      "requirement": "安装确认、租约、失败恢复和提交点恢复保持兼容",
+      "markers": [
+        "PASS 更新窗口全部状态、深浅主题、关闭按钮首帧稳定、长内容、重启确认与窗口生命周期",
+        "PASS 更新安装失败、中断恢复与安装锁",
+        "PASS AOT success:",
+        "PASS AOT unhealthy:",
+        "PASS AOT health-timeout:",
+        "PASS AOT storage-failure:",
+        "PASS AOT interrupted:",
+        "PASS AOT locked-file:",
+        "PASS AOT denied-directory:"
+      ]
+    },
+    {
+      "id": "aot-artifact-and-publisher",
+      "requirement": "真实 Native AOT 产物、签名准备和既有发布入口保持兼容",
+      "markers": [
+        "PASS publisher: key mismatch, first install, public failure, immutable resume, repeated resume, renewal, full download and Range"
+      ]
+    }
+  ]
+}

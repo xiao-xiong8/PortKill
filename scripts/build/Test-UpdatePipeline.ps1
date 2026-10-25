@@ -1,6 +1,6 @@
 #requires -Version 7.0
 [CmdletBinding()]
-param([string]$VcVarsAllPath,[switch]$ServerOnly,[switch]$SkipPerformance,[string]$OutputDirectory)
+param([string]$VcVarsAllPath,[switch]$ServerOnly,[switch]$SkipPerformance,[switch]$Clean,[string]$OutputDirectory)
 $ErrorActionPreference='Stop'
 $repository=(Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
 if (-not $OutputDirectory) { $OutputDirectory=Join-Path $repository ('.local/artifacts/update-validation/run-'+[DateTimeOffset]::UtcNow.ToString('yyyyMMddTHHmmss')) }
@@ -44,7 +44,12 @@ try {
     if (-not $SkipPerformance) { $testArgs+='--perf' }
     & dotnet @testArgs
     if ($LASTEXITCODE -ne 0) { throw '更新自动化验证失败。' }
-    & (Join-Path $PSScriptRoot 'Publish-UpdateServer.ps1') -OutputDirectory (Join-Path $OutputDirectory 'server-linux-x64')
+    $serverOutput = Join-Path $OutputDirectory 'server-linux-x64'
+    if ($Clean) {
+        & (Join-Path $PSScriptRoot 'Publish-UpdateServer.ps1') -Runtime 'linux-x64' -OutputDirectory $serverOutput -Clean
+    } else {
+        & (Join-Path $PSScriptRoot 'Publish-UpdateServer.ps1') -Runtime 'linux-x64' -OutputDirectory $serverOutput
+    }
     [IO.File]::WriteAllText((Join-Path $OutputDirectory 'result.json'),(@{Passed=$true;Utc=[DateTimeOffset]::UtcNow.ToString('O');OS=[Environment]::OSVersion.VersionString;SDK=(& dotnet --version);ServerOnly=[bool]$ServerOnly;Performance=(-not $SkipPerformance);Commit=(& git rev-parse HEAD)}|ConvertTo-Json))
     Write-Output "验证通过，日志：$OutputDirectory"
 } finally { Pop-Location; Stop-Transcript|Out-Null }

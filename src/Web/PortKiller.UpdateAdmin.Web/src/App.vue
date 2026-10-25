@@ -7,6 +7,8 @@ import OverviewPage from './pages/OverviewPage.vue';
 import HistoryPage from './pages/HistoryPage.vue';
 import JobPage from './pages/JobPage.vue';
 import UploadPage from './pages/UploadPage.vue';
+import SecurityPage from './pages/SecurityPage.vue';
+import AuditPage from './pages/AuditPage.vue';
 import { useAuth } from './state/auth';
 import { errorText } from './api/http';
 
@@ -21,7 +23,8 @@ const entries = computed(() => [
   { id: 'audit', title: '审计记录', permission: 'audit.read', path: 'M6 3h12v18H6z M9 8h6 M9 12h6 M9 16h4' },
 ].filter(entry => !full.value || !entry.permission || auth.can(entry.permission)));
 const selected = computed(() => location.value.split('/')[0]);
-const title = computed(() => selected.value === 'job' ? '任务详情' : entries.value.find(entry => entry.id === selected.value)?.title ?? '发布概览');
+const title = computed(() => selected.value === 'job' ? '任务详情' : entries.value.find(entry => entry.id === selected.value)?.title
+  ?? (selected.value === 'security' ? '安全管理' : selected.value === 'audit' ? '审计记录' : '发布概览'));
 function navigate(id: string) { window.location.hash = id; }
 function onHash() { location.value = window.location.hash.slice(1) || 'overview'; }
 async function refresh() { error.value = ''; try { await auth.restore(); } catch (cause) { error.value = errorText(cause); } }
@@ -55,7 +58,9 @@ onBeforeUnmount(() => { window.removeEventListener('hashchange', onHash); window
             <HistoryPage v-else-if="selected === 'history'" />
             <UploadPage v-else-if="selected === 'upload' && auth.can('release.upload')" :id="location.slice(7)" :key="location" />
             <JobPage v-else-if="selected === 'job'" :id="location.slice(4)" :key="location" />
-            <section v-else class="surface empty-workspace"><h2>会话已连接</h2><p class="muted">{{ session?.userName }} · {{ session?.roles.join(' / ') }}</p></section>
+            <SecurityPage v-else-if="selected === 'security'" />
+            <AuditPage v-else-if="selected === 'audit' && auth.can('audit.read')" />
+            <section v-else class="surface empty-workspace"><h2>无权访问此页面</h2><p class="muted">当前账号没有访问该工作区所需的权限。</p></section>
           </template>
         </main>
         <footer class="page-footer"><span>PortKill Update Administration</span><span>版本发布工作空间</span></footer>

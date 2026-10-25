@@ -142,4 +142,68 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await page.getByRole('button', { name: '重试下载检查' }).click();
     await expect(page.locator('.status-label').first()).toHaveText('发布完成', { timeout: 30000 });
   });
+  test('security administration protects account actions and audit data by permission', async () => {
+    test.setTimeout(60000);
+    async function completeStrongIfShown() {
+      const dialog = page.getByRole('dialog');
+      if (await dialog.count()) {
+        await dialog.getByLabel('当前密码').fill('Browser-Test-Only!492');
+        await dialog.getByLabel('验证器动态码').fill(totp(authenticatorKey));
+        await dialog.getByRole('button', { name: '确认身份' }).click();
+        await expect(dialog).toHaveCount(0);
+      }
+    }
+
+    await page.getByRole('button', { name: '安全管理', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '管理员账号' })).toBeVisible();
+    await expect(page.getByText('browser-admin', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: '新建账号' }).click();
+    await page.getByLabel('账号', { exact: true }).fill('browser-viewer');
+    await page.getByLabel('密码', { exact: true }).fill('Browser-Viewer-Only!492');
+    await page.getByLabel('确认密码', { exact: true }).fill('Browser-Viewer-Only!492');
+    await page.getByRole('button', { name: '创建账号' }).click();
+    await completeStrongIfShown();
+    await expect(page.locator('tr').filter({ hasText: 'browser-viewer' })).toBeVisible();
+
+    await page.getByRole('button', { name: '审计记录', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '审计记录', level: 2 })).toBeVisible();
+    await page.getByLabel('操作筛选').fill('account.created');
+    await page.getByRole('button', { name: '筛选', exact: true }).click();
+    await expect(page.locator('table')).toContainText('account.created');
+
+    const browser = page.context().browser();
+    if (!browser) throw new Error('Browser fixture unavailable.');
+    const viewerContext = await browser.newContext({ ignoreHTTPSErrors: true });
+    const viewerPage = await viewerContext.newPage();
+    try {
+      await viewerPage.goto('/');
+      await viewerPage.getByLabel('账号', { exact: true }).fill('browser-viewer');
+      await viewerPage.getByLabel('密码', { exact: true }).fill('Browser-Viewer-Only!492');
+      await viewerPage.getByRole('button', { name: '登录', exact: true }).click();
+      await expect(viewerPage.getByRole('heading', { name: '绑定验证器' })).toBeVisible();
+      await viewerPage.getByRole('button', { name: '生成绑定密钥' }).click();
+      const viewerKey = await viewerPage.getByLabel('绑定密钥', { exact: true }).inputValue();
+      await viewerPage.getByLabel('验证器动态码', { exact: true }).fill(totp(viewerKey));
+      await viewerPage.getByRole('button', { name: '验证并继续' }).click();
+      await expect(viewerPage.getByRole('heading', { name: '保存恢复码' })).toBeVisible();
+      await viewerPage.getByLabel('我已安全保存恢复码').check();
+      await viewerPage.getByRole('button', { name: '已保存，进入工作空间' }).click();
+      await expect(viewerPage.getByRole('heading', { name: '当前正式版本' })).toBeVisible();
+      await expect(viewerPage.getByRole('button', { name: '上传版本', exact: true })).toHaveCount(0);
+      await expect(viewerPage.getByRole('button', { name: '审计记录', exact: true })).toHaveCount(0);
+      const denied = await viewerPage.evaluate(async () => (await fetch('/api/v1/accounts?page=1&pageSize=20', { credentials: 'same-origin' })).status);
+      expect(denied).toBe(403);
+      await viewerPage.goto('/#audit');
+      await expect(viewerPage.getByRole('heading', { name: '无权访问此页面' })).toBeVisible();
+    } finally {
+      await viewerContext.close();
+    }
+
+    await page.getByRole('button', { name: '安全管理', exact: true }).click();
+    await expect(page.locator('tr').filter({ hasText: 'browser-viewer' })).toBeVisible();
+    page.once('dialog', dialog => dialog.accept());
+    await page.locator('tr').filter({ hasText: 'browser-viewer' }).getByRole('button', { name: '停用' }).click();
+    await completeStrongIfShown();
+    await expect(page.locator('tr').filter({ hasText: 'browser-viewer' })).toContainText('已停用');
+  });
 });

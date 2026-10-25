@@ -59,6 +59,8 @@ pwsh -File scripts/release/Publish-Update.ps1 -PrepareOnly -Version 0.2.0 `
 
 PrepareOnly 在独立 ReleaseId 目录生成已验签的 `manifest.json`、四文件更新 ZIP 和本地记录；将前两项上传管理网站。此入口在服务端查询、SSH/scp、激活和公网检查之前返回，不生成首装 ZIP，不读取 SSH 主机配置。公开 URL 必须明确提供；离线准备时服务器基线未知，由网站确认接口重新核对。`-PrepareOnly -Resume <ReleaseId>` 仅复核现有签名产物，不能把准备记录隐式转为 SSH 发布；准备模式与 SSH/LocalRoot 参数组合会被拒绝。
 
+制作记录 schema 2 保存制作模式、Git 提交及脏状态、公钥指纹、签名清单的版本/序号/有效期、两个文件的大小和摘要，以及 ZIP 内实际 EXE 的文件版本和摘要。`NativeAot` 由 win-x64 PE 结构和 Native AOT 运行时导出检查得出，普通托管 apphost 即使删去配套 DLL 也会被拒绝。准备模式记录 `BaselineKnown=false`、`Expected=null`。私钥及其路径不写入制作记录；网站始终从签名清单和实际更新包取得权威信息，不接收本地记录代替验签。
+
 新发布默认要求干净 Git 工作区，CI 使用明确版本。本地隔离演练可以显式 `-AllowDirty`，记录会保留 Dirty 状态。版本未指定时基于项目和服务端已激活版本递增；不修改项目源文件版本。
 
 本地发布记录、锁和签名产物保存在 `.local/artifacts/releases/`，恢复和续签继续从此目录读取，不应作为可随意清空的缓存。本地兼容配置读取 `.local/config/publisher.local.json`；非敏感配置示例位于 `deploy/examples/`。签名私钥仍使用原有受保护位置，不因项目目录整理迁入仓库。

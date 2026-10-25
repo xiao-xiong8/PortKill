@@ -90,7 +90,7 @@ try {
         $releaseDirectory = Join-Path $releaseRoot $releaseId
         [IO.Directory]::CreateDirectory($releaseDirectory) | Out-Null
         $recordPath = Join-Path $releaseDirectory 'release-record.json'
-        $record = [pscustomobject]@{ReleaseId=$releaseId; Mode=$(if ($PrepareOnly) { 'PrepareOnly' } else { 'Publish' }); Version=$Version; Phase='Created'; PublicBaseUrl=$PublicBaseUrl.AbsoluteUri; AllowHttp=[bool]$AllowHttp; Commit=(& git -C $projectRoot rev-parse HEAD); Dirty=($dirty.Count -gt 0); KeyFingerprint=$keyFingerprint; Expected=$(if ($PrepareOnly) { $null } else { 'none' }); Sequence=0L; ManifestSha256=''; PackageSha256=''}
+        $record = [pscustomobject]@{Schema=2; ReleaseId=$releaseId; Mode=$(if ($PrepareOnly) { 'PrepareOnly' } else { 'Publish' }); Version=$Version; Phase='Created'; PublicBaseUrl=$PublicBaseUrl.AbsoluteUri; AllowHttp=[bool]$AllowHttp; Commit=(& git -C $projectRoot rev-parse HEAD); Dirty=($dirty.Count -gt 0); KeyFingerprint=$keyFingerprint; BaselineKnown=(-not [bool]$PrepareOnly); Expected=$(if ($PrepareOnly) { $null } else { 'none' }); Sequence=0L; ManifestSha256=''; PackageSha256=''; Runtime='win-x64'; NativeAot=$false; FileVersion=''; ExeSha256=''; PackageBytes=0L; ManifestBytes=0L; ExpiresUtc=''; PreparedUtc=''; SourceRelease=$ResignRelease}
         Save-Record
         $settings = [ordered]@{Enabled=$true; AllowHttp=[bool]$AllowHttp; ManifestUrl=$PublicBaseUrl.AbsoluteUri.TrimEnd('/')+'/manifest.json'; PublicKeyPem=[IO.File]::ReadAllText([IO.Path]::GetFullPath($PublicKeyPath)); RealtimeEnabled=$true; PollSeconds=300; CheckTimeoutSeconds=8; DownloadTimeoutSeconds=180}
         [IO.File]::WriteAllText((Join-Path $releaseDirectory 'verification.json'), ($settings | ConvertTo-Json -Depth 4))
@@ -119,7 +119,9 @@ try {
         $sequenceLock=[IO.FileStream]::new((Join-Path $sequenceDirectory 'sequence.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
         $sequencePath=Join-Path $sequenceDirectory 'update-sequence.txt'
         $previous=if (Test-Path -LiteralPath $sequencePath) { [long]::Parse([IO.File]::ReadAllText($sequencePath)) } else { 0L }
-        $record.Sequence=[Math]::Max([DateTimeOffset]::UtcNow.ToUnixTimeSeconds(),[Math]::Max($previous,[long]$currentReceipt.Sequence)+1)
+        $sequenceBaseline=[Math]::Max($previous,[long]$currentReceipt.Sequence)
+        if ($previous -lt 0 -or $sequenceBaseline -eq [long]::MaxValue) { throw '本地或服务器序号不可继续分配。' }
+        $record.Sequence=[Math]::Max([DateTimeOffset]::UtcNow.ToUnixTimeSeconds(),$sequenceBaseline+1)
         $seqTmp=$sequencePath+'.tmp'; [IO.File]::WriteAllText($seqTmp,[string]$record.Sequence); [IO.File]::Move($seqTmp,$sequencePath,$true)
         Save-Record
         $publish=Join-Path $releaseDirectory 'publish'
@@ -130,6 +132,7 @@ try {
             & (Join-Path $PSScriptRoot 'Renew-UpdateManifest.ps1') -ManifestPath (Join-Path $old 'manifest.json') -OutputPath $manifest -SigningKeyPath $SigningKeyPath -PublicKeyPath $PublicKeyPath -Sequence $record.Sequence
         } else {
             if ($PreparedPublishDirectory) {
+                & (Join-Path $PSScriptRoot 'Get-AotArtifactInfo.ps1') -ExecutablePath (Join-Path $PreparedPublishDirectory 'PortKiller.exe') | Out-Null
                 [IO.Directory]::CreateDirectory($publish)|Out-Null
                 foreach ($name in @('PortKiller.exe','av_libglesv2.dll','libHarfBuzzSharp.dll','libSkiaSharp.dll')) { Copy-Item -LiteralPath (Join-Path $PreparedPublishDirectory $name) -Destination $publish }
             } else {
@@ -146,8 +149,18 @@ try {
                 try { foreach ($file in @('PortKiller.exe','av_libglesv2.dll','libHarfBuzzSharp.dll','libSkiaSharp.dll','update-settings.json')) { [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip,(Join-Path $publish $file),$file)|Out-Null } } finally { $zip.Dispose() }
             }
         }
-        Invoke-Tool @('verify','--config',$config,'--manifest',$manifest,'--package',$package)|Out-Null
+        $verified = (Invoke-Tool @('verify','--config',$config,'--manifest',$manifest,'--package',$package)) | ConvertFrom-Json
         $record.ManifestSha256=(Get-FileHash -LiteralPath $manifest).Hash; $record.PackageSha256=(Get-FileHash -LiteralPath $package).Hash
+        if ($verified.Version -ne $record.Version -or $verified.Sequence -ne $record.Sequence -or $verified.Runtime -ne 'win-x64' -or $verified.ManifestSha256 -ne $record.ManifestSha256 -or $verified.Sha256 -ne $record.PackageSha256) { throw '制作记录与已验签产物不一致。' }
+        $aotTemporary = Join-Path $releaseDirectory '.verify-native.exe'
+        $aotZip = [IO.Compression.ZipFile]::OpenRead($package)
+        try {
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($aotZip.GetEntry('PortKiller.exe'), $aotTemporary, $false)
+            $aotInfo = & (Join-Path $PSScriptRoot 'Get-AotArtifactInfo.ps1') -ExecutablePath $aotTemporary
+            $record.NativeAot=$aotInfo.NativeAot; $record.FileVersion=$aotInfo.FileVersion; $record.ExeSha256=$aotInfo.ExeSha256
+        } finally { $aotZip.Dispose(); if (Test-Path -LiteralPath $aotTemporary) { Remove-Item -LiteralPath $aotTemporary } }
+        $record.PackageBytes=(Get-Item -LiteralPath $package).Length; $record.ManifestBytes=(Get-Item -LiteralPath $manifest).Length
+        $record.ExpiresUtc=$verified.ExpiresUtc; $record.PreparedUtc=[DateTimeOffset]::UtcNow.ToString('O')
         $record.Phase='Verified'; Save-Record
     }
     if ((Get-FileHash -LiteralPath $manifest).Hash -ne $record.ManifestSha256 -or (Get-FileHash -LiteralPath $package).Hash -ne $record.PackageSha256) { throw '已签名产物发生变化，拒绝恢复。' }

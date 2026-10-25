@@ -33,7 +33,7 @@ internal sealed class PreparationFixture : IAsyncDisposable
     {
         string argumentsFile = Path.Combine(Root, Guid.NewGuid().ToString("N") + ".json");
         await File.WriteAllTextAsync(argumentsFile, JsonSerializer.Serialize(arguments));
-        string wrapper = Path.Combine(Root, "invoke.ps1");
+        string wrapper = Path.ChangeExtension(argumentsFile, ".ps1");
         await File.WriteAllTextAsync(wrapper, """
             $ErrorActionPreference = 'Stop'
             $p5Arguments = @(Get-Content -LiteralPath $env:PORTKILL_RELEASE_TEST_ARGUMENTS -Raw | ConvertFrom-Json)

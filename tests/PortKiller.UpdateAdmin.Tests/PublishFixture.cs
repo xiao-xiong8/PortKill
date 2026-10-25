@@ -18,10 +18,10 @@ internal sealed class PublishFixture : IAsyncDisposable
     public byte[] Package { get; private set; } = [];
     public string Version { get; private set; } = "";
 
-    public static async Task<PublishFixture> StartAsync(string? manifestUrl = null)
+    public static async Task<PublishFixture> StartAsync(string? manifestUrl = null, bool realHttp = false)
     {
         var fixture = new PublishFixture();
-        fixture.App = await TestApplication.StartAsync(services => services.AddSingleton(fixture.Options));
+        fixture.App = await TestApplication.StartAsync(services => services.AddSingleton(fixture.Options), realHttp);
         fixture.Options.ReleaseRoot = Path.Combine(fixture.App.Root, "public");
         fixture.Options.VerificationConfigPath = Path.Combine(fixture.App.Root, "verification.json");
         fixture.Options.ExecutablePath = FindTool();
@@ -67,7 +67,7 @@ internal sealed class PublishFixture : IAsyncDisposable
         }, ProtocolJsonContext.Default.SignedUpdate);
     }
 
-    public async Task<(string DraftId, string JobId)> UploadAsync(byte[] manifest)
+    public async Task<(string DraftId, string JobId)> UploadAsync(byte[] manifest, bool executeValidation = true)
     {
         using var created = await App.Client.PostAsJsonAsync("/api/v1/uploads/", new { ManifestBytes = manifest.Length, PackageBytes = Package.Length });
         created.EnsureSuccessStatusCode();
@@ -77,8 +77,11 @@ internal sealed class PublishFixture : IAsyncDisposable
         using var complete = await App.Client.PostAsJsonAsync($"/api/v1/uploads/{id}/complete", new { });
         complete.EnsureSuccessStatusCode();
         var value = await complete.Content.ReadFromJsonAsync<JsonElement>();
-        await using var scope = App.App.Services.CreateAsyncScope();
-        Assert.True(await scope.ServiceProvider.GetRequiredService<ValidationTaskExecutor>().ExecuteOnceAsync("fixture-validator", default));
+        if (executeValidation)
+        {
+            await using var scope = App.App.Services.CreateAsyncScope();
+            Assert.True(await scope.ServiceProvider.GetRequiredService<ValidationTaskExecutor>().ExecuteOnceAsync("fixture-validator", default));
+        }
         return (value.GetProperty("draftId").GetString()!, value.GetProperty("jobId").GetString()!);
     }
 
@@ -114,10 +117,13 @@ internal sealed class PublishFixture : IAsyncDisposable
     }
 
     public static string FindTool()
+        => FindExecutable("src/Tools/PortKiller.UpdateTool", "PortKiller.UpdateTool");
+
+    internal static string FindExecutable(string project, string name)
     {
         for (DirectoryInfo? current = new(AppContext.BaseDirectory); current != null; current = current.Parent)
             if (File.Exists(Path.Combine(current.FullName, "PortKill.Server.slnx")))
-                return Path.Combine(current.FullName, "src", "Tools", "PortKiller.UpdateTool", "bin", "Release", "net10.0", "PortKiller.UpdateTool.exe");
+                return Path.Combine(current.FullName, project, "bin", "Release", "net10.0", name + (OperatingSystem.IsWindows() ? ".exe" : ""));
         throw new DirectoryNotFoundException();
     }
 

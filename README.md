@@ -107,7 +107,7 @@ pwsh -File scripts/build/Test-UpdatePipeline.ps1 -VcVarsAllPath C:/path/to/vcvar
 
 该入口包含 UI、真实 AOT 安装与恢复、隔离发布演练、性能检查及 Linux 服务端构建。结果写入 `.local/artifacts/update-validation/`。真实 Linux、Nginx、TLS 和公网部署仍需单独验收；过程记录保存在本地，不随源码分发。
 
-网页发布管理后台由独立 Vue 前端、net10.0 API/Worker 和 SQLite + EF Core 10 业务模块组成。上传、严格验签、产物封存、单次发布确认、原子激活、中断恢复、分发下载验证、当前版本查询及持久管理事件流已实现；后续仍需完成发布集成验收、前端完整流程和生产部署验收。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
+网页发布管理后台由独立 Vue 前端、net10.0 API/Worker 和 SQLite + EF Core 10 业务模块组成。上传、严格验签、产物封存、单次发布确认、原子激活、中断恢复、分发下载验证、当前版本查询及持久管理事件流已实现。P4 发布与故障竞争集成验收已在 Windows 隔离环境通过，包含真实 HTTPS API、独立 Worker 进程、工具子进程及安全审计；后续为 Windows 预签名产物准备、前端完整流程和生产部署验收。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
 
 发布配置由 API 和 Worker 各自的配置提供。API 使用 `UpdateTool:VerificationConfigPath` 和 `UpdateTool:ReleaseRoot` 读取当前签名清单；Worker 还需配置 `UpdateTool:ExecutablePath` 并设置 `UpdateTool:Enabled=true`，负责验证上传产物和执行发布。两个进程必须共享相同的管理数据库、验签配置和 `ReleaseRoot`；API 对正式目录只需读取权限，Worker 需要按 UpdateTool 的原子发布流程写入。生产环境建议通过服务环境变量注入路径：
 
@@ -136,6 +136,9 @@ Publisher 或 Administrator 可向 `POST /api/v1/publish-jobs/{id}/public-check/
 ```powershell
 # 后台测试、实际 OpenAPI 比对、前端检查与构建
 pwsh -File scripts/checks/Test-Admin.ps1
+
+# P4 阶段验收：完整检查、故障覆盖映射及原有更新链回归
+pwsh -File scripts/checks/Test-AdminP4.ps1
 
 # 首次浏览器验证先在前端目录运行 pnpm exec playwright install chromium
 pwsh -File scripts/checks/Test-Admin.ps1 -IncludeBrowser

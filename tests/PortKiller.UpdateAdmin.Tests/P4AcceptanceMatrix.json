@@ -1,0 +1,72 @@
+{
+  "phase": "P4",
+  "minimumBackendTests": 208,
+  "minimumUpdateRegressionCases": 10,
+  "requirements": [
+    {
+      "id": "interrupted-input",
+      "requirement": "上传或验证中断不改变正式清单",
+      "tests": ["UploadTests.ActualStreamFailureLeavesSessionRetryableAndRemovesPartialFile", "ValidationArchiveTests.ChangedStagingBytesAreRejectedBeforeAnyReadyResult"]
+    },
+    {
+      "id": "approved-artifact-tampering",
+      "requirement": "确认后产物变化拒绝激活并记录安全审计",
+      "tests": ["PublishActivationTests.AReplacedArchiveAndDraftMetadataCannotChangeTheApprovedPublication", "PublishAuditTests.TamperedApprovedArchiveCreatesADurableActorBoundSecurityAudit"]
+    },
+    {
+      "id": "baseline-cas",
+      "requirement": "旧基线、同序号不同清单及并发确认具有确定结果",
+      "tests": ["PublishTests.ChangedArtifactExpiredChallengeAndBaselineAreRejectedDeterministically", "PublishRecoveryTests.DifferentManifestAtTheSameSequenceIsAConflict", "PublishTests.ConcurrentDifferentApprovalsReturnOneJobAndStableConflict"]
+    },
+    {
+      "id": "precommit-recovery",
+      "requirement": "包已公开但清单尚未提交时可在原任务恢复",
+      "tests": ["PublishRecoveryTests.KilledToolAtEachCommitBoundaryRecoversAfterApiRestart", "P4ProcessIntegrationTests.KillingProductionWorkerStopsItsOrphanAndRestoresTheActualCommitAfterRestart"]
+    },
+    {
+      "id": "postcommit-database-failure",
+      "requirement": "清单提交后数据库写入失败不回滚、不重复激活",
+      "tests": ["PublishRecoveryTests.DatabaseWriteFailureAfterActivationIsRepairedOnTheNextRecovery", "P4ProcessIntegrationTests.DatabaseFailureAfterCommitIsRecoveredByARestartedProductionWorkerWithoutReactivation"]
+    },
+    {
+      "id": "public-check-retry",
+      "requirement": "下载失败保持已激活状态，原任务重试仅重新检查",
+      "tests": ["PublicVerificationTests.OriginalJobRetryIsConcurrentIdempotentAndDoesNotRewriteAnyPublicationArtifacts", "P4ProcessIntegrationTests.RestartedProductionWorkerRetriesOnlyTheFailedDownloadOnTheOriginalJob"]
+    },
+    {
+      "id": "http-idempotency-and-worker-competition",
+      "requirement": "真实 HTTPS 认证上传、重复确认及两个 Worker 只产生一次激活",
+      "tests": ["PublishTests.ConcurrentSameKeyConfirmationReturnsOneDurableJob", "P4ProcessIntegrationTests.TwoProductionWorkersCompleteAuthenticatedHttpsUploadPublicationAndReplayExactlyOnce"]
+    },
+    {
+      "id": "legacy-cli-lock-and-supersession",
+      "requirement": "原 CLI 进程共用发布锁，更新版本使旧任务被取代",
+      "tests": ["P4ProcessIntegrationTests.OriginalCliProcessLockDefersTheWorkerAndItsNewerCommitSupersedesTheOldJob", "PublishRecoveryTests.InterruptedOldTaskBecomesSupersededWithoutRollingBackANewerManifest"]
+    },
+    {
+      "id": "worker-loss-and-fencing",
+      "requirement": "Worker 终止、工具孤儿和租约丢失按实际提交事实恢复",
+      "tests": ["P4ProcessIntegrationTests.KillingProductionWorkerStopsItsOrphanAndRestoresTheActualCommitAfterRestart", "PublishRecoveryTests.LeaseLossCancelsTheActiveToolAndLeavesTheTaskForRecovery", "PublishRecoveryTests.ProductionToolRejectsDeadOrReusedOwnerIdentityBeforeActivation"]
+    },
+    {
+      "id": "tool-resource-bounds",
+      "requirement": "输出超限与超时在提交前后均正确判定，子进程有界退出",
+      "tests": ["P4ProcessIntegrationTests.OversizedActivationOutputUsesTheCommitFactAndPersistsOnlySafeCodes", "PublishRecoveryTests.ToolTimeoutUsesTheCommitRecordInsteadOfAssumingFailure", "UpdateToolClientTests.ToolOutputIsBoundedAndTimeoutKillsTheEntireProcessTree"]
+    },
+    {
+      "id": "durable-events-and-session-revocation",
+      "requirement": "事件与状态原子提交，管理 SSE 可补读、可撤销且慢写有界",
+      "tests": ["JobEventTests.EventWriteFailureRollsBackClaimStateAndCounter", "JobEventStreamTests.ReplaySnapshotNeverAdvancesTheBrowserPastUnsentBatches", "JobEventStreamTests.OpenStreamRechecksPersistedSessionAndRoles", "JobEventStreamTests.SlowWriteHasADeadlineAndHoldsNoDatabaseTransactionOrEventQueue"]
+    },
+    {
+      "id": "fail-closed-audit",
+      "requirement": "关键审计写入失败使事件和数据库状态一起回滚，随后可恢复",
+      "tests": ["PublishAuditTests.FailedAuditInsertRollsBackTheEventAndStateThenRecoversWithoutReactivation"]
+    },
+    {
+      "id": "authentication-and-download-source",
+      "requirement": "发布确认绑定认证会话；下载检查不能接受任意源或跟随重定向",
+      "tests": ["PublishTests.ChallengeBindsVerifiedArtifactAndConfirmationIsIdempotent", "PublicCheckAuthorizationTests.RetryRequiresAuthenticationCsrfAndRecentMfaWithoutChangingTheOriginalJob", "PublicVerificationTests.DownloadFailuresPreserveActivationAndNeverFollowRedirects", "PublicVerificationTests.TotalDeadlineCoversBodiesAfterHeadersHaveArrived"]
+    }
+  ]
+}

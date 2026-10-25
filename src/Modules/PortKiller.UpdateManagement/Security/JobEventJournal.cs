@@ -14,19 +14,26 @@ public sealed class JobEventJournal(UpdateAdminDbContext database, AdminOptions 
         if (database.Database.CurrentTransaction == null)
             throw new InvalidOperationException("Task events require the state transition's transaction.");
         long sequence;
+        string kind, actor;
         var added = database.ChangeTracker.Entries<ReleaseJob>()
             .SingleOrDefault(entry => entry.Entity.Id == id && entry.State == EntityState.Added);
-        if (added != null) sequence = added.Entity.LastEventSequence = 1;
+        if (added != null)
+        { sequence = added.Entity.LastEventSequence = 1; kind = added.Entity.Kind; actor = added.Entity.RequestedById; }
         else
         {
             int changed = await database.ReleaseJobs.Where(job => job.Id == id && job.LastEventSequence < long.MaxValue)
                 .ExecuteUpdateAsync(update => update.SetProperty(job => job.LastEventSequence, job => job.LastEventSequence + 1), token);
             if (changed != 1) throw new InvalidOperationException("Task event counter is unavailable.");
-            sequence = await database.ReleaseJobs.AsNoTracking().Where(job => job.Id == id)
-                .Select(job => job.LastEventSequence).SingleAsync(token);
+            var job = await database.ReleaseJobs.AsNoTracking().Where(job => job.Id == id)
+                .Select(job => new { job.LastEventSequence, job.Kind, job.RequestedById }).SingleAsync(token);
+            sequence = job.LastEventSequence; kind = job.Kind; actor = job.RequestedById;
         }
         database.JobEvents.Add(new JobEvent { JobId = id, Sequence = sequence, Stage = stage, Message = code,
             CreatedUtcMs = clock.GetUtcNow().ToUnixTimeMilliseconds() });
+        // Worker decisions must remain auditable even when the shorter task-event history has been pruned.
+        if (kind == "publish" && stage is "conflict" or "failed" or "manifest_activated" or "active_unverified" or "completed" or "superseded")
+            database.AuditEvents.Add(new AuditEvent { ActorUserId = actor, ResourceId = id, Action = "publish." + stage,
+                Result = code, CorrelationId = "job:" + id, CreatedUtcMs = clock.GetUtcNow().ToUnixTimeMilliseconds() });
         await database.SaveChangesAsync(token);
         await PruneAsync(token);
     }

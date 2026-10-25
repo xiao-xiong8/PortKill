@@ -5,6 +5,11 @@ public enum ValidationState { Pending, Validating, ReadyForApproval, Rejected }
 public enum PublishJobState { Queued, Publishing, ManifestActivated, PublicVerifying, Completed, ActiveUnverified, Failed, Conflict, Superseded }
 
 public sealed record LiveHealthResponse(string Status, string Component);
+public sealed record AdminHealthQueueResponse(int Validation, int Publish, int Active, int Attention);
+public sealed record AdminHealthStorageResponse(long TotalBytes, long UsedBytes, long FreeBytes, double FreePercent);
+public sealed record AdminHealthManifestResponse(string Status, string? Version, long? Sequence, double? DaysRemaining);
+public sealed record AdminHealthResponse(string Status, string Component, long ObservedUtcMs, string Database,
+    AdminHealthQueueResponse Queue, AdminHealthStorageResponse? Storage, AdminHealthManifestResponse Manifest);
 public sealed record SystemStatusResponse(string Application, string Version, int ContractVersion);
 public sealed record CapabilitiesResponse(UploadState[] UploadStates, ValidationState[] ValidationStates, PublishJobState[] PublishStates);
 public sealed record PageResponse<T>(IReadOnlyList<T> Items, int Page, int PageSize, long Total);

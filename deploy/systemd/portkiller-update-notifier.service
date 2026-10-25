@@ -31,6 +31,9 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 SystemCallArchitectures=native
 ReadOnlyPaths=/srv/portkiller-updates /etc/portkiller-updates
 LimitNOFILE=4096
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=portkiller-update-notifier
 
 [Install]
 WantedBy=multi-user.target

@@ -54,9 +54,11 @@ done
 api_was_active=0
 worker_was_active=0
 notifier_was_active=0
+monitor_was_active=0
 if systemctl is-active --quiet portkiller-update-api.service; then api_was_active=1; fi
 if systemctl is-active --quiet portkiller-update-worker.service; then worker_was_active=1; fi
 if systemctl is-active --quiet portkiller-update-notifier.service; then notifier_was_active=1; fi
+if systemctl is-active --quiet portkiller-update-monitor.timer; then monitor_was_active=1; fi
 staged=""
 restore_id="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 
@@ -66,11 +68,12 @@ cleanup() {
     if [[ "$api_was_active" -eq 1 ]]; then systemctl start portkiller-update-api.service >/dev/null 2>&1 || true; fi
     if [[ "$worker_was_active" -eq 1 ]]; then systemctl start portkiller-update-worker.service >/dev/null 2>&1 || true; fi
     if [[ "$notifier_was_active" -eq 1 ]]; then systemctl start portkiller-update-notifier.service >/dev/null 2>&1 || true; fi
+    if [[ "$monitor_was_active" -eq 1 ]]; then systemctl start portkiller-update-monitor.timer >/dev/null 2>&1 || true; fi
     exit "$status"
 }
 trap cleanup EXIT
 
-systemctl stop portkiller-update-api.service portkiller-update-worker.service portkiller-update-notifier.service >/dev/null 2>&1 || true
+systemctl stop portkiller-update-monitor.timer portkiller-update-monitor.service portkiller-update-api.service portkiller-update-worker.service portkiller-update-notifier.service >/dev/null 2>&1 || true
 install -d -o root -g root -m 0755 "$data_parent" "$public_parent"
 staged="$(mktemp -d "$data_parent/.portkiller-restore.XXXXXX")"
 chmod 0700 "$staged"

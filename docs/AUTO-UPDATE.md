@@ -88,6 +88,8 @@ sudo systemctl start portkiller-update-api.service portkiller-update-worker.serv
 
 服务程序本身不从备份覆盖；升级或恢复前必须先部署与数据库迁移版本匹配的已验证 bundle。恢复不会把旧版本清单写回正式目录，签名清单仍是提交事实；若清单/包与回执不一致，保持服务停机并按 `UpdateTool inspect/recover` 检查后再启动。备份目录包含认证材料和发布产物，必须存放在权限为 `0700` 的本地磁盘并另行复制到受控离线介质。
 
+P7-05 增加一个不依赖第三方平台的本机监测 timer：`portkiller-update-monitor.timer` 每 5 分钟运行一次 `monitor-update-server.py`，通过回环 `/health/ready`、Notifier `/health` 和本机旧下载入口检查管理 API、SQLite 就绪状态、验证/发布队列、磁盘容量、正式清单有效期以及静态分发可用性。API、Worker、Notifier 和监测器输出 JSON 结构化日志到 journald；监测账号只读，认证密钥和上传内容不进入日志；结果以原子 JSON 快照保存在 `/run/portkiller-update-monitor/status.json`。可用 `journalctl -u portkiller-update-monitor.service` 查看告警，阈值由 `/etc/portkiller-updates/monitor.env` 调整。API 或 Worker 停止时，只要 Nginx 静态目录和 Notifier 仍健康，监测会标记 `distribution_only`，桌面端继续使用既有下载/通知链；静态清单或只读通知不可用则单独告警。备份和恢复会同时暂停 monitor timer，避免维护期间读取中间状态。
+
 通知服务仅监听 `127.0.0.1:8091`，由 Nginx 精确路由 `/stable/events` 代理，关闭缓冲、缓存和压缩，读超时 90 秒。心跳 25 秒，客户端闲置超时 75 秒，单行 4 KiB、单事件 8 KiB。客户端在 404/405/501、401/403 时约 30 分钟后再探测，继续轮询；其他断开指数退避并遵守 Retry-After。
 
 服务端只读取原子激活的清单，FileSystemWatcher 加 1 秒文件身份检查兜底；内容未变不重复验签。每连接只保留最新一条提示，慢连接写超时 5 秒。重启从当前有效清单恢复，坏清单/序号倒退不广播。`/health` 仅 loopback 可读，区分运行状态、清单有效状态、序号、连接数和剩余有效天数。生产前检查发行版、CPU、端口、权限、Nginx worker_connections 和证书；本地 Kestrel 连接压测不等于 Nginx 生产容量。

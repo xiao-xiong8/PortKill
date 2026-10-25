@@ -37,6 +37,7 @@ echo "Creating a complete backup before replacing the server bundle..."
 bash "$backup_script" "$backup"
 
 systemctl stop portkiller-update-api.service portkiller-update-worker.service portkiller-update-notifier.service >/dev/null 2>&1 || true
+systemctl stop portkiller-update-monitor.timer portkiller-update-monitor.service >/dev/null 2>&1 || true
 bash "$installer" "$deploy_user" "$bundle" "$verification"
 systemctl stop portkiller-update-api.service portkiller-update-worker.service >/dev/null 2>&1 || true
 
@@ -53,6 +54,7 @@ systemctl start portkiller-update-worker.service
 if [[ -x /opt/portkiller-updates/notifier/PortKiller.UpdateNotifier && -f /etc/portkiller-updates/verification.json ]]; then
     systemctl start portkiller-update-notifier.service
 fi
+systemctl start portkiller-update-monitor.timer
 
 for attempt in $(seq 1 30); do
     if curl --fail --silent --show-error --max-time 2 http://127.0.0.1:5081/health/live >/dev/null; then

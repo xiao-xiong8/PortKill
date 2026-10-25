@@ -20,14 +20,19 @@ $deploymentFiles=@(
     'deploy/systemd/portkiller-update-api.service',
     'deploy/systemd/portkiller-update-worker.service',
     'deploy/systemd/portkiller-update-notifier.service',
+    'deploy/systemd/portkiller-update-monitor.service',
+    'deploy/systemd/portkiller-update-monitor.timer',
     'deploy/ubuntu/install-update-server.sh',
+    'deploy/ubuntu/monitor-update-server.sh',
+    'deploy/ubuntu/monitor-update-server.py',
     'deploy/nginx/portkiller-admin.conf.example',
     'deploy/nginx/portkiller-download-tls.conf.example',
     'deploy/ubuntu/backup-update-server.sh',
     'deploy/ubuntu/restore-update-server.sh',
     'deploy/ubuntu/upgrade-update-server.sh',
     'deploy/examples/update-admin-api.env.example',
-    'deploy/examples/update-admin-worker.env.example'
+    'deploy/examples/update-admin-worker.env.example',
+    'deploy/examples/update-monitor.env.example'
 )
 foreach ($relative in $deploymentFiles) {
     if (-not (Test-Path -LiteralPath (Join-Path $repository $relative) -PathType Leaf)) { throw "缺少部署文件：$relative" }
@@ -35,6 +40,8 @@ foreach ($relative in $deploymentFiles) {
 $apiUnit=Get-Content -Raw -LiteralPath (Join-Path $repository 'deploy/systemd/portkiller-update-api.service')
 $workerUnit=Get-Content -Raw -LiteralPath (Join-Path $repository 'deploy/systemd/portkiller-update-worker.service')
 $notifierUnit=Get-Content -Raw -LiteralPath (Join-Path $repository 'deploy/systemd/portkiller-update-notifier.service')
+$monitorUnit=Get-Content -Raw -LiteralPath (Join-Path $repository 'deploy/systemd/portkiller-update-monitor.service')
+$monitorTimer=Get-Content -Raw -LiteralPath (Join-Path $repository 'deploy/systemd/portkiller-update-monitor.timer')
 foreach ($required in @('User=portkiller-update-api','Group=portkiller-admin','ProtectSystem=strict','NoNewPrivileges=true','ReadWritePaths=/var/lib/portkiller-updates/admin','InaccessiblePaths=/var/lib/portkiller-updates/admin/archive')) {
     if ($apiUnit -notmatch [regex]::Escape($required)) { throw "API systemd 单元缺少约束：$required" }
 }
@@ -44,8 +51,12 @@ foreach ($required in @('User=portkiller-update-worker','SupplementaryGroups=por
 foreach ($required in @('User=portkiller-update-notifier','ProtectSystem=strict','NoNewPrivileges=true','ReadOnlyPaths=/srv/portkiller-updates /etc/portkiller-updates')) {
     if ($notifierUnit -notmatch [regex]::Escape($required)) { throw "Notifier systemd 单元缺少约束：$required" }
 }
+foreach ($required in @('User=portkiller-update-monitor','Group=portkiller-update-monitor','SupplementaryGroups=portkiller-admin','ProtectSystem=strict','NoNewPrivileges=true','ReadOnlyPaths=/var/lib/portkiller-updates /srv/portkiller-updates /etc/portkiller-updates /opt/portkiller-updates','StandardOutput=journal','SyslogIdentifier=portkiller-update-monitor')) {
+    if ($monitorUnit -notmatch [regex]::Escape($required)) { throw "监测 systemd 单元缺少约束：$required" }
+}
+if ($monitorTimer -notmatch [regex]::Escape('OnUnitActiveSec=5min')) { throw '监测 timer 缺少周期' }
 $installer=Get-Content -Raw -LiteralPath (Join-Path $repository 'deploy/ubuntu/install-update-server.sh')
-foreach ($required in @('portkiller-update-api','portkiller-update-worker','portkiller-update-notifier','portkiller-admin','portkiller-publish','2770 "$data_root"')) {
+foreach ($required in @('portkiller-update-api','portkiller-update-worker','portkiller-update-notifier','portkiller-update-monitor','portkiller-admin','portkiller-publish','2770 "$data_root"','monitor-update-server.py','python3')) {
     if ($installer -notmatch [regex]::Escape($required)) { throw "安装脚本缺少权限边界：$required" }
 }
 $nginxAdmin=Get-Content -Raw -LiteralPath (Join-Path $repository 'deploy/nginx/portkiller-admin.conf.example')
@@ -65,7 +76,7 @@ foreach ($required in @('db backup --output','files.sha256','archive','stable'))
 foreach ($required in @('db restore --input','sha256sum -c files.sha256','recover --root','inspect --root')) {
     if ($restoreScript -notmatch [regex]::Escape($required)) { throw "恢复脚本缺少内容：$required" }
 }
-foreach ($required in @('backup-update-server.sh','db migrate','/health/live')) {
+foreach ($required in @('backup-update-server.sh','db migrate','/health/live','portkiller-update-monitor.timer')) {
     if ($upgradeScript -notmatch [regex]::Escape($required)) { throw "升级脚本缺少内容：$required" }
 }
 foreach ($file in @($bundle.files)) {

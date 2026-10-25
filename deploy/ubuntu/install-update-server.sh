@@ -27,7 +27,11 @@ nginx_config="$repository_deploy_dir/nginx/portkiller-updates.conf"
 api_unit="$repository_deploy_dir/systemd/portkiller-update-api.service"
 worker_unit="$repository_deploy_dir/systemd/portkiller-update-worker.service"
 notifier_unit="$repository_deploy_dir/systemd/portkiller-update-notifier.service"
-for required in "$nginx_config" "$api_unit" "$worker_unit" "$notifier_unit"; do
+monitor_unit="$repository_deploy_dir/systemd/portkiller-update-monitor.service"
+monitor_timer="$repository_deploy_dir/systemd/portkiller-update-monitor.timer"
+monitor_script="$script_dir/monitor-update-server.sh"
+monitor_python="$script_dir/monitor-update-server.py"
+for required in "$nginx_config" "$api_unit" "$worker_unit" "$notifier_unit" "$monitor_unit" "$monitor_timer" "$monitor_script" "$monitor_python"; do
     if [[ ! -f "$required" ]]; then
         echo "Missing deployment file: $required" >&2
         exit 1
@@ -39,6 +43,7 @@ publish_group="portkiller-publish"
 api_user="portkiller-update-api"
 worker_user="portkiller-update-worker"
 notifier_user="portkiller-update-notifier"
+monitor_user="portkiller-update-monitor"
 data_parent="/var/lib/portkiller-updates"
 data_root="$data_parent/admin"
 staging_root="$data_root/staging"
@@ -72,17 +77,19 @@ ensure_group "$publish_group"
 ensure_service_user "$api_user" "$data_root"
 ensure_service_user "$worker_user" "$data_root"
 ensure_service_user "$notifier_user" "$install_root/notifier"
+ensure_service_user "$monitor_user" "$data_root"
 usermod -a -G "$admin_group" "$api_user"
 usermod -a -G "$admin_group" "$worker_user"
+usermod -a -G "$admin_group" "$monitor_user"
 usermod -a -G "$publish_group" "$worker_user"
 # Keep the existing SSH publishing entry point working without granting it database access.
 usermod -a -G "$publish_group" "$deploy_user"
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y nginx curl
+apt-get install -y nginx curl python3
 
-for unit in portkiller-update-api.service portkiller-update-worker.service portkiller-update-notifier.service; do
+for unit in portkiller-update-api.service portkiller-update-worker.service portkiller-update-notifier.service portkiller-update-monitor.timer portkiller-update-monitor.service; do
     systemctl stop "$unit" >/dev/null 2>&1 || true
 done
 
@@ -122,6 +129,11 @@ find "$auth_root" -type f -exec chmod 0600 {} +
 install -o root -g root -m 0644 "$api_unit" /etc/systemd/system/portkiller-update-api.service
 install -o root -g root -m 0644 "$worker_unit" /etc/systemd/system/portkiller-update-worker.service
 install -o root -g root -m 0644 "$notifier_unit" /etc/systemd/system/portkiller-update-notifier.service
+install -o root -g root -m 0644 "$monitor_unit" /etc/systemd/system/portkiller-update-monitor.service
+install -o root -g root -m 0644 "$monitor_timer" /etc/systemd/system/portkiller-update-monitor.timer
+install -d -o root -g root -m 0755 "$install_root/monitor"
+install -o root -g root -m 0755 "$monitor_script" "$install_root/monitor/monitor-update-server.sh"
+install -o root -g root -m 0644 "$monitor_python" "$install_root/monitor/monitor-update-server.py"
 
 if [[ -n "$bundle" ]]; then
     if [[ ! -d "$bundle" ]]; then
@@ -211,10 +223,30 @@ EOF
 }
 write_env "$config_root/api.env" 'UpdateTool__Enabled=false'
 write_env "$config_root/worker.env" 'UpdateTool__Enabled=true'
+monitor_env="$config_root/monitor.env"
+monitor_temporary="$(mktemp "$config_root/.monitor.env.XXXXXX")"
+cat > "$monitor_temporary" <<EOF
+PORTKILL_MONITOR_DATA_ROOT=$data_root
+PORTKILL_MONITOR_PUBLIC_ROOT=$public_root
+PORTKILL_MONITOR_API_URL=http://127.0.0.1:5081/health/ready
+PORTKILL_MONITOR_NOTIFIER_URL=http://127.0.0.1:8091/health
+PORTKILL_MONITOR_DOWNLOAD_URL=http://127.0.0.1:8080/stable/manifest.json
+PORTKILL_MONITOR_STATUS_PATH=/run/portkiller-update-monitor/status.json
+PORTKILL_MONITOR_MIN_FREE_BYTES=1073741824
+PORTKILL_MONITOR_MIN_FREE_PERCENT=10
+PORTKILL_MONITOR_QUEUE_WARNING=10
+PORTKILL_MONITOR_QUEUE_CRITICAL=50
+PORTKILL_MONITOR_MANIFEST_WARNING_DAYS=14
+PORTKILL_MONITOR_MANIFEST_CRITICAL_DAYS=7
+PORTKILL_MONITOR_TIMEOUT_SECONDS=3
+EOF
+install -o root -g "$admin_group" -m 0640 "$monitor_temporary" "$monitor_env"
+rm -f -- "$monitor_temporary"
 
 install -o root -g root -m 0644 "$nginx_config" /etc/nginx/conf.d/portkiller-updates.conf
 systemctl daemon-reload
 systemctl enable portkiller-update-api.service portkiller-update-worker.service >/dev/null
+systemctl enable portkiller-update-monitor.timer >/dev/null
 if [[ -x "$install_root/notifier/PortKiller.UpdateNotifier" && -f "$config_root/verification.json" ]]; then
     systemctl enable portkiller-update-notifier.service >/dev/null
 fi
@@ -223,6 +255,7 @@ nginx -t
 systemctl enable nginx >/dev/null
 systemctl start nginx
 systemctl reload nginx
+systemctl start portkiller-update-monitor.timer
 
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -q 'Status: active'; then
     ufw allow 8080/tcp
@@ -241,7 +274,7 @@ else
     echo "API and Worker are installed but stopped until the bundle is complete and the database is migrated."
 fi
 
-echo "Installed service accounts: $api_user, $worker_user, $notifier_user"
+echo "Installed service accounts: $api_user, $worker_user, $notifier_user, $monitor_user"
 echo "Data root: $data_root (SQLite and Data Protection keys)"
 echo "Publish root: $public_root (Worker and legacy SSH publisher write; API and Notifier read only)"
 echo "Migration command (stop API and Worker first):"

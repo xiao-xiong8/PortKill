@@ -20,6 +20,23 @@ public sealed class SkeletonTests
         Assert.Equal(2, json.EnumerateObject().Count());
     }
 
+    [Fact]
+    public async Task ReadyHealthIsBoundedAndSecretFree()
+    {
+        await using var app = await TestApplication.StartAsync();
+        var response = await app.Client.GetAsync("/health/ready");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain(app.Root, body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("password", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("cookie", body, StringComparison.OrdinalIgnoreCase);
+        var json = JsonSerializer.Deserialize<JsonElement>(body);
+        Assert.Equal("admin-api", json.GetProperty("component").GetString());
+        Assert.Equal("healthy", json.GetProperty("database").GetString());
+        Assert.Equal(0, json.GetProperty("queue").GetProperty("active").GetInt32());
+        Assert.True(json.GetProperty("manifest").GetProperty("status").GetString() is "missing" or "unavailable");
+    }
+
     [Theory]
     [InlineData("/api/v1/system/status")]
     [InlineData("/api/v1/system/capabilities")]

@@ -34,6 +34,9 @@ ReadWritePaths=/var/lib/portkiller-updates/admin
 InaccessiblePaths=/var/lib/portkiller-updates/admin/archive
 ReadOnlyPaths=/opt/portkiller-updates/api /srv/portkiller-updates/stable /etc/portkiller-updates
 LimitNOFILE=8192
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=portkiller-update-api
 
 [Install]
 WantedBy=multi-user.target

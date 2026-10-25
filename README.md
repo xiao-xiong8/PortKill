@@ -174,6 +174,14 @@ dotnet run --project src/Services/PortKiller.UpdateAdmin.Api -c Release -- admin
 
 上述命令可附加 `--data-root <绝对目录>`，应与服务使用同一配置。数据库备份使用 SQLite Online Backup API，完成后才写入 `backup.json`；包含数据库、迁移版本、认证密钥和 SHA-256 清单。生产服务器使用 `deploy/ubuntu/backup-update-server.sh`、`upgrade-update-server.sh` 和 `restore-update-server.sh` 进一步覆盖认证密钥、封存/暂存、正式清单/包、UpdateTool 回执状态及运行配置，并在恢复前校验 `files.sha256`。恢复校验复制后的数据库、外键、迁移版本和密钥摘要，保留现有密钥，撤销所有恢复出的会话，随后需重新登录并完成 MFA。备份目录包含认证材料和发布产物，必须按凭据保管；Linux 新数据目录默认仅属主可访问，已有目录需去掉 other 权限，API/Worker 共享组和 umask 在部署阶段配置。仅使用支持文件锁的本地磁盘，维护时停止所有数据库写入者；恢复后以 Worker 身份重新 `inspect` 当前清单和包，不能用数据备份替换已激活签名事实。
 
+P7-05 安装入口还会启用免费的本机 `portkiller-update-monitor.timer`。它通过 `/health/ready`、Notifier 健康端点和旧下载入口检查管理服务、队列、磁盘、签名清单有效期及静态分发，不读取密钥或上传内容；告警使用 journald，快照位于 `/run/portkiller-update-monitor/status.json`。查看最近一次结果：
+
+```bash
+sudo systemctl list-timers portkiller-update-monitor.timer
+sudo journalctl -u portkiller-update-monitor.service -n 20 --no-pager
+sudo cat /run/portkiller-update-monitor/status.json
+```
+
 专用 Linux 环境使用 `bash scripts/checks/test-admin-linux.sh` 执行真实服务端测试。Windows 上的测试和 linux-x64 构建不能代替该运行结果；实际 Windows AOT 包在 Linux 上的验包测试属于 P3。
 
 ## 提交与发布文件

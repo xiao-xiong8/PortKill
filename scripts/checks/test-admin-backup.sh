@@ -18,5 +18,8 @@ grep -Fq 'inspect --root' "$deploy/restore-update-server.sh"
 grep -Fq 'backup-update-server.sh' "$deploy/upgrade-update-server.sh"
 grep -Fq 'db migrate' "$deploy/upgrade-update-server.sh"
 grep -Fq '/health/live' "$deploy/upgrade-update-server.sh"
+grep -Fq 'portkiller-update-monitor.timer' "$deploy/upgrade-update-server.sh"
+grep -Fq 'portkiller-update-monitor.timer' "$deploy/backup-update-server.sh"
+grep -Fq 'portkiller-update-monitor.timer' "$deploy/restore-update-server.sh"
 
 echo "PASS admin backup and upgrade scripts"

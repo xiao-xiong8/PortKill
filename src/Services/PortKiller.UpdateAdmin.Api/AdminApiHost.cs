@@ -33,6 +33,7 @@ public static class AdminApiHost
         builder.Services.TryAddSingleton(updateTool);
         builder.Services.AddSingleton<UpdateToolClient>();
         builder.Services.TryAddSingleton<IPublishedReleaseReader, PublishedReleaseReader>();
+        builder.Services.AddScoped<AdminHealthService>();
         builder.Services.AddAdminIdentity(administration);
         builder.AddRequestSecurity();
         builder.Services.AddScoped<AdminCookieEvents>();
@@ -82,6 +83,8 @@ public static class AdminApiHost
         app.UseAuthorization();
         app.UseCsrfValidation();
         app.MapGet("/health/live", () => new LiveHealthResponse("ok", "admin-api")).AllowAnonymous().WithName("GetLiveHealth");
+        app.MapGet("/health/ready", async (AdminHealthService health, CancellationToken token)
+            => await health.GetAsync(token)).AllowAnonymous().WithName("GetReadyHealth").Produces<AdminHealthResponse>();
         app.MapGet("/api/v1/system/status", () => new SystemStatusResponse(
             AdminApplication.Name, AdminApplication.Version, AdminContract.Version))
             .RequireAuthorization(AdminPermissions.Read).WithName("GetSystemStatus").ProducesProblem(401).ProducesProblem(403);

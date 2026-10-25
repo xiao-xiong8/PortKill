@@ -45,6 +45,26 @@
         }
       }
     },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "GetReadyHealth",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminHealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/system/status": {
       "get": {
         "tags": [
@@ -2069,6 +2089,130 @@
           "recordedUtcMs": {
             "pattern": "^-?(?:0|[1-9]\\d*)$",
             "format": "int64"
+          }
+        }
+      },
+      "AdminHealthManifestResponse": {
+        "required": [
+          "status",
+          "version",
+          "sequence",
+          "daysRemaining"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "sequence": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64",
+            "nullable": true
+          },
+          "daysRemaining": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "format": "double",
+            "nullable": true
+          }
+        }
+      },
+      "AdminHealthQueueResponse": {
+        "required": [
+          "validation",
+          "publish",
+          "active",
+          "attention"
+        ],
+        "type": "object",
+        "properties": {
+          "validation": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int32"
+          },
+          "publish": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int32"
+          },
+          "active": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int32"
+          },
+          "attention": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int32"
+          }
+        }
+      },
+      "AdminHealthResponse": {
+        "required": [
+          "status",
+          "component",
+          "observedUtcMs",
+          "database",
+          "queue",
+          "storage",
+          "manifest"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "component": {
+            "type": "string"
+          },
+          "observedUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "database": {
+            "type": "string"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/AdminHealthQueueResponse"
+          },
+          "storage": {
+            "type": "object",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AdminHealthStorageResponse"
+              }
+            ],
+            "nullable": true
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/AdminHealthManifestResponse"
+          }
+        }
+      },
+      "AdminHealthStorageResponse": {
+        "required": [
+          "totalBytes",
+          "usedBytes",
+          "freeBytes",
+          "freePercent"
+        ],
+        "type": "object",
+        "properties": {
+          "totalBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "usedBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "freeBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "freePercent": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "format": "double"
           }
         }
       },

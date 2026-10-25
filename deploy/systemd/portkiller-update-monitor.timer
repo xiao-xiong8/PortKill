@@ -1,0 +1,12 @@
+[Unit]
+Description=Run PortKiller update server health monitor periodically
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=portkiller-update-monitor.service
+
+[Install]
+WantedBy=timers.target

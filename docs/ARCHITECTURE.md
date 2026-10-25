@@ -92,7 +92,9 @@ Ubuntu 安装入口 `deploy/ubuntu/install-update-server.sh` 创建 `portkiller-
 
 Nginx 的管理和下载 TLS 模板分别位于 `deploy/nginx/portkiller-admin.conf.example` 与 `deploy/nginx/portkiller-download-tls.conf.example`。管理站点代理 `/api/v1/`、流式上传和受认证管理 SSE，API 错误不回退到 SPA；下载站点只提供签名清单、不可变 ZIP、Range 和只读 UpdateNotifier SSE。旧 HTTP 下载入口继续保留，避免用客户端不接受的重定向破坏已有更新源。模板中的域名、证书和私钥路径必须在服务器上替换，不能提交真实值。
 
-P7-04 的 `deploy/ubuntu/backup-update-server.sh`、`upgrade-update-server.sh` 和 `restore-update-server.sh` 以停机锁协调 API/Worker/Notifier，数据库使用 SQLite Online Backup API，文件区使用固定目录清单和 SHA-256 清单。备份包含认证密钥、封存/暂存、正式清单/包、UpdateTool 回执状态及运行配置；恢复先验证摘要，再保留旧目录、恢复数据库并以 Worker 身份 `inspect` 当前发布。服务程序和 systemd 单元通过已验证 bundle 重新部署，不能用数据备份回退程序版本。
+P7-04 的 `deploy/ubuntu/backup-update-server.sh`、`upgrade-update-server.sh` 和 `restore-update-server.sh` 以停机锁协调 API/Worker/Notifier，并暂停 monitor timer，数据库使用 SQLite Online Backup API，文件区使用固定目录清单和 SHA-256 清单。备份包含认证密钥、封存/暂存、正式清单/包、UpdateTool 回执状态及运行配置；恢复先验证摘要，再保留旧目录、恢复数据库并以 Worker 身份 `inspect` 当前发布。服务程序和 systemd 单元通过已验证 bundle 重新部署，不能用数据备份回退程序版本。
+
+P7-05 的 `portkiller-update-monitor.service`/`.timer` 使用独立只读账号和系统 Python，通过回环就绪接口、只读 Notifier、旧下载入口、systemd 状态和有限磁盘信息生成脱敏健康快照。API、Worker、Notifier 和监测器使用 JSON 结构化日志输出到 journald；告警只包含有界 code、severity、component 和固定消息，并另写 `/run/portkiller-update-monitor/status.json`，不记录 Cookie、密码、MFA、认证密钥、签名私钥或响应正文。管理 API/Worker 可独立停机，Nginx 静态分发和只读通知仍保持独立可用；恢复/备份会暂停 timer，防止中间状态被采样。
 
 管理 API 使用 `/api/v1`、camelCase JSON 和字符串枚举；分页统一为 page/pageSize/total/items。错误使用 Problem Details，并附稳定 code 和 correlationId，不返回堆栈或运行目录。`/health/live` 仅提供存活信息，管理接口默认需要认证。
 

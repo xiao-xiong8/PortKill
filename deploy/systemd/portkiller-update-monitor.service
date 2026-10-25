@@ -1,0 +1,40 @@
+[Unit]
+Description=PortKiller update server health monitor
+After=network-online.target portkiller-update-api.service portkiller-update-worker.service portkiller-update-notifier.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=portkiller-update-monitor
+Group=portkiller-update-monitor
+SupplementaryGroups=portkiller-admin
+ExecStart=/opt/portkiller-updates/monitor/monitor-update-server.sh
+EnvironmentFile=-/etc/portkiller-updates/monitor.env
+RuntimeDirectory=portkiller-update-monitor
+RuntimeDirectoryMode=0750
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+LockPersonality=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+ReadOnlyPaths=/var/lib/portkiller-updates /srv/portkiller-updates /etc/portkiller-updates /opt/portkiller-updates
+ReadWritePaths=/run/portkiller-update-monitor
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=portkiller-update-monitor
+TimeoutStartSec=20
+TimeoutStopSec=5
+
+[Install]
+WantedBy=multi-user.target

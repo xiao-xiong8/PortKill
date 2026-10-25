@@ -10,7 +10,7 @@ public static class NotifierHost
         options.Validate();
         var builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseUrls(url);
-        builder.Logging.ClearProviders(); builder.Logging.AddSimpleConsole();
+        builder.Logging.ClearProviders(); builder.Logging.AddJsonConsole();
         builder.Logging.SetMinimumLevel(LogLevel.Warning);
         var monitor = new ReleaseMonitor(root, options);
         builder.Services.AddSingleton(monitor);

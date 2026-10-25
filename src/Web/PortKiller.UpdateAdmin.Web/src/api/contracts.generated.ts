@@ -607,6 +607,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/health/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetReadyHealth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -627,6 +643,44 @@ export interface components {
             /** Format: int64 */
             recordedUtcMs: unknown;
             sha256: string;
+        };
+        AdminHealthManifestResponse: {
+            /** Format: double */
+            daysRemaining: unknown;
+            /** Format: int64 */
+            sequence: unknown;
+            status: string;
+            version: string | null;
+        };
+        AdminHealthQueueResponse: {
+            /** Format: int32 */
+            active: unknown;
+            /** Format: int32 */
+            attention: unknown;
+            /** Format: int32 */
+            publish: unknown;
+            /** Format: int32 */
+            validation: unknown;
+        };
+        AdminHealthResponse: {
+            component: string;
+            database: string;
+            manifest: components["schemas"]["AdminHealthManifestResponse"];
+            /** Format: int64 */
+            observedUtcMs: unknown;
+            queue: components["schemas"]["AdminHealthQueueResponse"];
+            status: string;
+            storage: components["schemas"]["AdminHealthStorageResponse"] | null;
+        };
+        AdminHealthStorageResponse: {
+            /** Format: int64 */
+            freeBytes: unknown;
+            /** Format: double */
+            freePercent: unknown;
+            /** Format: int64 */
+            totalBytes: unknown;
+            /** Format: int64 */
+            usedBytes: unknown;
         };
         AuditEvent: {
             action?: string;
@@ -2555,6 +2609,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LiveHealthResponse"];
+                };
+            };
+        };
+    };
+    GetReadyHealth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminHealthResponse"];
                 };
             };
         };

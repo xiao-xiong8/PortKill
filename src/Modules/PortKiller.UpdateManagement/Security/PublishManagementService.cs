@@ -144,6 +144,17 @@ public sealed class PublishManagementService(UpdateAdminDbContext database, Admi
         return Response(row.job, row.approval);
     }
 
+    public async Task<PublishJobResponse> GetRequestAsync(ClaimsPrincipal principal, string key, CancellationToken token)
+    {
+        if (key.Length is < 1 or > 128 || key.Any(character => character < 0x21 || character > 0x7e))
+            throw new AdminFailure("idempotency_key_invalid", 400, "确认请求标识无效。");
+        string userId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        var previous = await database.IdempotencyRequests.AsNoTracking().SingleOrDefaultAsync(row => row.UserId == userId
+            && row.Operation == Operation && row.Key == key, token);
+        if (previous?.ResultResourceId == null) throw new AdminFailure("resource_not_found", 404, "尚未找到此确认请求的结果，请稍后查询或重试原请求。");
+        return await GetJobAsync(principal, previous.ResultResourceId, token);
+    }
+
     public async Task<PublishJobResponse> RetryPublicCheckAsync(ClaimsPrincipal principal, string id, CancellationToken token)
     {
         for (int attempt = 0; ; attempt++)

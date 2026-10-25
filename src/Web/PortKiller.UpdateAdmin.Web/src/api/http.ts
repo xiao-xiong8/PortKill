@@ -39,12 +39,14 @@ export function reportAuthentication(error: unknown, path: string) {
     window.dispatchEvent(new Event('admin:unauthorized'));
 }
 
-export async function api<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
+export async function api<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal,
+  extraHeaders?: HeadersInit): Promise<T> {
   if (!path.startsWith('/api/v1/')) throw new Error('Invalid management path.');
   try {
     const headers = new Headers();
     if (method !== 'GET') headers.set('X-PortKill-CSRF', await csrfToken(signal));
     if (body !== undefined) headers.set('Content-Type', 'application/json');
+    if (extraHeaders) for (const [name, value] of new Headers(extraHeaders)) headers.set(name, value);
     return await readResponse<T>(await fetch(path, { method, headers, credentials: 'same-origin', redirect: 'error',
       cache: 'no-store', body: body === undefined ? undefined : JSON.stringify(body), signal }));
   } catch (error) { reportAuthentication(error, path); throw error; }

@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { statSync } from 'node:fs';
+import { statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { expect, test, type Page, type BrowserContext } from '@playwright/test';
 
 function totp(key: string, offset = 0) {
@@ -14,6 +14,7 @@ function totp(key: string, offset = 0) {
 test.describe.serial('authenticated administration with real HTTPS API', () => {
   let page: Page;
   let context: BrowserContext;
+  let authenticatorKey = '';
   const fixtures = fileURLToPath(new URL('../../../../.local/artifacts/admin-browser/runtime/fixtures/', import.meta.url));
   test.beforeAll(async ({ browser }) => { context = await browser.newContext({ ignoreHTTPSErrors: true }); page = await context.newPage(); });
   test.afterAll(async () => { await context.close(); });
@@ -25,6 +26,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await expect(page.getByRole('heading', { name: '绑定验证器' })).toBeVisible();
     await page.getByRole('button', { name: '生成绑定密钥' }).click();
     const key = await page.getByLabel('绑定密钥', { exact: true }).inputValue();
+    authenticatorKey = key;
     await page.getByLabel('验证器动态码', { exact: true }).fill(totp(key));
     await page.getByRole('button', { name: '验证并继续' }).click();
     await expect(page.getByRole('heading', { name: '保存恢复码' })).toBeVisible();
@@ -47,7 +49,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await page.getByRole('button', { name: '再次认证', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('当前密码').fill('Browser-Test-Only!492');
-    await dialog.getByLabel('验证器动态码').fill(totp(key, 1));
+    await dialog.getByLabel('验证器动态码').fill(totp(authenticatorKey, 1));
     await dialog.getByRole('button', { name: '确认身份' }).click();
     await expect(dialog).toHaveCount(0);
     expect(await page.evaluate(() => Object.keys(localStorage).filter(key => key !== 'portkill.theme'))).toEqual([]);
@@ -94,5 +96,50 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     expect(await page.locator('.log-lines img').count()).toBe(0);
     await network.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: 104857600, uploadThroughput: 104857600 });
     await network.detach();
+  });
+  test('publish confirmation is one-time and failed public verification can be retried', async () => {
+    test.setTimeout(90000);
+    const distributionFailure = fileURLToPath(new URL('../../../../.local/artifacts/admin-browser/runtime/distribution-unavailable', import.meta.url));
+    writeFileSync(distributionFailure, 'test outage');
+    try {
+      await expect(page.getByRole('button', { name: '生成发布确认' })).toBeVisible();
+      await page.getByRole('button', { name: '生成发布确认' }).click();
+      await expect(page.getByText('当前正式清单', { exact: true })).toBeVisible();
+      let idempotencyKey = '';
+      let acceptedJobId = '';
+      await page.route('**/api/v1/releases/*/publish', async route => {
+        idempotencyKey = route.request().postDataJSON().idempotencyKey;
+        const response = await route.fetch();
+        acceptedJobId = (await response.json()).id; // The API accepted the request; only the browser response is lost.
+        await route.abort('failed');
+      }, { times: 1 });
+      await page.getByRole('button', { name: '确认并创建发布任务' }).click();
+      await expect(page.getByRole('alert')).toContainText('连接中断');
+      const beforeReload = await page.evaluate(async key => {
+        const response = await fetch(`/api/v1/publish-requests/${encodeURIComponent(key)}`, { credentials: 'same-origin' });
+        return response.json();
+      }, idempotencyKey);
+      expect(beforeReload.id).toBe(acceptedJobId);
+      await page.reload();
+      await expect(page.getByRole('button', { name: '查询确认结果' })).toBeVisible();
+      await page.getByRole('button', { name: '重试同一确认请求' }).click();
+      await expect(page).toHaveURL(new RegExp(`#job/${acceptedJobId}`));
+      const recovered = await page.evaluate(async key => {
+        const response = await fetch(`/api/v1/publish-requests/${encodeURIComponent(key)}`, { credentials: 'same-origin' });
+        return response.json();
+      }, idempotencyKey);
+      expect(recovered.id).toBe(acceptedJobId);
+      expect(decodeURIComponent(new URL(page.url()).hash.slice('#job/'.length))).toBe(recovered.id);
+      await expect(page.locator('.status-label').first()).toHaveText('已生效，下载检查未通过', { timeout: 30000 });
+    } finally {
+      try { unlinkSync(distributionFailure); } catch { /* The fixture process may already have cleaned it. */ }
+    }
+    const publishJobs = await page.evaluate(async () => {
+      const response = await fetch('/api/v1/jobs?page=1&pageSize=20&kind=publish', { credentials: 'same-origin' });
+      return (await response.json()).items;
+    });
+    expect(publishJobs).toHaveLength(1);
+    await page.getByRole('button', { name: '重试下载检查' }).click();
+    await expect(page.locator('.status-label').first()).toHaveText('发布完成', { timeout: 30000 });
   });
 });

@@ -16,6 +16,15 @@ describe('authenticated management transport', () => {
   });
   it('preserves exact unsafe int64 values', () => { expect(parseJson<{ sequence: string }>('{"sequence":9223372036854775806}').sequence).toBe('9223372036854775806'); });
   it('retains bounded rate limit information', async () => { await expect(readResponse(new Response('{"code":"rate_limited"}', { status: 429, headers: { 'content-type': 'application/problem+json', 'retry-after': '60' } }))).rejects.toMatchObject({ retryAfter: 60 }); });
+  it('adds an idempotency header without replacing the fresh CSRF token', async () => {
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ requestToken: 'fresh-token' }))
+      .mockResolvedValueOnce(Response.json({ id: 'job-1' }, { status: 202 }));
+    vi.stubGlobal('fetch', fetcher);
+    await api('/api/v1/releases/draft/publish', 'POST', { challengeId: 'challenge', idempotencyKey: 'request-1' }, undefined, { 'Idempotency-Key': 'request-1' });
+    const headers = fetcher.mock.calls[1][1].headers as Headers;
+    expect(headers.get('X-PortKill-CSRF')).toBe('fresh-token');
+    expect(headers.get('Idempotency-Key')).toBe('request-1');
+  });
   it('rejects SPA HTML and surfaces unauthorized protected responses', async () => {
     await expect(readResponse(new Response('<html>'))).rejects.toBeInstanceOf(ApiError);
     const listener = vi.fn(); vi.stubGlobal('window', { dispatchEvent: listener });

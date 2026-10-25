@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using PortKiller.UpdateManagement.Contracts;
 using PortKiller.UpdateManagement.Security;
 
@@ -8,6 +9,10 @@ public static class PublishEndpoints
     public static void MapPublishEndpoints(this WebApplication app)
     {
         var releases = app.MapGroup("/api/v1/releases");
+        app.MapGet("/api/v1/publish-requests/{key}", async (string key, PublishManagementService service, HttpContext context)
+            => await service.GetRequestAsync(context.User, key, context.RequestAborted))
+            .RequireAuthorization(AdminPermissions.Read).WithName("GetPublishRequest")
+            .ProducesProblem(400).ProducesProblem(401).ProducesProblem(403).ProducesProblem(404);
         releases.MapGet("/current", async (CurrentReleaseService service, HttpContext context)
             => await service.GetAsync(context.RequestAborted))
             .RequireAuthorization(AdminPermissions.Read).WithName("GetCurrentRelease")
@@ -21,9 +26,9 @@ public static class PublishEndpoints
             .ProducesProblem(401).ProducesProblem(403).ProducesProblem(404).ProducesProblem(409);
 
         releases.MapPost("/{draftId}/publish", async (string draftId, PublishConfirmationRequest request,
-            PublishManagementService service, HttpContext context) =>
+            PublishManagementService service, HttpContext context,
+            [FromHeader(Name = "Idempotency-Key")] string? header) =>
         {
-            string? header = context.Request.Headers["Idempotency-Key"].FirstOrDefault();
             var job = await service.ConfirmAsync(context.User, draftId, request, header, context.RequestAborted);
             return TypedResults.Accepted($"/api/v1/publish-jobs/{job.Id}", job);
         })

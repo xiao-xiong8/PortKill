@@ -1,0 +1,58 @@
+# TLS download site template. Replace the host name and certificate paths before enabling.
+# Keep the legacy HTTP/static template for clients that have not migrated to HTTPS.
+server {
+    listen 443 ssl http2;
+    server_name updates.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/updates.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/updates.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:PortKillUpdatesTls:10m;
+    ssl_session_timeout 10m;
+
+    root /srv/portkiller-updates;
+    server_tokens off;
+    sendfile on;
+    etag on;
+    max_ranges 1;
+    gzip off;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    access_log /var/log/nginx/portkiller-updates-tls.access.log;
+    error_log /var/log/nginx/portkiller-updates-tls.error.log;
+
+    location = /stable/events {
+        proxy_pass http://127.0.0.1:8091/stable/events;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_cache off;
+        proxy_set_header Accept-Encoding "";
+        proxy_read_timeout 90s;
+        proxy_send_timeout 15s;
+        proxy_redirect off;
+        gzip off;
+        limit_except GET { deny all; }
+    }
+
+    location = /stable/manifest.json {
+        default_type application/json;
+        add_header Cache-Control "no-cache";
+        add_header Accept-Ranges bytes;
+        limit_except GET { deny all; }
+        try_files $uri =404;
+    }
+
+    location ~ ^/stable/PortKiller-[0-9.]+-win-x64[.]zip$ {
+        default_type application/zip;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header Accept-Ranges bytes;
+        limit_except GET { deny all; }
+        try_files $uri =404;
+    }
+
+    location / { return 404; }
+}

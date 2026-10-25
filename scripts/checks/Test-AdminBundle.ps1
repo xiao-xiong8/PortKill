@@ -21,6 +21,8 @@ $deploymentFiles=@(
     'deploy/systemd/portkiller-update-worker.service',
     'deploy/systemd/portkiller-update-notifier.service',
     'deploy/ubuntu/install-update-server.sh',
+    'deploy/nginx/portkiller-admin.conf.example',
+    'deploy/nginx/portkiller-download-tls.conf.example',
     'deploy/examples/update-admin-api.env.example',
     'deploy/examples/update-admin-worker.env.example'
 )
@@ -42,6 +44,14 @@ foreach ($required in @('User=portkiller-update-notifier','ProtectSystem=strict'
 $installer=Get-Content -Raw -LiteralPath (Join-Path $repository 'deploy/ubuntu/install-update-server.sh')
 foreach ($required in @('portkiller-update-api','portkiller-update-worker','portkiller-update-notifier','portkiller-admin','portkiller-publish','2770 "$data_root"')) {
     if ($installer -notmatch [regex]::Escape($required)) { throw "安装脚本缺少权限边界：$required" }
+}
+$nginxAdmin=Get-Content -Raw -LiteralPath (Join-Path $repository 'deploy/nginx/portkiller-admin.conf.example')
+$nginxDownload=Get-Content -Raw -LiteralPath (Join-Path $repository 'deploy/nginx/portkiller-download-tls.conf.example')
+foreach ($required in @('location /api/v1/','events/stream','proxy_buffering off','proxy_request_buffering off','client_max_body_size 257m','X-Forwarded-Proto https','try_files $uri $uri/ /index.html')) {
+    if ($nginxAdmin -notmatch [regex]::Escape($required)) { throw "管理 Nginx 模板缺少约束：$required" }
+}
+foreach ($required in @('location = /stable/manifest.json','immutable','max_ranges 1','location = /stable/events','location / { return 404; }')) {
+    if ($nginxDownload -notmatch [regex]::Escape($required)) { throw "下载 Nginx 模板缺少约束：$required" }
 }
 foreach ($file in @($bundle.files)) {
     $path=Join-Path $OutputDirectory ([string]$file.path)

@@ -90,6 +90,8 @@ MainViewModel.* 位于 Shell/Compatibility，仍是已有功能的兼容协调�
 
 Ubuntu 安装入口 `deploy/ubuntu/install-update-server.sh` 创建 `portkiller-update-api`、`portkiller-update-worker` 和 `portkiller-update-notifier` 三个 `nologin` 服务账号。API 与 Worker 通过 `portkiller-admin` 组共享 SQLite、WAL/SHM 和上传暂存区；封存区由 Worker 所有，正式目录由 Worker 和受控旧 SSH 发布组写入，API 和 Notifier 只读。`deploy/systemd/` 中的三个服务单元启用 `ProtectSystem=strict`、`NoNewPrivileges`、固定回环监听及受限读写路径。安装或升级不会自动迁移数据库，需停止 API/Worker 后以 API 服务账号执行 `db migrate`；真实 Linux、权限、Nginx、TLS 和公网路径仍需 P7 后续验收。
 
+Nginx 的管理和下载 TLS 模板分别位于 `deploy/nginx/portkiller-admin.conf.example` 与 `deploy/nginx/portkiller-download-tls.conf.example`。管理站点代理 `/api/v1/`、流式上传和受认证管理 SSE，API 错误不回退到 SPA；下载站点只提供签名清单、不可变 ZIP、Range 和只读 UpdateNotifier SSE。旧 HTTP 下载入口继续保留，避免用客户端不接受的重定向破坏已有更新源。模板中的域名、证书和私钥路径必须在服务器上替换，不能提交真实值。
+
 管理 API 使用 `/api/v1`、camelCase JSON 和字符串枚举；分页统一为 page/pageSize/total/items。错误使用 Problem Details，并附稳定 code 和 correlationId，不返回堆栈或运行目录。`/health/live` 仅提供存活信息，管理接口默认需要认证。
 
 `deploy/contracts/admin-api.v1.json` 由实际 API 导出；前端类型通过 openapi-typescript 生成，构建检查需比较实际契约及已生成类型。新增业务入口随对应功能任务加入契约，不将规划中的接口伪装为已经实现。

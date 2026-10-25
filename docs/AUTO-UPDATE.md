@@ -47,6 +47,10 @@ sudo bash deploy/ubuntu/install-update-server.sh <existing-ssh-user> \
 
 本阶段安装的 Nginx 模板先保持旧客户端使用的静态下载和 `/stable/events` 路径；管理网页/API 的 HTTPS 代理和独立管理域名在 P7-03 配置，不能把当前 `8080` 下载入口当作管理登录入口。
 
+P7-03 的 Nginx 模板位于 `deploy/nginx/portkiller-admin.conf.example` 和 `deploy/nginx/portkiller-download-tls.conf.example`。管理域名和更新域名分开填写，证书可用同一台服务器上的免费 Let's Encrypt 证书；模板不包含真实域名、证书或私钥。启用前替换 `server_name` 及证书路径，先执行 `nginx -t` 再 reload。管理站点将 `/api/v1/` 和管理 SSE 代理到回环 API，关闭请求/响应缓冲并允许 257 MiB 流式请求；API 路径没有 SPA 回退，Cookie 仍由 HTTPS 同源管理域名承载。下载站点只公开签名清单、版本 ZIP 和 `/stable/events`，保留 Range、不可变 ZIP 缓存及清单 `no-cache`，其他路径返回 404。
+
+旧客户端的 HTTP 更新源不要通过 301/308 强制迁移；客户端明确拒绝重定向时，继续保留 `portkiller-updates.conf` 的旧静态入口，待客户端配置逐步切换到 TLS 下载域名后再评估下线旧入口。
+
 首次部署或迁移版本后，先停止 API 与 Worker，再运行维护迁移；服务不会在启动时自动迁移：
 
 ```bash

@@ -1,6 +1,6 @@
 #requires -Version 7.0
 [CmdletBinding()]
-param([ValidateSet('Debug','Release')][string]$Configuration='Release',[switch]$RunTests)
+param([ValidateSet('Debug','Release')][string]$Configuration='Release',[switch]$RunTests,[switch]$IncludePerformance)
 $ErrorActionPreference='Stop'
 $repository=(Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 & (Join-Path $repository 'scripts/checks/Test-Architecture.ps1')
@@ -10,7 +10,9 @@ if ($RunTests) {
     $testProject=Join-Path $repository 'tests/PortKiller.UpdateAdmin.Tests'
     if (-not (Test-Path -LiteralPath $testProject)) { throw 'Administration tests are not present' }
     $results=Join-Path $repository '.local/artifacts/admin-tests/latest'
-    & dotnet test $testProject -c $Configuration --no-build --nologo --logger 'trx;LogFileName=admin-tests.trx' --results-directory $results
+    $testArguments = @($testProject, '-c', $Configuration, '--no-build', '--nologo', '--logger', 'trx;LogFileName=admin-tests.trx', '--results-directory', $results)
+    if (-not $IncludePerformance) { $testArguments += @('--filter', 'Category!=Performance') }
+    & dotnet test @testArguments
     if ($LASTEXITCODE -ne 0) { throw 'Administration tests failed' }
     [xml]$trx=[IO.File]::ReadAllText((Join-Path $results 'admin-tests.trx'))
     if ([int]$trx.TestRun.ResultSummary.Counters.total -lt 1 -or [int]$trx.TestRun.ResultSummary.Counters.notExecuted -gt 0) {

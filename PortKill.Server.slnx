@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="src/Modules/PortKiller.UpdateProtocol/PortKiller.UpdateProtocol.csproj" />
   <Folder Name="/tests/">
+    <Project Path="tests/PortKiller.UpdateAdmin.BrowserHost/PortKiller.UpdateAdmin.BrowserHost.csproj" />
     <Project Path="tests/PortKiller.UpdateAdmin.Tests/PortKiller.UpdateAdmin.Tests.csproj" />
     <Project Path="tests/PortKiller.UpdateTool.TestHost/PortKiller.UpdateTool.TestHost.csproj" />
   </Folder>

@@ -31,6 +31,8 @@ public sealed class WorkerRegistrationTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ValidationTaskExecutor>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<PublishTaskExecutor>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<PublishTaskQueue>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<PublicVerificationTaskQueue>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<PublicVerificationTaskExecutor>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<UploadCleanupService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ValidationTaskQueue>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ValidationArchiveService>());

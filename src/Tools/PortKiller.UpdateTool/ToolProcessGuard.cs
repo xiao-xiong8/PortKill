@@ -23,7 +23,7 @@ public sealed class ToolProcessGuard : IDisposable
         _watchdog = WatchAsync();
     }
 
-    public static ToolProcessGuard? FromArguments(IReadOnlyDictionary<string, string> flags)
+    public static ToolProcessGuard? FromArguments(IReadOnlyDictionary<string, string> flags, int maximumAllowedSeconds = 60)
     {
         bool pid = flags.TryGetValue("--owner-pid", out string? pidText);
         bool start = flags.TryGetValue("--owner-start-ticks", out string? startText);
@@ -32,7 +32,8 @@ public sealed class ToolProcessGuard : IDisposable
         if (!pid || !start || !runtime
             || !int.TryParse(pidText, NumberStyles.None, CultureInfo.InvariantCulture, out int ownerPid) || ownerPid <= 0
             || !long.TryParse(startText, NumberStyles.None, CultureInfo.InvariantCulture, out long ticks) || ticks <= 0
-            || !int.TryParse(runtimeText, NumberStyles.None, CultureInfo.InvariantCulture, out int seconds) || seconds is < 1 or > 60)
+            || !int.TryParse(runtimeText, NumberStyles.None, CultureInfo.InvariantCulture, out int seconds)
+            || seconds < 1 || seconds > maximumAllowedSeconds)
             throw new ArgumentException("The tool owner identity and runtime bound are required together.");
         try { return new(ownerPid, ticks, seconds); }
         catch (Exception exception) when (exception is ArgumentException or System.ComponentModel.Win32Exception)

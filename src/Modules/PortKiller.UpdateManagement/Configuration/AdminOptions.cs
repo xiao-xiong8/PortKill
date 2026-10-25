@@ -9,6 +9,7 @@ public sealed class UpdateToolOptions
     public string VerificationConfigPath { get; set; } = "";
     public string ReleaseRoot { get; set; } = "";
     public int TimeoutSeconds { get; set; } = 45;
+    public int PublicCheckTimeoutSeconds { get; set; } = 300;
     public int MaximumOutputBytes { get; set; } = 65_536;
 
     public void Validate()
@@ -16,7 +17,8 @@ public sealed class UpdateToolOptions
         if (!Enabled) return;
         if (string.IsNullOrWhiteSpace(ExecutablePath) || !Path.IsPathFullyQualified(ExecutablePath)
             || string.IsNullOrWhiteSpace(VerificationConfigPath) || !Path.IsPathFullyQualified(VerificationConfigPath)
-            || TimeoutSeconds is < 1 or > 55 || MaximumOutputBytes is < 1024 or > 1_048_576)
+            || TimeoutSeconds is < 1 or > 55 || PublicCheckTimeoutSeconds is < 1 or > 600
+            || MaximumOutputBytes is < 1024 or > 1_048_576)
             throw new InvalidOperationException("Publisher UpdateTool configuration is invalid.");
         ExecutablePath = Path.GetFullPath(ExecutablePath);
         VerificationConfigPath = Path.GetFullPath(VerificationConfigPath);

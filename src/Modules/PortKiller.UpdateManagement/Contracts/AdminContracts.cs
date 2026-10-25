@@ -16,9 +16,23 @@ public sealed record PublishChallengeResponse(string Id, string DraftId, string 
 
 public sealed record PublishConfirmationRequest(string ChallengeId, string? IdempotencyKey = null);
 
+[System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
+public sealed record PublicCheckRetryRequest;
+
 public sealed record PublishJobResponse(string Id, string DraftId, string Application, string Channel,
     PublishJobState State, string Version, long Sequence, string ManifestSha256, string PackageSha256,
-    string ExpectedCurrentManifestSha256, long CreatedUtcMs, string? ErrorCode = null);
+    string ExpectedCurrentManifestSha256, long CreatedUtcMs, string? ErrorCode = null,
+    long? ActivatedUtcMs = null, PublicCheckResponse? DownloadCheck = null);
+
+// The last completed result remains historical while a new attempt is queued or running.
+public sealed record PublicCheckResponse(int Attempts, bool Pending, bool Running, long? LastAttemptStartedUtcMs,
+    long? LastCompletedUtcMs, bool? LastSucceeded, string? LastErrorCode);
+public enum ManifestExpiryStatus { Healthy, Expiring, Critical, Expired }
+public sealed record ActivationReceiptResponse(string JobId, string Sha256, long RecordedUtcMs);
+public sealed record CurrentReleaseDetails(string Version, long Sequence, string ManifestSha256, string PackageSha256,
+    long ExpiresUtcMs, double DaysRemaining, ManifestExpiryStatus ExpiryStatus,
+    ActivationReceiptResponse? ActivationReceipt, PublicCheckResponse? DownloadCheck);
+public sealed record CurrentReleaseResponse(string Application, string Channel, long ObservedUtcMs, CurrentReleaseDetails? Release);
 
 public static class AdminContract
 {

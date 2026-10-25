@@ -25,6 +25,10 @@ public sealed class PublisherWorker(
                     await using var scope = scopes.CreateAsyncScope();
                     processed = await scope.ServiceProvider.GetRequiredService<PublishTaskExecutor>()
                         .ExecuteOnceAsync(_workerId, stoppingToken);
+                    // Use a separate scope/context after activation; check retries never enter PublishTaskExecutor.
+                    await using var checkScope = scopes.CreateAsyncScope();
+                    processed |= await checkScope.ServiceProvider.GetRequiredService<PublicVerificationTaskExecutor>()
+                        .ExecuteOnceAsync(_workerId, stoppingToken);
                 }
                 await Task.Delay(processed ? TimeSpan.FromMilliseconds(100) : TimeSpan.FromSeconds(1), stoppingToken);
             }

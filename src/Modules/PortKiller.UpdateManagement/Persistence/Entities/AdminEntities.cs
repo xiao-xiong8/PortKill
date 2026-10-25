@@ -95,6 +95,12 @@ public sealed class ReleaseJob : IVersionedEntity
     public int Attempts { get; set; }
     public string? ErrorCode { get; set; }
     public string? ReceiptSha256 { get; set; }
+    public long? ActivatedUtcMs { get; set; }
+    public int PublicCheckAttempts { get; set; }
+    public long? PublicCheckStartedUtcMs { get; set; }
+    public long? PublicCheckCompletedUtcMs { get; set; }
+    public bool? PublicCheckSucceeded { get; set; }
+    public string? PublicCheckErrorCode { get; set; }
     public long CreatedUtcMs { get; set; }
     public long Revision { get; set; }
 }

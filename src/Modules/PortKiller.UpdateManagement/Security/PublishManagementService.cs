@@ -144,6 +144,63 @@ public sealed class PublishManagementService(UpdateAdminDbContext database, Admi
         return Response(row.job, row.approval);
     }
 
+    public async Task<PublishJobResponse> RetryPublicCheckAsync(ClaimsPrincipal principal, string id, CancellationToken token)
+    {
+        for (int attempt = 0; ; attempt++)
+        {
+            try { return await RetryPublicCheckCoreAsync(principal, id, token); }
+            catch (Exception exception) when (Busy(exception))
+            {
+                if (attempt >= 2) throw new AdminFailure("publish_in_progress", 409, "发布任务正在处理，请稍后重试。");
+                database.ChangeTracker.Clear();
+                await Task.Delay(25 * (attempt + 1), token);
+            }
+        }
+    }
+
+    private async Task<PublishJobResponse> RetryPublicCheckCoreAsync(ClaimsPrincipal principal, string id, CancellationToken token)
+    {
+        await using var transaction = await database.Database.BeginTransactionAsync(token);
+        SessionTicket actor = await RequirePublisherAsync(principal, token);
+        bool administrator = await database.UserRoles.Where(link => link.UserId == actor.User.Id)
+            .Join(database.Roles, link => link.RoleId, role => role.Id, (link, role) => role.Name)
+            .AnyAsync(name => name == "Administrator", token);
+        var row = await database.ReleaseJobs.AsNoTracking().Where(job => job.Id == id && job.Kind == "publish"
+                && job.Application == "PortKill" && job.Channel == "stable")
+            .Join(database.PublishApprovals, job => job.PublishApprovalId, approval => approval.Id, (job, approval) => new { job, approval })
+            .Join(database.ReleaseDrafts, item => item.job.DraftId, draft => draft.Id,
+                (item, draft) => new { item.job, item.approval, OwnerId = draft.OwnerId }).SingleOrDefaultAsync(token);
+        if (row == null || !administrator && row.job.RequestedById != actor.User.Id && row.OwnerId != actor.User.Id)
+            throw new AdminFailure("resource_not_found", 404, "发布任务不存在。");
+        // Concurrent clicks and responses lost in transit all return the same original job.
+        if (row.job.State is PublishJobState.ManifestActivated or PublishJobState.PublicVerifying or PublishJobState.Completed)
+        { await transaction.CommitAsync(token); return Response(row.job, row.approval); }
+        if (row.job.State != PublishJobState.ActiveUnverified)
+            throw new AdminFailure("public_check_not_retryable", 409, "当前任务不支持重试下载检查。");
+        PublishedRelease? current = await source.ReadAsync(token);
+        if (current?.ManifestSha256 != row.approval.ManifestSha256)
+            throw new AdminFailure("public_check_baseline_changed", 409, "正式清单已经变化，请查看当前版本。");
+        if (await database.ReleaseJobs.AnyAsync(job => job.Id != id && job.Kind == "publish"
+            && job.Application == row.job.Application && job.Channel == row.job.Channel
+            && (job.State == PublishJobState.Queued || job.State == PublishJobState.Publishing
+                || job.State == PublishJobState.ManifestActivated || job.State == PublishJobState.PublicVerifying), token))
+            throw new AdminFailure("publish_in_progress", 409, "同一应用和渠道已有发布任务正在处理。");
+        int changed = await database.ReleaseJobs.Where(job => job.Id == id && job.State == PublishJobState.ActiveUnverified)
+            .ExecuteUpdateAsync(update => update.SetProperty(job => job.State, PublishJobState.PublicVerifying)
+                .SetProperty(job => job.LeaseOwner, (string?)null).SetProperty(job => job.LeaseExpiresUtcMs, (long?)null)
+                .SetProperty(job => job.ErrorCode, (string?)null).SetProperty(job => job.Revision, job => job.Revision + 1), token);
+        if (changed != 1) throw new AdminFailure("publish_busy", 409, "任务状态已经变化，请刷新后重试。");
+        long sequence = (await database.JobEvents.Where(item => item.JobId == id).MaxAsync(item => (long?)item.Sequence, token) ?? 0) + 1;
+        database.JobEvents.Add(new JobEvent { JobId = id, Sequence = sequence, Stage = "public_check_queued",
+            Message = "public_check_retry_requested", CreatedUtcMs = Now });
+        audit.Stage("publish.public_check_retried", id, actorUserId: actor.User.Id);
+        await database.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
+        row.job.State = PublishJobState.PublicVerifying;
+        row.job.LeaseOwner = null; row.job.ErrorCode = null;
+        return Response(row.job, row.approval);
+    }
+
     private async Task<SessionTicket> RequirePublisherAsync(ClaimsPrincipal principal, CancellationToken token)
     {
         var actor = await sessions.ValidateAsync(principal, token)
@@ -185,9 +242,10 @@ public sealed class PublishManagementService(UpdateAdminDbContext database, Admi
             && string.Equals(draft.ManifestSha256, approval.ManifestSha256, StringComparison.OrdinalIgnoreCase)
             && string.Equals(draft.PackageSha256, approval.PackageSha256, StringComparison.OrdinalIgnoreCase);
 
-    internal static PublishJobResponse Response(ReleaseJob job, PublishApproval approval)
+    private PublishJobResponse Response(ReleaseJob job, PublishApproval approval)
         => new(job.Id, job.DraftId, job.Application, job.Channel, job.State, approval.Version, approval.Sequence,
-            approval.ManifestSha256, approval.PackageSha256, approval.ExpectedManifestSha256, job.CreatedUtcMs, job.ErrorCode);
+            approval.ManifestSha256, approval.PackageSha256, approval.ExpectedManifestSha256, job.CreatedUtcMs, job.ErrorCode,
+            job.ActivatedUtcMs, CurrentReleaseService.Check(job, Now));
 
     private static bool IsDigest(string? value) => value is { Length: 64 } && value.All(Uri.IsHexDigit);
     private static bool Busy(Exception exception)

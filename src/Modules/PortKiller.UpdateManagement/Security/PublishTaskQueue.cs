@@ -115,6 +115,7 @@ public sealed class PublishTaskQueue(UpdateAdminDbContext database, TimeProvider
                 && job.State == PublishJobState.Publishing && job.LeaseOwner == workerId && job.LeaseExpiresUtcMs > now)
             .ExecuteUpdateAsync(update => update.SetProperty(job => job.State, PublishJobState.ManifestActivated)
                 .SetProperty(job => job.ErrorCode, (string?)null).SetProperty(job => job.ReceiptSha256, result.ReceiptSha256)
+                .SetProperty(job => job.ActivatedUtcMs, now)
                 .SetProperty(job => job.LeaseOwner, (string?)null).SetProperty(job => job.LeaseExpiresUtcMs, (long?)null)
                 .SetProperty(job => job.Revision, job => job.Revision + 1), token);
         if (changed != 1) return false;

@@ -107,7 +107,7 @@ pwsh -File scripts/build/Test-UpdatePipeline.ps1 -VcVarsAllPath C:/path/to/vcvar
 
 该入口包含 UI、真实 AOT 安装与恢复、隔离发布演练、性能检查及 Linux 服务端构建。结果写入 `.local/artifacts/update-validation/`。真实 Linux、Nginx、TLS 和公网部署仍需单独验收；过程记录保存在本地，不随源码分发。
 
-网页发布管理后台由独立 Vue 前端、net10.0 API/Worker 和 SQLite + EF Core 10 业务模块组成。上传、严格验签、产物封存、单次发布确认、原子激活和中断恢复已实现；后续仍需完成公网验证、管理事件流、前端完整流程和生产部署验收。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
+网页发布管理后台由独立 Vue 前端、net10.0 API/Worker 和 SQLite + EF Core 10 业务模块组成。上传、严格验签、产物封存、单次发布确认、原子激活、中断恢复、分发下载验证及当前版本查询已实现；后续仍需完成管理事件流、前端完整流程和生产部署验收。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
 
 发布配置由 API 和 Worker 各自的配置提供。API 使用 `UpdateTool:VerificationConfigPath` 和 `UpdateTool:ReleaseRoot` 读取当前签名清单；Worker 还需配置 `UpdateTool:ExecutablePath` 并设置 `UpdateTool:Enabled=true`，负责验证上传产物和执行发布。两个进程必须共享相同的管理数据库、验签配置和 `ReleaseRoot`；API 对正式目录只需读取权限，Worker 需要按 UpdateTool 的原子发布流程写入。生产环境建议通过服务环境变量注入路径：
 
@@ -120,6 +120,12 @@ UpdateTool__ReleaseRoot=/srv/portkiller-updates/stable
 在 API 进程中保持 `UpdateTool__Enabled=false`；仅发布 Worker 设置为 `true`。Windows 开发机应使用对应的绝对路径。`VerificationConfigPath` 只包含验证公钥及公开 URL，不放置发布私钥；签名私钥继续留在受控 Windows 制作环境。正式部署的服务账户、共享目录权限和恢复流程在 P7 阶段验收。
 
 Worker 先核对正式签名清单和实际包，再决定恢复任务或激活。清单已提交而回执或数据库写入失败时，`recover` 修复回执和 ManifestActivated 状态；已有更新版本时旧任务成为 Superseded。核对受阻时任务保持 Publishing，延迟重试核对。执行锁覆盖整个发布操作，工具绑定父进程身份和运行时限；Worker 退出后遗留工具会退出，重启后核对提交事实。调用未带父进程参数的原 CLI 发布流程继续使用相同的服务端提交锁和 CAS。
+
+激活后的任务由 Worker 调用 `public-check`，验证配置中的清单 URL、签名清单指定的同源包、完整包摘要和 Range 响应，所有请求均拒绝重定向。检查通过后状态为 Completed，失败为 ActiveUnverified，已激活文件保持有效。`UpdateTool__PublicCheckTimeoutSeconds` 默认 300 秒，可设为 1–600 秒，覆盖响应头及全部响应体；激活工具继续使用独立的短超时。
+
+已认证读取者可通过 `GET /api/v1/releases/current` 查询正式版本、签名到期状态和后台记录。`observedUtcMs` 是本次读取签名清单的时间，`activationReceipt` 是 Worker 持久记录的历史回执摘要及记录时间，`downloadCheck` 是最近完成的下载结果及待处理状态；查询不触发联网检查，也不验证或修复 Worker 私有回执文件。外部 CLI 发布没有对应后台任务时，后两项为空。签名到期不足 14 天提示 Expiring，不足 7 天为 Critical，到期后为 Expired。
+
+Publisher 或 Administrator 可向 `POST /api/v1/publish-jobs/{id}/public-check/retry` 发送 `{}`，并携带 CSRF 令牌及近期 MFA 会话；Publisher 还须满足任务归属限制。ActiveUnverified 的重试在原任务上只重新核对和下载检查，保留上次结果，不再次激活；不接受 URL 参数，正式清单变化或有其他活动发布时返回冲突。已排队、检查中或已完成的重复请求返回原任务。本阶段以隔离目录、测试密钥、本机真实 HTTP 服务和真实工具进程验证，真实公网、Linux、Nginx 和 HTTPS 验收留到 P7–P8。
 
 ```powershell
 # 后台测试、实际 OpenAPI 比对、前端检查与构建

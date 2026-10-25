@@ -520,6 +520,9 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                     b.Property<string>("Id")
                         .HasColumnType("TEXT");
 
+                    b.Property<long?>("ActivatedUtcMs")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Application")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -553,6 +556,21 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
 
                     b.Property<string>("LeaseOwner")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("PublicCheckAttempts")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("PublicCheckCompletedUtcMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PublicCheckErrorCode")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("PublicCheckStartedUtcMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool?>("PublicCheckSucceeded")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("PublishApprovalId")
                         .HasColumnType("TEXT");

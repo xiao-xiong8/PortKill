@@ -20,9 +20,11 @@ try
     if (!flags.TryGetValue("--config", out string? configPath)) throw new ArgumentException("The verification configuration is required.");
     foreach (string name in flags.Keys)
         if (name is not ("--config" or "--root" or "--manifest" or "--package" or "--expected" or "--manifest-sha256" or "--package-sha256"
-            or "--owner-pid" or "--owner-start-ticks" or "--max-runtime-seconds"))
+            or "--owner-pid" or "--owner-start-ticks" or "--max-runtime-seconds" or "--timeout-seconds"))
             throw new ArgumentException("An unsupported command option was provided.");
-    using var owner = ToolProcessGuard.FromArguments(flags);
+    if (command != "public-check" && flags.ContainsKey("--timeout-seconds"))
+        throw new ArgumentException("The download timeout is only valid for public-check.");
+    using var owner = ToolProcessGuard.FromArguments(flags, command == "public-check" ? 605 : 60);
     Action? ensureOwner = owner is null ? null : owner.Check;
     var options = JsonSerializer.Deserialize(File.ReadAllText(configPath), ProtocolJsonContext.Default.ManifestVerificationOptions)
         ?? throw new InvalidDataException("验证配置无效。");
@@ -44,46 +46,15 @@ try
                 approvedManifestSha256: approvedManifest, approvedPackageSha256: approvedPackage, ensureOwner: ensureOwner); break;
         case "inspect": case "recover": result = new ReleaseStore(flags["--root"], options).Inspect(command == "recover", ensureOwner); break;
         case "public-check":
-            using (var http = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(5) }) { Timeout = TimeSpan.FromMinutes(5) })
+            int seconds = 300;
+            if (flags.TryGetValue("--timeout-seconds", out string? timeoutText)
+                && (!int.TryParse(timeoutText, System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out seconds) || seconds is < 1 or > 600))
+                throw new ArgumentException("The public-check timeout is invalid.");
+            using (var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(seconds)))
             {
-                using var response = await http.GetAsync(options.ManifestUrl, HttpCompletionOption.ResponseHeadersRead);
-                response.EnsureSuccessStatusCode();
-                if (response.Content.Headers.ContentLength > 65536) throw new InvalidDataException("公网清单超限。");
-                using var input = await response.Content.ReadAsStreamAsync();
-                using var output = new MemoryStream();
-                byte[] buffer = new byte[4096]; int read;
-                while ((read = await input.ReadAsync(buffer)) != 0) { if (output.Length + read > 65536) throw new InvalidDataException("公网清单超限。"); output.Write(buffer, 0, read); }
-                byte[] bytes = output.ToArray();
-                var verified = UpdateManifest.Verify(bytes, options);
-                if (flags.TryGetValue("--expected", out string? expected) && Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)) != expected)
-                    throw new InvalidDataException("公网清单与发布记录不匹配。");
-                string temporary = Path.GetTempFileName();
-                try
-                {
-                    using var download = await http.GetAsync(verified.PackageUrl, HttpCompletionOption.ResponseHeadersRead);
-                    download.EnsureSuccessStatusCode();
-                    using (var source = await download.Content.ReadAsStreamAsync())
-                    using (var file = File.Create(temporary))
-                    {
-                        long total = 0;
-                        while ((read = await source.ReadAsync(buffer)) != 0) { total += read; if (total > verified.Size) throw new InvalidDataException("公网包超限。"); await file.WriteAsync(buffer.AsMemory(0, read)); }
-                    }
-                    ReleasePackage.Verify(temporary, verified);
-                    using var rangeRequest = new HttpRequestMessage(HttpMethod.Get, verified.PackageUrl);
-                    rangeRequest.Headers.Range = new(0, 0);
-                    using var range = await http.SendAsync(rangeRequest, HttpCompletionOption.ResponseHeadersRead);
-                    if (range.StatusCode != System.Net.HttpStatusCode.PartialContent || range.Content.Headers.ContentRange?.From != 0
-                        || range.Content.Headers.ContentRange?.To != 0 || range.Content.Headers.ContentRange?.Length != verified.Size)
-                        throw new InvalidDataException("公网 Range 验证失败。");
-                    await using var rangeStream = await range.Content.ReadAsStreamAsync();
-                    byte[] one = new byte[1];
-                    using var expectedByte = File.OpenRead(temporary);
-                    if (await rangeStream.ReadAsync(one) != 1 || one[0] != expectedByte.ReadByte()
-                        || await rangeStream.ReadAsync(one) != 0) throw new InvalidDataException("公网 Range 内容不正确。");
-                }
-                finally { File.Delete(temporary); }
-                result = new { verified.Version, verified.Sequence, verified.ExpiresUtc, DaysRemaining = (verified.ExpiresUtc - DateTimeOffset.UtcNow).TotalDays,
-                    Warning = verified.ExpiresUtc < DateTimeOffset.UtcNow.AddDays(14), Critical = verified.ExpiresUtc < DateTimeOffset.UtcNow.AddDays(7) };
+                flags.TryGetValue("--expected", out string? expected);
+                result = await PublicReleaseChecker.CheckAsync(options, expected, deadline.Token);
             }
             break;
         default: throw new ArgumentException("未知命令。");
@@ -105,7 +76,8 @@ catch (Exception ex)
         FileNotFoundException or DirectoryNotFoundException => "file_unavailable",
         UnauthorizedAccessException => "access_denied",
         HttpRequestException => "remote_check_failed",
-        InvalidDataException or System.Security.Cryptography.CryptographicException => "validation_failed",
+        OperationCanceledException => "remote_check_timeout",
+        InvalidDataException or System.Security.Cryptography.CryptographicException or JsonException or FormatException => "validation_failed",
         InvalidOperationException => "operation_conflict",
         IOException => "io_failure",
         _ => "internal_error"
@@ -116,6 +88,7 @@ catch (Exception ex)
         "file_unavailable" => "验证所需文件不可用。",
         "access_denied" => "工具无权访问验证文件。",
         "remote_check_failed" => "远端更新源验证失败。",
+        "remote_check_timeout" => "远端更新源验证超时。",
         "validation_failed" => "签名清单或更新包验证失败。",
         "operation_conflict" => "更新操作与当前状态冲突。",
         "io_failure" => "读取或写入更新文件失败。",

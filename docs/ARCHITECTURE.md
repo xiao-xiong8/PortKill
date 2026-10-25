@@ -1,6 +1,6 @@
 # 当前工程架构
 
-更新日期：2026-10-24。根目录：`C:\自用\项目\PortKill`。
+更新日期：2026-10-25。桌面端与管理网站位于同一仓库，应用、构建及部署独立。
 
 更新模块的使用和部署见 [自动更新操作说明](AUTO-UPDATE.md)。协议库、发布工具、通知服务及独立验证项目已落地，正式部署另行执行。实施计划与验证过程记录保存在本地 `.local/docs/`，不随源码分发。
 
@@ -15,6 +15,13 @@ flowchart TD
   Updates --> UpdateProtocol
   UpdateTool --> UpdateProtocol
   UpdateNotifier --> UpdateProtocol
+  UpdateAdminWeb --> UpdateAdminApi
+  UpdateAdminApi --> UpdateManagement
+  UpdatePublisherWorker --> UpdateManagement
+  UpdateManagement --> UpdateProtocol
+  UpdateAdminApi --> SQLite
+  UpdatePublisherWorker --> SQLite
+  UpdatePublisherWorker -->|独立工具进程| UpdateTool
   UpdateRegression --> Updates
   UpdateRegression --> UpdateTool
   UpdateRegression --> UpdateNotifier
@@ -36,6 +43,9 @@ flowchart TD
 | UpdateProtocol | DTO、源生成 JSON、签名/同源/有效期验证和版本包结构验证；客户端与服务端共用 |
 | UpdateTool | ZIP/EXE 自检、排他锁、CAS、不可变包、原子清单、回执恢复与公网复检 |
 | UpdateNotifier | ASP.NET Core loopback 服务、有效清单监测、有界 SSE 广播及健康信息 |
+| UpdateManagement | 管理契约、认证、持久任务、上传封存、发布及下载检查编排、当前版本聚合 |
+| UpdateAdmin.Api | 受认证的管理 HTTP 接口、只读正式清单查询及离线运维入口 |
+| UpdatePublisher.Worker | 独立领取验证、激活和下载检查任务，调用固定配置的 UpdateTool |
 | Desktop | Bootstrap、Shell、Features、Configuration、Presentation、Diagnostics、Assets |
 
 公共进程原生声明进入 Windows；仍与端口复检和连接操作关联的 ProcessManagerService 暂留 Ports。出现第二个实际消费者后再抽取通用操作接口，Windows 不反向依赖 Ports。
@@ -89,6 +99,12 @@ API/Worker 在运行期持有同一数据根的共享维护锁并检查迁移版
 UpdateTool 通过固定路径及 ArgumentList 调用，支持可选 `--json-errors`、schema=1 的 code/message 错误封套。单次确认绑定产物摘要和正式清单基线，Worker 激活前再次核对摘要，工具在原有提交锁内执行 CAS 和原子清单切换。API 只读取正式签名清单，私钥留在 Windows 制作环境。
 
 发布执行同时受本地执行锁和数据库租约保护，心跳使用独立 DbContext；租约丢失时取消并终止工具。工具通过可选父进程 PID、启动时间和运行时限防止孤儿进程继续提交，并在服务端提交锁内再次检查。恢复先验证当前清单和实际包、修复回执，再修复数据库；匹配已确认摘要时恢复 ManifestActivated，较新的可信发布使旧任务变为 Superseded，无法核对时保留 Publishing。实际激活才消耗尝试次数，耗尽后仍先核对是否已经提交。原 CLI 不带父进程参数时继续使用原流程和同一提交锁。
+
+下载检查使用独立领取器、执行器、尝试次数和结果字段。状态从 ManifestActivated 进入 PublicVerifying，再进入 Completed 或 ActiveUnverified；检查取消或租约过期后只重新检查，较新正式版本使旧任务成为 Superseded。60 秒租约由独立 DbContext 每 20 秒续租，共用本地发布执行锁。检查前后均通过只读 inspect 核对清单及实际包，检查结果绑定确认时的清单和包摘要，避免长下载期间版本切换导致误报。
+
+`public-check` 只使用部署验签配置中的清单 URL 和签名清单中的同源包 URL，拒绝重定向，限制清单及包大小，严格验签、验包并核对单字节 Range。独立的 1–600 秒总超时默认 300 秒，取消令牌覆盖响应头、响应体及写入；外层进程时限和父进程监视负责终止遗留工具。原任务的检查重试要求发布权限、资源归属、近期 MFA、CSRF 和审计，重复请求幂等，不能传 URL 或转回激活状态。
+
+`GET /api/v1/releases/current` 仅从正式签名清单和管理数据库聚合版本、签名到期状态、历史激活回执摘要及最近下载检查。清单观察时间、回执记录时间和检查完成时间分别返回；查询不联网、不读取或修复 Worker 私有回执文件，历史成功不表示当前公网健康。外部 CLI 发布没有匹配后台任务时，回执和检查均为空。14/7/0 天阈值分别用于到期预警、严重预警和已过期提示；签名结构有效但已过期的清单仍可查询，损坏或无法核对的源返回 503。当前验收使用 Windows 本机 HTTP 服务和隔离签名产物，真实 Linux、Nginx、HTTPS 和公网路径留到 P7–P8。
 
 用户 config.json、更新信任配置、注册表键、互斥体、EXE 名称与版本保持兼容。SettingsJsonContext 和 UpdateJsonContext 继续用于 AOT 序列化。
 

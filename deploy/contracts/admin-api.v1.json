@@ -508,6 +508,106 @@
         }
       }
     },
+    "/api/v1/publish-jobs/{id}/public-check/retry": {
+      "post": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "RetryPublicCheck",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicCheckRetryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishJobResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/validation-tasks/{id}": {
       "get": {
         "tags": [
@@ -1300,6 +1400,56 @@
         }
       }
     },
+    "/api/v1/releases/current": {
+      "get": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "GetCurrentRelease",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentReleaseResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/releases/{draftId}/publish/challenge": {
       "post": {
         "tags": [
@@ -1317,6 +1467,16 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishChallengeResponse"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
@@ -1387,6 +1547,16 @@
           "required": true
         },
         "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishJobResponse"
+                }
+              }
+            }
+          },
           "400": {
             "description": "Bad Request",
             "content": {
@@ -1485,6 +1655,26 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "ActivationReceiptResponse": {
+        "required": [
+          "jobId",
+          "sha256",
+          "recordedUtcMs"
+        ],
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "recordedUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
           }
         }
       },
@@ -1666,6 +1856,94 @@
           }
         }
       },
+      "CurrentReleaseDetails": {
+        "required": [
+          "version",
+          "sequence",
+          "manifestSha256",
+          "packageSha256",
+          "expiresUtcMs",
+          "daysRemaining",
+          "expiryStatus",
+          "activationReceipt",
+          "downloadCheck"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "sequence": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "manifestSha256": {
+            "type": "string"
+          },
+          "packageSha256": {
+            "type": "string"
+          },
+          "expiresUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "daysRemaining": {
+            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$",
+            "format": "double"
+          },
+          "expiryStatus": {
+            "$ref": "#/components/schemas/ManifestExpiryStatus"
+          },
+          "activationReceipt": {
+            "type": "object",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ActivationReceiptResponse"
+              }
+            ],
+            "nullable": true
+          },
+          "downloadCheck": {
+            "type": "object",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PublicCheckResponse"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "CurrentReleaseResponse": {
+        "required": [
+          "application",
+          "channel",
+          "observedUtcMs",
+          "release"
+        ],
+        "type": "object",
+        "properties": {
+          "application": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "observedUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "release": {
+            "type": "object",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CurrentReleaseDetails"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
       "CurrentSessionView": {
         "required": [
           "userId",
@@ -1758,6 +2036,14 @@
             "type": "string"
           }
         }
+      },
+      "ManifestExpiryStatus": {
+        "enum": [
+          "healthy",
+          "expiring",
+          "critical",
+          "expired"
+        ]
       },
       "PageResponseOfAccountView": {
         "required": [
@@ -1872,6 +2158,108 @@
           }
         }
       },
+      "PublicCheckResponse": {
+        "required": [
+          "attempts",
+          "pending",
+          "running",
+          "lastAttemptStartedUtcMs",
+          "lastCompletedUtcMs",
+          "lastSucceeded",
+          "lastErrorCode"
+        ],
+        "type": "object",
+        "properties": {
+          "attempts": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int32"
+          },
+          "pending": {
+            "type": "boolean"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "lastAttemptStartedUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64",
+            "nullable": true
+          },
+          "lastCompletedUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64",
+            "nullable": true
+          },
+          "lastSucceeded": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "lastErrorCode": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "PublicCheckRetryRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "PublishChallengeResponse": {
+        "required": [
+          "id",
+          "draftId",
+          "application",
+          "channel",
+          "version",
+          "sequence",
+          "manifestSha256",
+          "packageSha256",
+          "releaseNotes",
+          "expectedCurrentManifestSha256",
+          "expiresUtcMs"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "draftId": {
+            "type": "string"
+          },
+          "application": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "sequence": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "manifestSha256": {
+            "type": "string"
+          },
+          "packageSha256": {
+            "type": "string"
+          },
+          "releaseNotes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expectedCurrentManifestSha256": {
+            "type": "string"
+          },
+          "expiresUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          }
+        }
+      },
       "PublishConfirmationRequest": {
         "required": [
           "challengeId"
@@ -1940,6 +2328,20 @@
           },
           "errorCode": {
             "type": "string",
+            "nullable": true
+          },
+          "activatedUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64",
+            "nullable": true
+          },
+          "downloadCheck": {
+            "type": "object",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PublicCheckResponse"
+              }
+            ],
             "nullable": true
           }
         }

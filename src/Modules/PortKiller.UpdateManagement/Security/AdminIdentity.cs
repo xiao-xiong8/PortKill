@@ -50,6 +50,7 @@ public static class AdminIdentity
         services.AddScoped<AdminBackupService>();
         services.AddScoped<UploadManagementService>();
         services.AddScoped<PublishManagementService>();
+        services.AddScoped<CurrentReleaseService>();
         services.AddAdminWorkerServices();
         return services;
     }
@@ -67,6 +68,8 @@ public static class AdminWorkerServices
         services.AddScoped<ValidationTaskExecutor>();
         services.AddScoped<PublishTaskQueue>();
         services.AddScoped<PublishTaskExecutor>();
+        services.AddScoped<PublicVerificationTaskQueue>();
+        services.AddScoped<PublicVerificationTaskExecutor>();
         services.AddSingleton<ValidationArchiveService>();
         services.AddScoped<UploadCleanupService>();
         return services;

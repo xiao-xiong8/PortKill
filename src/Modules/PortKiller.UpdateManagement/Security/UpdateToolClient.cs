@@ -17,6 +17,9 @@ public sealed record UpdateToolInspectionResult(bool Succeeded, string? ErrorCod
     string? Version, long? Sequence, string? ManifestSha256, string? PackageSha256, string? ExpiresUtc,
     string? ReceiptSha256 = null);
 
+public sealed record UpdateToolPublicCheckResult(bool Succeeded, string? ErrorCode, string? Version = null,
+    long? Sequence = null, string? ManifestSha256 = null, string? PackageSha256 = null);
+
 public sealed class UpdateToolClient(UpdateToolOptions options)
 {
     public async Task<UpdateToolResult> VerifyAsync(string manifestPath, string packagePath, CancellationToken token)
@@ -147,6 +150,33 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
     public Task<UpdateToolInspectionResult> RecoverAsync(CancellationToken token)
         => InspectCoreAsync("recover", token);
 
+    public async Task<UpdateToolPublicCheckResult> PublicCheckAsync(string expectedManifestSha256, CancellationToken token)
+    {
+        try
+        {
+            options.ValidatePublishing();
+            if (!IsDigest(expectedManifestSha256)) return new(false, "tool_protocol_error");
+            ToolInvocation invocation = await InvokeAsync("public-check", [
+                ("--config", options.VerificationConfigPath), ("--expected", expectedManifestSha256),
+                ("--timeout-seconds", options.PublicCheckTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture))],
+                token, options.PublicCheckTimeoutSeconds + 2);
+            if (!invocation.Succeeded) return new(false, invocation.ErrorCode ?? "remote_check_failed");
+            using var document = JsonDocument.Parse(invocation.Output);
+            JsonElement root = document.RootElement;
+            string version = GetString(root, "Version", "version");
+            long sequence = GetInt64(root, "Sequence", "sequence");
+            string manifest = GetString(root, "ManifestSha256", "manifestSha256");
+            string package = GetString(root, "PackageSha256", "packageSha256");
+            if (version.Length is < 1 or > 32 || sequence <= 0 || !IsDigest(manifest) || !IsDigest(package)
+                || !manifest.Equals(expectedManifestSha256, StringComparison.OrdinalIgnoreCase))
+                return new(false, "tool_protocol_error");
+            return new(true, null, version, sequence, manifest.ToUpperInvariant(), package.ToUpperInvariant());
+        }
+        catch (JsonException) { return new(false, "tool_protocol_error"); }
+        catch (InvalidOperationException) { return new(false, "tool_unavailable"); }
+        catch (AdminFailure failure) when (failure.Code == "invalid_storage_path") { return new(false, "file_unavailable"); }
+    }
+
     private async Task<UpdateToolInspectionResult> InspectCoreAsync(string command, CancellationToken token)
     {
         try
@@ -176,7 +206,8 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
         catch (AdminFailure failure) when (failure.Code == "invalid_storage_path") { return InspectionFailure("file_unavailable"); }
     }
 
-    private async Task<ToolInvocation> InvokeAsync(string command, (string Name, string Value)[] arguments, CancellationToken token)
+    private async Task<ToolInvocation> InvokeAsync(string command, (string Name, string Value)[] arguments, CancellationToken token,
+        int? timeoutSeconds = null)
     {
         token.ThrowIfCancellationRequested();
         AdminRuntimeLease.RequireLocalPath(options.ExecutablePath);
@@ -199,7 +230,7 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
         {
             AddArgument(start, "--owner-pid", owner.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
             AddArgument(start, "--owner-start-ticks", owner.StartTime.ToUniversalTime().Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            AddArgument(start, "--max-runtime-seconds", (options.TimeoutSeconds + 3).ToString(System.Globalization.CultureInfo.InvariantCulture));
+            AddArgument(start, "--max-runtime-seconds", ((timeoutSeconds ?? options.TimeoutSeconds) + 3).ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
         start.ArgumentList.Add("--json-errors");
         using var process = new Process { StartInfo = start, EnableRaisingEvents = true };
@@ -215,7 +246,7 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
         Task<CapturedOutput> stdout = CaptureAsync(process.StandardOutput, options.MaximumOutputBytes, outputCancellation.Token);
         Task<CapturedOutput> stderr = CaptureAsync(process.StandardError, options.MaximumOutputBytes, outputCancellation.Token);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
-        timeout.CancelAfter(TimeSpan.FromSeconds(options.TimeoutSeconds));
+        timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds ?? options.TimeoutSeconds));
         try
         {
             try { await process.WaitForExitAsync(timeout.Token); }
@@ -301,7 +332,7 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
             if (!root.TryGetProperty("schema", out JsonElement schema) || schema.GetInt32() != 1
                 || !root.TryGetProperty("code", out JsonElement codeElement)) return Failure("tool_execution_failed");
             string code = codeElement.GetString() ?? "";
-            return code is "invalid_arguments" or "file_unavailable" or "access_denied" or "remote_check_failed"
+            return code is "invalid_arguments" or "file_unavailable" or "access_denied" or "remote_check_failed" or "remote_check_timeout"
                 or "validation_failed" or "operation_conflict" or "io_failure" or "internal_error"
                 ? Failure(code) : Failure("tool_execution_failed");
         }

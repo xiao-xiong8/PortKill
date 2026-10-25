@@ -319,6 +319,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/publish-jobs/{id}/public-check/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["RetryPublicCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/releases/{draftId}/publish": {
         parameters: {
             query?: never;
@@ -345,6 +361,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["CreatePublishChallenge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetCurrentRelease"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -510,6 +542,12 @@ export interface components {
             roles: string[];
             userName: string;
         };
+        ActivationReceiptResponse: {
+            jobId: string;
+            /** Format: int64 */
+            recordedUtcMs: unknown;
+            sha256: string;
+        };
         AuditEvent: {
             action?: string;
             actorUserId?: string | null;
@@ -558,6 +596,27 @@ export interface components {
         CsrfResponse: {
             requestToken: string;
         };
+        CurrentReleaseDetails: {
+            activationReceipt: components["schemas"]["ActivationReceiptResponse"] | null;
+            /** Format: double */
+            daysRemaining: unknown;
+            downloadCheck: components["schemas"]["PublicCheckResponse"] | null;
+            /** Format: int64 */
+            expiresUtcMs: unknown;
+            expiryStatus: components["schemas"]["ManifestExpiryStatus"];
+            manifestSha256: string;
+            packageSha256: string;
+            /** Format: int64 */
+            sequence: unknown;
+            version: string;
+        };
+        CurrentReleaseResponse: {
+            application: string;
+            channel: string;
+            /** Format: int64 */
+            observedUtcMs: unknown;
+            release: components["schemas"]["CurrentReleaseDetails"] | null;
+        };
         CurrentSessionView: {
             currentSessionId: string;
             /** Format: int64 */
@@ -582,6 +641,8 @@ export interface components {
             password: string;
             userName: string;
         };
+        /** @enum {unknown} */
+        ManifestExpiryStatus: "healthy" | "expiring" | "critical" | "expired";
         PageResponseOfAccountView: {
             items: components["schemas"]["AccountView"][];
             /** Format: int32 */
@@ -617,15 +678,46 @@ export interface components {
             title?: string | null;
             type?: string | null;
         };
+        PublicCheckResponse: {
+            /** Format: int32 */
+            attempts: unknown;
+            /** Format: int64 */
+            lastAttemptStartedUtcMs: unknown;
+            /** Format: int64 */
+            lastCompletedUtcMs: unknown;
+            lastErrorCode: string | null;
+            lastSucceeded: boolean | null;
+            pending: boolean;
+            running: boolean;
+        };
+        PublicCheckRetryRequest: Record<string, never>;
+        PublishChallengeResponse: {
+            application: string;
+            channel: string;
+            draftId: string;
+            expectedCurrentManifestSha256: string;
+            /** Format: int64 */
+            expiresUtcMs: unknown;
+            id: string;
+            manifestSha256: string;
+            packageSha256: string;
+            releaseNotes: string[];
+            /** Format: int64 */
+            sequence: unknown;
+            version: string;
+        };
         PublishConfirmationRequest: {
             challengeId: string;
             idempotencyKey?: string | null;
         };
         PublishJobResponse: {
+            /** Format: int64 */
+            activatedUtcMs?: unknown;
             application: string;
             channel: string;
             /** Format: int64 */
             createdUtcMs: unknown;
+            downloadCheck?: components["schemas"]["PublicCheckResponse"] | null;
             draftId: string;
             errorCode?: string | null;
             expectedCurrentManifestSha256: string;
@@ -1443,6 +1535,86 @@ export interface operations {
             };
         };
     };
+    RetryPublicCheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublicCheckRetryRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishJobResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     ConfirmPublish: {
         parameters: {
             query?: never;
@@ -1458,6 +1630,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishJobResponse"];
+                };
+            };
             /** @description Bad Request */
             400: {
                 headers: {
@@ -1516,6 +1697,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublishChallengeResponse"];
+                };
+            };
             /** @description Unauthorized */
             401: {
                 headers: {
@@ -1545,6 +1735,53 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetCurrentRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentReleaseResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

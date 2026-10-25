@@ -12,5 +12,6 @@
     <Using Include="Xunit" />
     <ProjectReference Include="../../src/Modules/PortKiller.UpdateProtocol/PortKiller.UpdateProtocol.csproj" />
     <ProjectReference Include="../PortKiller.UpdateAdmin.Tests/PortKiller.UpdateAdmin.Tests.csproj" />
+    <ProjectReference Include="../../src/Modules/PortKiller.Updates/PortKiller.Updates.csproj" />
   </ItemGroup>
 </Project>

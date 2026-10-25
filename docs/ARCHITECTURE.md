@@ -100,6 +100,8 @@ API/Worker 在运行期持有同一数据根的共享维护锁并检查迁移版
 
 UpdateTool 通过固定路径及 ArgumentList 调用，支持可选 `--json-errors`、schema=1 的 code/message 错误封套。单次确认绑定产物摘要和正式清单基线，Worker 激活前再次核对摘要，工具在原有提交锁内执行 CAS 和原子清单切换。API 只读取正式签名清单，私钥留在 Windows 制作环境。
 
+Windows `Publish-Update.ps1 -PrepareOnly` 在任何服务端查询或交付前返回，只产生独立 ReleaseId 下的签名清单、四文件 ZIP 和制作记录。记录绑定实际 EXE 的文件版本、摘要和 Native AOT PE 特征；网站不接收制作记录代替验签，也不接收签名私钥。旧 SSH/LocalRoot 入口继续可用；Resume 先核对服务端提交事实，已生效时只补下载检查，被网站或其他 CLI 的更新版本取代时拒绝恢复。`Test-ReleaseP5.ps1` 使用真实桌面 AOT、认证 HTTPS API、生产 Worker/工具子进程和客户端更新模块验证闭环，SSH 使用本机真实 OpenSSH 客户端和隔离回环服务；实际 Linux 部署另行验收。
+
 发布执行同时受本地执行锁和数据库租约保护，心跳使用独立 DbContext；租约丢失时取消并终止工具。工具通过可选父进程 PID、启动时间和运行时限防止孤儿进程继续提交，并在服务端提交锁内再次检查。恢复先验证当前清单和实际包、修复回执，再修复数据库；匹配已确认摘要时恢复 ManifestActivated，较新的可信发布使旧任务变为 Superseded，无法核对时保留 Publishing。实际激活才消耗尝试次数，耗尽后仍先核对是否已经提交。原 CLI 不带父进程参数时继续使用原流程和同一提交锁。
 
 下载检查使用独立领取器、执行器、尝试次数和结果字段。状态从 ManifestActivated 进入 PublicVerifying，再进入 Completed 或 ActiveUnverified；检查取消或租约过期后只重新检查，较新正式版本使旧任务成为 Superseded。60 秒租约由独立 DbContext 每 20 秒续租，共用本地发布执行锁。检查前后均通过只读 inspect 核对清单及实际包，检查结果绑定确认时的清单和包摘要，避免长下载期间版本切换导致误报。

@@ -89,6 +89,21 @@ pwsh -File scripts/release/Publish-Update.ps1 -Resume <ReleaseId> -SshUser updat
 
 ## 自动化验收入口
 
+Windows 预签名及网站发布闭环验收：
+
+```powershell
+pwsh -File scripts/checks/Test-ReleaseP5.ps1 -VcVarsAllPath C:/path/to/vcvarsall.bat
+
+# 复用已构建的真实桌面 AOT 目录
+pwsh -File scripts/checks/Test-ReleaseP5.ps1 -PreparedPublishDirectory C:/build/portkiller-win-x64
+```
+
+该入口检查实际 Native AOT EXE、准备模式的交付隔离、制作记录、原 SSH/scp 和 LocalRoot 发布、Resume 与续签，以及新旧入口的版本竞争。随后使用真实 HTTPS 管理 API、测试签名密钥和生产 Worker/工具进程发布 AOT 包，由现有客户端更新模块发现并在显式下载后验包；同时检查篡改包和落后序号被拒绝。测试不覆盖安装用户当前程序，客户端安装和恢复沿用下面的完整更新验收入口。
+
+SSH 测试使用本机 OpenSSH 客户端连接回环 SSHv2/SFTP 服务，独立生成测试密钥并启用严格主机密钥校验，不安装系统服务或修改全局 SSH 配置。仅测试所需的 Python 依赖固定在 `tests/PortKiller.Release.Tests/ssh-requirements.txt`，自动安装到 `.local/cache/p5-ssh/`；可用 `-PythonExecutable` 指定解释器，不属于生产依赖。部署路径映射到隔离 Windows 目录，真实 Linux 权限、Nginx、生产证书和公网仍需部署验收。结果保存在 `.local/artifacts/admin-execution/P5-04/`，包含独立的后台、前端和旧更新回归证据。
+
+原有完整桌面更新及安装恢复验收：
+
 ```powershell
 pwsh -File scripts/build/Test-UpdatePipeline.ps1 -VcVarsAllPath C:/path/to/vcvarsall.bat
 ```

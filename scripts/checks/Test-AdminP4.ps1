@@ -1,9 +1,9 @@
 #requires -Version 7.0
 [CmdletBinding()]
-param()
+param([string]$OutputDirectory)
 $ErrorActionPreference = 'Stop'
 $repository = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
-$evidence = Join-Path $repository '.local/artifacts/admin-execution/P4-06'
+$evidence = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $repository '.local/artifacts/admin-execution/P4-06' }
 New-Item -ItemType Directory -Path $evidence -Force | Out-Null
 Push-Location $repository
 try {

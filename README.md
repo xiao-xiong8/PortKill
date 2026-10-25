@@ -97,7 +97,7 @@ pwsh -File scripts/dev/Start-Admin.ps1 -Service Web
 
 发布前编辑 [docs/RELEASE-NOTES.txt](docs/RELEASE-NOTES.txt)，每行一项。现有发布流程会将这些说明加入签名清单，客户端显示对应版本的实际内容。更新由用户确认下载和重启，更新包不会覆盖本机配置。
 
-目前使用本地签名和 SSH 发布至 Linux，服务端由 Nginx 提供静态文件与只读 SSE 通知。部署配置、密钥准备、发布、恢复和续签步骤见[自动更新操作说明](docs/AUTO-UPDATE.md)。
+支持 Windows 本地签名后通过管理 API 上传发布，并保留 SSH 发布入口；Linux 服务端由 Nginx 提供静态文件与只读 SSE 通知。部署配置、密钥准备、发布、恢复和续签步骤见[自动更新操作说明](docs/AUTO-UPDATE.md)。
 
 完整本地更新验收入口：
 
@@ -107,7 +107,9 @@ pwsh -File scripts/build/Test-UpdatePipeline.ps1 -VcVarsAllPath C:/path/to/vcvar
 
 该入口包含 UI、真实 AOT 安装与恢复、隔离发布演练、性能检查及 Linux 服务端构建。结果写入 `.local/artifacts/update-validation/`。真实 Linux、Nginx、TLS 和公网部署仍需单独验收；过程记录保存在本地，不随源码分发。
 
-网页发布管理后台由独立 Vue 前端、net10.0 API/Worker 和 SQLite + EF Core 10 业务模块组成。上传、严格验签、产物封存、单次发布确认、原子激活、中断恢复、分发下载验证、当前版本查询及持久管理事件流已实现。P4 发布与故障竞争集成验收已在 Windows 隔离环境通过，包含真实 HTTPS API、独立 Worker 进程、工具子进程及安全审计；后续为 Windows 预签名产物准备、前端完整流程和生产部署验收。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
+网页发布管理后台由独立 Vue 前端、net10.0 API/Worker 和 SQLite + EF Core 10 业务模块组成。上传、严格验签、产物封存、单次发布确认、原子激活、中断恢复、分发下载验证、当前版本查询及持久管理事件流已实现。Windows 发布脚本提供 `-PrepareOnly`，生成可上传的签名清单与真实 AOT 四文件 ZIP；P4 故障竞争和 P5 产物发布闭环在 Windows 隔离环境验收。前端完整业务页面和生产部署仍待后续阶段完成。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
+
+部署按一台现有服务器设计，网页静态文件、API、Worker、Notifier、SQLite 和 Nginx 共用此服务器并各自独立运行；桌面构建和 RSA 签名留在 Windows 本机。使用免费自托管组件，不依赖付费数据库、存储、CI 或签名服务；已有服务器、带宽和域名费用按现有资源计算。自有更新签名不等于 Windows 已信任首装发布者。
 
 发布配置由 API 和 Worker 各自的配置提供。API 使用 `UpdateTool:VerificationConfigPath` 和 `UpdateTool:ReleaseRoot` 读取当前签名清单；Worker 还需配置 `UpdateTool:ExecutablePath` 并设置 `UpdateTool:Enabled=true`，负责验证上传产物和执行发布。两个进程必须共享相同的管理数据库、验签配置和 `ReleaseRoot`；API 对正式目录只需读取权限，Worker 需要按 UpdateTool 的原子发布流程写入。生产环境建议通过服务环境变量注入路径：
 
@@ -139,6 +141,9 @@ pwsh -File scripts/checks/Test-Admin.ps1
 
 # P4 阶段验收：完整检查、故障覆盖映射及原有更新链回归
 pwsh -File scripts/checks/Test-AdminP4.ps1
+
+# P5 阶段验收：真实桌面 AOT、旧发布兼容和管理 API 到客户端验包
+pwsh -File scripts/checks/Test-ReleaseP5.ps1 -VcVarsAllPath C:/path/to/vcvarsall.bat
 
 # 首次浏览器验证先在前端目录运行 pnpm exec playwright install chromium
 pwsh -File scripts/checks/Test-Admin.ps1 -IncludeBrowser

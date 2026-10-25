@@ -48,6 +48,17 @@ sudo bash deploy/ubuntu/install-update-server.sh updatepublisher /path/to/server
 
 ## 发布、恢复与续签
 
+网站上传模式先在 Windows 本机制作产物，无需 SSH 凭据：
+
+```powershell
+pwsh -File scripts/release/Publish-Update.ps1 -PrepareOnly -Version 0.2.0 `
+  -PublicBaseUrl https://updates.example.com/stable/ `
+  -SigningKeyPath C:/private/update-private.pem -PublicKeyPath C:/private/update-public.pem `
+  -ReleaseNotesPath C:/release/notes.txt -VcVarsAllPath C:/path/to/vcvarsall.bat
+```
+
+PrepareOnly 在独立 ReleaseId 目录生成已验签的 `manifest.json`、四文件更新 ZIP 和本地记录；将前两项上传管理网站。此入口在服务端查询、SSH/scp、激活和公网检查之前返回，不生成首装 ZIP，不读取 SSH 主机配置。公开 URL 必须明确提供；离线准备时服务器基线未知，由网站确认接口重新核对。`-PrepareOnly -Resume <ReleaseId>` 仅复核现有签名产物，不能把准备记录隐式转为 SSH 发布；准备模式与 SSH/LocalRoot 参数组合会被拒绝。
+
 新发布默认要求干净 Git 工作区，CI 使用明确版本。本地隔离演练可以显式 `-AllowDirty`，记录会保留 Dirty 状态。版本未指定时基于项目和服务端已激活版本递增；不修改项目源文件版本。
 
 本地发布记录、锁和签名产物保存在 `.local/artifacts/releases/`，恢复和续签继续从此目录读取，不应作为可随意清空的缓存。本地兼容配置读取 `.local/config/publisher.local.json`；非敏感配置示例位于 `deploy/examples/`。签名私钥仍使用原有受保护位置，不因项目目录整理迁入仓库。

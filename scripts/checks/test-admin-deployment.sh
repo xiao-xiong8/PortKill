@@ -25,6 +25,7 @@ grep -Fq 'NoNewPrivileges=true' "$systemd_dir/portkiller-update-api.service"
 grep -Fq 'NoNewPrivileges=true' "$systemd_dir/portkiller-update-worker.service"
 grep -Fq 'NoNewPrivileges=true' "$systemd_dir/portkiller-update-notifier.service"
 bash "$repository/scripts/checks/test-admin-nginx.sh"
+bash "$repository/scripts/checks/test-admin-backup.sh"
 
 if command -v systemd-analyze >/dev/null 2>&1; then
     systemd-analyze verify \

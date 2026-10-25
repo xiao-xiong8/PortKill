@@ -23,6 +23,9 @@ $deploymentFiles=@(
     'deploy/ubuntu/install-update-server.sh',
     'deploy/nginx/portkiller-admin.conf.example',
     'deploy/nginx/portkiller-download-tls.conf.example',
+    'deploy/ubuntu/backup-update-server.sh',
+    'deploy/ubuntu/restore-update-server.sh',
+    'deploy/ubuntu/upgrade-update-server.sh',
     'deploy/examples/update-admin-api.env.example',
     'deploy/examples/update-admin-worker.env.example'
 )
@@ -52,6 +55,18 @@ foreach ($required in @('location /api/v1/','events/stream','proxy_buffering off
 }
 foreach ($required in @('location = /stable/manifest.json','immutable','max_ranges 1','location = /stable/events','location / { return 404; }')) {
     if ($nginxDownload -notmatch [regex]::Escape($required)) { throw "下载 Nginx 模板缺少约束：$required" }
+}
+$backupScript=Get-Content -Raw -LiteralPath (Join-Path $repository 'deploy/ubuntu/backup-update-server.sh')
+$restoreScript=Get-Content -Raw -LiteralPath (Join-Path $repository 'deploy/ubuntu/restore-update-server.sh')
+$upgradeScript=Get-Content -Raw -LiteralPath (Join-Path $repository 'deploy/ubuntu/upgrade-update-server.sh')
+foreach ($required in @('db backup --output','files.sha256','archive','stable')) {
+    if ($backupScript -notmatch [regex]::Escape($required)) { throw "备份脚本缺少内容：$required" }
+}
+foreach ($required in @('db restore --input','sha256sum -c files.sha256','recover --root','inspect --root')) {
+    if ($restoreScript -notmatch [regex]::Escape($required)) { throw "恢复脚本缺少内容：$required" }
+}
+foreach ($required in @('backup-update-server.sh','db migrate','/health/live')) {
+    if ($upgradeScript -notmatch [regex]::Escape($required)) { throw "升级脚本缺少内容：$required" }
 }
 foreach ($file in @($bundle.files)) {
     $path=Join-Path $OutputDirectory ([string]$file.path)

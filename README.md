@@ -172,7 +172,7 @@ dotnet run --project src/Services/PortKiller.UpdateAdmin.Api -c Release -- db re
 dotnet run --project src/Services/PortKiller.UpdateAdmin.Api -c Release -- admin reset-mfa --user <管理员账号>
 ```
 
-上述命令可附加 `--data-root <绝对目录>`，应与服务使用同一配置。备份使用 SQLite Online Backup API，完成后才写入 `backup.json`；包含数据库、迁移版本、认证密钥和 SHA-256 清单。恢复校验复制后的数据库、外键、迁移版本和密钥摘要，保留现有密钥，撤销所有恢复出的会话，随后需重新登录并完成 MFA。备份目录包含认证材料，必须按凭据保管；Linux 新数据目录默认仅属主可访问，已有目录需去掉 other 权限，API/Worker 共享组和 umask 在部署阶段配置。仅使用支持文件锁的本地磁盘，维护时停止所有数据库写入者。此备份只覆盖管理数据库和认证密钥，正式包及公开清单的全量恢复与发布状态核对属于后续部署阶段。
+上述命令可附加 `--data-root <绝对目录>`，应与服务使用同一配置。数据库备份使用 SQLite Online Backup API，完成后才写入 `backup.json`；包含数据库、迁移版本、认证密钥和 SHA-256 清单。生产服务器使用 `deploy/ubuntu/backup-update-server.sh`、`upgrade-update-server.sh` 和 `restore-update-server.sh` 进一步覆盖认证密钥、封存/暂存、正式清单/包、UpdateTool 回执状态及运行配置，并在恢复前校验 `files.sha256`。恢复校验复制后的数据库、外键、迁移版本和密钥摘要，保留现有密钥，撤销所有恢复出的会话，随后需重新登录并完成 MFA。备份目录包含认证材料和发布产物，必须按凭据保管；Linux 新数据目录默认仅属主可访问，已有目录需去掉 other 权限，API/Worker 共享组和 umask 在部署阶段配置。仅使用支持文件锁的本地磁盘，维护时停止所有数据库写入者；恢复后以 Worker 身份重新 `inspect` 当前清单和包，不能用数据备份替换已激活签名事实。
 
 专用 Linux 环境使用 `bash scripts/checks/test-admin-linux.sh` 执行真实服务端测试。Windows 上的测试和 linux-x64 构建不能代替该运行结果；实际 Windows AOT 包在 Linux 上的验包测试属于 P3。
 

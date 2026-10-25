@@ -65,7 +65,28 @@ sudo systemctl start portkiller-update-api.service portkiller-update-worker.serv
 sudo -u portkiller-update-api /bin/sh -c 'set -a; . /etc/portkiller-updates/api.env; set +a; exec /opt/portkiller-updates/api/PortKiller.UpdateAdmin.Api admin init --user <admin>'
 ```
 
-升级时先备份 `/var/lib/portkiller-updates/admin`、`/var/lib/portkiller-updates/admin/archive`、`/srv/portkiller-updates/stable`、`/srv/portkiller-updates/.stable-update-state` 和 `/etc/portkiller-updates`，再重复安装脚本和迁移步骤。恢复前必须停止 API、Worker 和 Notifier；恢复后重新执行权限核对、迁移检查和已激活清单/包摘要检查。
+P7-04 提供完整的停机协调入口。备份会停止 API、Worker、Notifier，使用 SQLite Online Backup API 保存数据库和认证密钥，再复制 `/var/lib/portkiller-updates/admin/{archive,staging}`、`/srv/portkiller-updates/{stable,.stable-update-state}` 和 `/etc/portkiller-updates`，最后写入覆盖全部文件的 `files.sha256`：
+
+```bash
+sudo bash deploy/ubuntu/backup-update-server.sh /private-backups/portkiller-update-20261025
+```
+
+升级入口会先创建上述完整备份，再安装新的服务端 bundle、以 API 服务账号执行迁移、启动服务并轮询回环健康检查；失败时保留备份，不自动回滚或删除旧目录：
+
+```bash
+sudo bash deploy/ubuntu/upgrade-update-server.sh <existing-ssh-user> \
+  /path/to/server-bundle /path/to/verification.json \
+  /private-backups/portkiller-update-20261025
+```
+
+恢复前必须停止 API、Worker 和 Notifier。恢复脚本先校验所有摘要，以停机状态恢复数据库、认证状态、封存/暂存、正式清单/包、UpdateTool 回执状态和配置；旧目录保留为 `.pre-restore-*`，恢复后由 Worker 账号执行 `inspect` 核对当前清单及包：
+
+```bash
+sudo bash deploy/ubuntu/restore-update-server.sh /private-backups/portkiller-update-20261025
+sudo systemctl start portkiller-update-api.service portkiller-update-worker.service
+```
+
+服务程序本身不从备份覆盖；升级或恢复前必须先部署与数据库迁移版本匹配的已验证 bundle。恢复不会把旧版本清单写回正式目录，签名清单仍是提交事实；若清单/包与回执不一致，保持服务停机并按 `UpdateTool inspect/recover` 检查后再启动。备份目录包含认证材料和发布产物，必须存放在权限为 `0700` 的本地磁盘并另行复制到受控离线介质。
 
 通知服务仅监听 `127.0.0.1:8091`，由 Nginx 精确路由 `/stable/events` 代理，关闭缓冲、缓存和压缩，读超时 90 秒。心跳 25 秒，客户端闲置超时 75 秒，单行 4 KiB、单事件 8 KiB。客户端在 404/405/501、401/403 时约 30 分钟后再探测，继续轮询；其他断开指数退避并遵守 Retry-After。
 

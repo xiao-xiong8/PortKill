@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using PortKiller.UpdateManagement;
 using PortKiller.UpdateManagement.Configuration;
 using PortKiller.Updates;
@@ -50,6 +53,26 @@ public sealed class SkeletonTests
         Assert.Equal("authentication_required", problem.GetProperty("code").GetString());
         Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("correlationId").GetString()));
         Assert.DoesNotContain(app.Root, problem.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ManagementRouteAnonymousAllowlistHasNoUnexpectedBypass()
+    {
+        await using var app = await TestApplication.StartAsync();
+        var dataSources = app.App.Services.GetRequiredService<IEnumerable<EndpointDataSource>>();
+        var routes = dataSources.SelectMany(source => source.Endpoints)
+            .OfType<RouteEndpoint>()
+            .Where(endpoint => endpoint.RoutePattern.RawText?.StartsWith("/api/v1", StringComparison.Ordinal) == true)
+            .ToArray();
+        var anonymous = routes
+            .Where(endpoint => endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null)
+            .Select(endpoint => endpoint.RoutePattern.RawText!)
+            .OrderBy(route => route, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(new[] { "/api/v1/auth/csrf", "/api/v1/auth/login" }, anonymous);
+        Assert.All(routes.Where(endpoint => endpoint.Metadata.GetMetadata<IAllowAnonymous>() is null), endpoint =>
+            Assert.DoesNotContain(endpoint.Metadata, metadata => metadata is IAllowAnonymous));
     }
 
     [Fact]

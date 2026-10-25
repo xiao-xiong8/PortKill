@@ -1,0 +1,133 @@
+{
+  "phase": "P8-01",
+  "minimumBackendTests": 223,
+  "groups": [
+    {
+      "id": "authentication-replay",
+      "requirement": "认证重放、弱认证和错误凭据不能绕过 MFA",
+      "tests": [
+        "PasswordAuthenticationTests.FreshDatabaseHasNoDefaultAccountsAndBootstrapRunsOnce",
+        "PasswordAuthenticationTests.PasswordLoginCannotBypassMfa",
+        "PasswordAuthenticationTests.UnknownAccountAndWrongPasswordHaveTheSamePublicError",
+        "MfaTests.OneAuthenticatorCodeCannotCompleteTwoConcurrentLogins",
+        "MfaTests.RecoveryCodeIsSingleUseAndDoesNotGrantRecentStrongAuthentication",
+        "MfaTests.ReauthenticationRejectsPreviouslyConsumedCode"
+      ]
+    },
+    {
+      "id": "session-revocation",
+      "requirement": "注销、停用、密码或 MFA 变化撤销 Cookie 和长连接权限",
+      "tests": [
+        "SessionTests.CookieAndSessionRemainValidAfterApiRestart",
+        "SessionTests.LogoutRevokesTheServerSession",
+        "SessionTests.PasswordSecurityVersionChangeInvalidatesExistingCookies",
+        "AuthorizationTests.RoleAndDisableChangesInvalidateTargetCookies",
+        "JobEventStreamTests.OpenStreamRechecksPersistedSessionAndRoles"
+      ]
+    },
+    {
+      "id": "resource-authorization",
+      "requirement": "账号、上传、任务、发布和审计接口执行资源级授权",
+      "tests": [
+        "AuthorizationTests.RolePoliciesApplyThePermissionMatrix",
+        "AuthorizationTests.SensitiveChangesRequireFreshStrongAuthenticationAndPasswordChangeRevokesSelf",
+        "UploadTests.UploadAccessIsRoleLimitedAndForeignSessionIsNotFound",
+        "PublishActivationTests.PublishJobStatusIsHiddenFromUnrelatedUsers",
+        "JobHistoryTests.NonAdministratorsCannotDiscoverOtherOwnersTasks",
+        "PublishRequestTests.EvenAdministratorCannotDiscoverAnotherActorsConfirmationKey",
+        "PublicCheckAuthorizationTests.AnUnrelatedPublisherCannotReadOrRetrySomeoneElsesJob",
+        "JobEventTests.SnapshotAndReplayApplyCurrentRolesAndResourceOwnership"
+      ]
+    },
+    {
+      "id": "approval-binding",
+      "requirement": "发布确认绑定产物、基线、摘要和单次挑战，替换产物不能激活",
+      "tests": [
+        "PublishTests.ChallengeBindsVerifiedArtifactAndConfirmationIsIdempotent",
+        "PublishTests.ChangedArtifactExpiredChallengeAndBaselineAreRejectedDeterministically",
+        "PublishActivationTests.AReplacedArchiveAndDraftMetadataCannotChangeTheApprovedPublication",
+        "PublishAuditTests.TamperedApprovedArchiveCreatesADurableActorBoundSecurityAudit"
+      ]
+    },
+    {
+      "id": "upload-and-package-boundaries",
+      "requirement": "上传、ZIP、PackageUrl 和暂存封存边界拒绝异常输入",
+      "tests": [
+        "UploadTests.ChunkedBodyWithoutContentLengthUsesActualByteAccounting",
+        "UploadTests.WrongLengthOversizeAndIncompleteTransfersAreRejectedAndCleaned",
+        "UploadTests.ActualStreamFailureLeavesSessionRetryableAndRemovesPartialFile",
+        "UploadTests.InvalidReservationsAreRejectedBeforeStorageAllocation",
+        "ValidationArchiveTests.ChangedStagingBytesAreRejectedBeforeAnyReadyResult",
+        "PackageValidationTests.RejectsUnexpectedZipEntryNamesBeforeExtraction",
+        "PackageValidationTests.RejectsUnsafePackageUrlsBeforeAnyDownload"
+      ]
+    },
+    {
+      "id": "concurrent-submission",
+      "requirement": "重复确认、竞争 Worker 和旧发布锁只产生一次确定提交",
+      "tests": [
+        "PublishTests.ConcurrentSameKeyConfirmationReturnsOneDurableJob",
+        "PublishTests.ConcurrentDifferentApprovalsReturnOneJobAndStableConflict",
+        "PublishActivationTests.CompetingWorkersLeaseAtMostOnceAndTheOriginalToolLockBlocksActivation",
+        "P4ProcessIntegrationTests.TwoProductionWorkersCompleteAuthenticatedHttpsUploadPublicationAndReplayExactlyOnce"
+      ]
+    },
+    {
+      "id": "failure-recovery",
+      "requirement": "工具、Worker、数据库和公网检查故障按提交事实恢复",
+      "tests": [
+        "PublishRecoveryTests.KilledToolAtEachCommitBoundaryRecoversAfterApiRestart",
+        "PublishRecoveryTests.DatabaseWriteFailureAfterActivationIsRepairedOnTheNextRecovery",
+        "PublishRecoveryTests.KillingOnlyTheWorkerStopsItsOrphanAndThenRecoversTheActualCommit",
+        "P4ProcessIntegrationTests.KillingProductionWorkerStopsItsOrphanAndRestoresTheActualCommitAfterRestart",
+        "P4ProcessIntegrationTests.OversizedActivationOutputUsesTheCommitFactAndPersistsOnlySafeCodes",
+        "PublicVerificationTests.DownloadFailuresPreserveActivationAndNeverFollowRedirects",
+        "PublicVerificationTests.OriginalJobRetryIsConcurrentIdempotentAndDoesNotRewriteAnyPublicationArtifacts"
+      ]
+    },
+    {
+      "id": "tool-and-health-boundary",
+      "requirement": "UpdateTool 调用固定且有界，健康和错误输出不泄露路径或认证材料",
+      "tests": [
+        "UpdateToolClientTests.InvokesPinnedToolWithArgumentListAndReturnsSanitizedStructuredErrors",
+        "UpdateToolClientTests.MissingToolAndInvalidWorkerConfigurationFailClosed",
+        "UpdateToolClientTests.ToolOutputIsBoundedAndTimeoutKillsTheEntireProcessTree",
+        "SkeletonTests.HealthIsPublicAndContainsNoRuntimePaths",
+        "SkeletonTests.ReadyHealthIsBoundedAndSecretFree",
+        "AuditTests.AuthenticationAndDenialsHaveCorrelatedAuditWithoutSecretsInAuditOrLogs",
+        "JobEventTests.EventMessagesRejectRawOutputAndPaths"
+      ]
+    },
+    {
+      "id": "anonymous-route-allowlist",
+      "requirement": "管理 API 的匿名入口只有 CSRF 和登录，健康入口不暴露管理数据",
+      "tests": [
+        "SkeletonTests.ManagementEndpointsDenyAnonymousRequests",
+        "SkeletonTests.ManagementRouteAnonymousAllowlistHasNoUnexpectedBypass",
+        "SkeletonTests.ForgedCookieCannotAuthenticate",
+        "SkeletonTests.ApiRejectsNonLoopbackBindings"
+      ]
+    },
+    {
+      "id": "durable-audit-and-browser",
+      "requirement": "关键安全审计失败回滚，浏览器使用真实认证接口并避免敏感持久化",
+      "tests": [
+        "AuditTests.AuditWriteFailureRollsBackSecurityChangeAndSessionRevocation",
+        "PublishAuditTests.FailedAuditInsertRollsBackTheEventAndStateThenRecoversWithoutReactivation"
+      ],
+      "browserChecks": [
+        "authenticated MFA flow",
+        "resource authorization and audit flow",
+        "upload cancellation and publish idempotency recovery",
+        "SSE reconnect and session revocation",
+        "production build contains no mock business entry"
+      ]
+    }
+  ],
+  "packageChecks": [
+    "server bundle is self-contained without Native AOT",
+    "bundle contains no private key, local environment, desktop payload or node_modules",
+    "tracked source contains no private key material or default credentials",
+    "production API has no developer exception or authentication bypass switch"
+  ]
+}

@@ -8,7 +8,7 @@ using PortKiller.UpdateManagement.Persistence.Entities;
 
 namespace PortKiller.UpdateManagement.Security;
 
-public sealed class ValidationTaskQueue(UpdateAdminDbContext database, TimeProvider clock)
+public sealed class ValidationTaskQueue(UpdateAdminDbContext database, TimeProvider clock, JobEventJournal events)
 {
     public const int MaximumAttempts = 5;
     private const int LeaseSeconds = 60;
@@ -31,8 +31,7 @@ public sealed class ValidationTaskQueue(UpdateAdminDbContext database, TimeProvi
             Channel = draft.Channel, State = PublishJobState.Queued, CreatedUtcMs = Now
         };
         database.ReleaseDrafts.Add(draft); database.ReleaseJobs.Add(job);
-        database.JobEvents.Add(new JobEvent { JobId = job.Id, Sequence = 1, Stage = "queued", Message = "validation_queued", CreatedUtcMs = Now });
-        await database.SaveChangesAsync(token);
+        await events.AppendAsync(job.Id, "queued", "validation_queued", token);
         return (draft.Id, job.Id);
     }
 
@@ -200,14 +199,10 @@ public sealed class ValidationTaskQueue(UpdateAdminDbContext database, TimeProvi
         return true;
     }
 
-    private async Task AddEventAsync(string id, string stage, string message, CancellationToken token)
-    {
-        long sequence = (await database.JobEvents.Where(item => item.JobId == id).MaxAsync(item => (long?)item.Sequence, token) ?? 0) + 1;
-        database.JobEvents.Add(new JobEvent { JobId = id, Sequence = sequence, Stage = stage, Message = message, CreatedUtcMs = Now });
-        await database.SaveChangesAsync(token);
-    }
+    private Task AddEventAsync(string id, string stage, string message, CancellationToken token)
+        => events.AppendAsync(id, stage, message, token);
 
-    private static ValidationTaskResponse Response(ReleaseJob job, ReleaseDraft draft)
+    internal static ValidationTaskResponse Response(ReleaseJob job, ReleaseDraft draft)
         => new(job.Id, job.DraftId, job.State, job.Attempts, job.CreatedUtcMs, job.LeaseExpiresUtcMs, job.ErrorCode,
             draft.ValidationState, draft.Version, draft.Sequence, draft.ManifestSha256, draft.PackageSha256,
             JsonSerializer.Deserialize<string[]>(draft.ReleaseNotesJson) ?? [], draft.ValidatedUtcMs, draft.ManifestExpiresUtcMs);

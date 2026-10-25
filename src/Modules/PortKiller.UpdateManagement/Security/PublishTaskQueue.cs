@@ -12,7 +12,7 @@ public sealed record PublishTaskContext(string Id, string DraftId, string Archiv
     int Attempts, long LeaseExpiresUtcMs);
 
 /// <summary>Leases publish jobs and records the durable activation boundary.</summary>
-public sealed class PublishTaskQueue(UpdateAdminDbContext database, TimeProvider clock)
+public sealed class PublishTaskQueue(UpdateAdminDbContext database, TimeProvider clock, JobEventJournal events)
 {
     public const int MaximumAttempts = 3;
     private const int LeaseSeconds = 60;
@@ -172,12 +172,8 @@ public sealed class PublishTaskQueue(UpdateAdminDbContext database, TimeProvider
         return true;
     }
 
-    private async Task AddEventAsync(string id, string stage, string message, CancellationToken token)
-    {
-        long sequence = (await database.JobEvents.Where(item => item.JobId == id).MaxAsync(item => (long?)item.Sequence, token) ?? 0) + 1;
-        database.JobEvents.Add(new JobEvent { JobId = id, Sequence = sequence, Stage = stage, Message = message, CreatedUtcMs = Now });
-        await database.SaveChangesAsync(token);
-    }
+    private Task AddEventAsync(string id, string stage, string message, CancellationToken token)
+        => events.AppendAsync(id, stage, message, token);
 
     private static PublishTaskContext Context(ReleaseJob job, PublishApproval approval)
         => new(job.Id, job.DraftId, approval.ArchiveId, approval.Application, approval.Channel, approval.Version,

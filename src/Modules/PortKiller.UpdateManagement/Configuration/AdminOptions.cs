@@ -54,6 +54,15 @@ public sealed class AdminOptions
     public int StrongAuthenticationMinutes { get; set; } = 5;
     public int AuditRetentionDays { get; set; } = 90;
     public int AuditMaximumRows { get; set; } = 100_000;
+    public int JobEventRetentionDays { get; set; } = 30;
+    public int JobEventMaximumRowsPerJob { get; set; } = 500;
+    public int JobEventMaximumRows { get; set; } = 100_000;
+    public int JobStreamMaximumConnections { get; set; } = 100;
+    public int JobStreamMaximumConnectionsPerUser { get; set; } = 5;
+    public int JobStreamPollMilliseconds { get; set; } = 500;
+    public int JobStreamHeartbeatSeconds { get; set; } = 10;
+    public int JobStreamWriteTimeoutSeconds { get; set; } = 5;
+    public int JobStreamLifetimeSeconds { get; set; } = 600;
     public int MaxUploadPackageBytes { get; set; } = 268_435_456;
     public int MaxActiveUploadsPerUser { get; set; } = 2;
     public int MaxActiveUploadsTotal { get; set; } = 100;
@@ -80,6 +89,14 @@ public sealed class AdminOptions
             || UploadExpirationHours is < 1 or > 168 || RejectedArchiveRetentionDays is < 1 or > 3650
             || UnpublishedArchiveRetentionDays is < 1 or > 3650)
             throw new InvalidOperationException("Administration storage or session limits are invalid.");
+        if (JobEventRetentionDays is < 1 or > 3650 || JobEventMaximumRowsPerJob is < 1 or > 10_000
+            || JobEventMaximumRows < JobEventMaximumRowsPerJob || JobEventMaximumRows > 1_000_000
+            || JobStreamMaximumConnections is < 1 or > 1000
+            || JobStreamMaximumConnectionsPerUser is < 1 or > 20
+            || JobStreamMaximumConnectionsPerUser > JobStreamMaximumConnections
+            || JobStreamPollMilliseconds is < 100 or > 1000 || JobStreamHeartbeatSeconds is < 1 or > 30
+            || JobStreamWriteTimeoutSeconds is < 1 or > 15 || JobStreamLifetimeSeconds is < 1 or > 3600)
+            throw new InvalidOperationException("Administration job event limits are invalid.");
     }
 }
 

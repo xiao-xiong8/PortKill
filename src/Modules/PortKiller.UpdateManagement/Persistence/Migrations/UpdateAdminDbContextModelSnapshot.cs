@@ -355,6 +355,8 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
 
                     b.HasKey("JobId", "Sequence");
 
+                    b.HasIndex("CreatedUtcMs", "JobId", "Sequence");
+
                     b.ToTable("JobEvents");
                 });
 
@@ -550,6 +552,9 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<long>("LastEventSequence")
+                        .HasColumnType("INTEGER");
 
                     b.Property<long?>("LeaseExpiresUtcMs")
                         .HasColumnType("INTEGER");

@@ -107,7 +107,7 @@ pwsh -File scripts/build/Test-UpdatePipeline.ps1 -VcVarsAllPath C:/path/to/vcvar
 
 该入口包含 UI、真实 AOT 安装与恢复、隔离发布演练、性能检查及 Linux 服务端构建。结果写入 `.local/artifacts/update-validation/`。真实 Linux、Nginx、TLS 和公网部署仍需单独验收；过程记录保存在本地，不随源码分发。
 
-网页发布管理后台由独立 Vue 前端、net10.0 API/Worker 和 SQLite + EF Core 10 业务模块组成。上传、严格验签、产物封存、单次发布确认、原子激活、中断恢复、分发下载验证及当前版本查询已实现；后续仍需完成管理事件流、前端完整流程和生产部署验收。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
+网页发布管理后台由独立 Vue 前端、net10.0 API/Worker 和 SQLite + EF Core 10 业务模块组成。上传、严格验签、产物封存、单次发布确认、原子激活、中断恢复、分发下载验证、当前版本查询及持久管理事件流已实现；后续仍需完成发布集成验收、前端完整流程和生产部署验收。实施计划位于本地 `.local/docs/plans/UPDATE-ADMIN-IMPLEMENTATION-PLAN.md`。
 
 发布配置由 API 和 Worker 各自的配置提供。API 使用 `UpdateTool:VerificationConfigPath` 和 `UpdateTool:ReleaseRoot` 读取当前签名清单；Worker 还需配置 `UpdateTool:ExecutablePath` 并设置 `UpdateTool:Enabled=true`，负责验证上传产物和执行发布。两个进程必须共享相同的管理数据库、验签配置和 `ReleaseRoot`；API 对正式目录只需读取权限，Worker 需要按 UpdateTool 的原子发布流程写入。生产环境建议通过服务环境变量注入路径：
 
@@ -126,6 +126,12 @@ Worker 先核对正式签名清单和实际包，再决定恢复任务或激活�
 已认证读取者可通过 `GET /api/v1/releases/current` 查询正式版本、签名到期状态和后台记录。`observedUtcMs` 是本次读取签名清单的时间，`activationReceipt` 是 Worker 持久记录的历史回执摘要及记录时间，`downloadCheck` 是最近完成的下载结果及待处理状态；查询不触发联网检查，也不验证或修复 Worker 私有回执文件。外部 CLI 发布没有对应后台任务时，后两项为空。签名到期不足 14 天提示 Expiring，不足 7 天为 Critical，到期后为 Expired。
 
 Publisher 或 Administrator 可向 `POST /api/v1/publish-jobs/{id}/public-check/retry` 发送 `{}`，并携带 CSRF 令牌及近期 MFA 会话；Publisher 还须满足任务归属限制。ActiveUnverified 的重试在原任务上只重新核对和下载检查，保留上次结果，不再次激活；不接受 URL 参数，正式清单变化或有其他活动发布时返回冲突。已排队、检查中或已完成的重复请求返回原任务。本阶段以隔离目录、测试密钥、本机真实 HTTP 服务和真实工具进程验证，真实公网、Linux、Nginx 和 HTTPS 验收留到 P7–P8。
+
+验证及发布任务统一提供三个受认证的读取入口：`GET /api/v1/jobs/{id}` 获取任务快照，`GET /api/v1/jobs/{id}/events?after=<事件ID>&limit=100` 分批补读，`GET /api/v1/jobs/{id}/events/stream` 建立同源 Cookie SSE。Administrator 可读取全部任务，其他读取者须为任务请求者或草稿所有者；每次轮询重新检查数据库会话、当前角色及资源归属。SSE 心跳不延长空闲会话，注销、撤销、停用、安全版本变化及到期会发送 `closed` 并关闭连接；客户端收到后应停止自动重连并处理认证状态。连接上限返回 429 和 `Retry-After: 3`。
+
+事件 ID 为不透明的“任务 ID:序号”字符串，API 重启或事件清理后均不重复使用；首次无游标返回当前快照，从 `<任务ID>:0` 可补读仍保留的完整历史。SSE 首次发送 `snapshot`，后续 `job` 事件携带递增 ID；补读批次后的 `snapshot` 不携带 SSE ID，因此不会跳过尚未发送的历史。重连时 `Last-Event-ID` 优先于 URL 的初始 `after`。过旧、存在缺口或超前的游标收到 `reset` 及最新快照，格式错误或跨任务 ID 返回 400。快照代表当前状态，阶段代码用于历史展示；不得根据旧的补读事件覆盖较新快照。
+
+事件保留默认 30 天、每任务 500 条、全库 100000 条，由 `Administration__JobEventRetentionDays`、`Administration__JobEventMaximumRowsPerJob` 和 `Administration__JobEventMaximumRows` 配置，API 与 Worker 应使用相同保留参数。状态及事件在同一事务提交，写入和每小时维护清理旧事件；事件只保存有界阶段及错误代码。管理 SSE 每批最多 32 条且不建立无限订阅队列，API 默认总连接 100、每账号 5、轮询 500ms、心跳 10s、单批写时限 5s、连接轮换 600s；对应 `Administration__JobStreamMaximumConnections`、`JobStreamMaximumConnectionsPerUser`、`JobStreamPollMilliseconds`、`JobStreamHeartbeatSeconds`、`JobStreamWriteTimeoutSeconds`、`JobStreamLifetimeSeconds`，后五项也使用 `Administration__` 前缀。浏览器自动重连间隔提示为 3s；前端仍须对连续失败实施有界重试。管理连接与公开 UpdateNotifier 连接使用各自接口、授权及部署；真实代理配置在 P7 验收。
 
 ```powershell
 # 后台测试、实际 OpenAPI 比对、前端检查与构建

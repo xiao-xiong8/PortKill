@@ -10,7 +10,7 @@ namespace PortKiller.UpdateManagement.Security;
 public sealed record PublicVerificationTask(string Id, string Version, long Sequence, string ManifestSha256, string PackageSha256);
 
 /// <summary>Download checks have their own attempts and never transition back into activation.</summary>
-public sealed class PublicVerificationTaskQueue(UpdateAdminDbContext database, TimeProvider clock)
+public sealed class PublicVerificationTaskQueue(UpdateAdminDbContext database, TimeProvider clock, JobEventJournal events)
 {
     private const int LeaseSeconds = 60;
     private long Now => clock.GetUtcNow().ToUnixTimeMilliseconds();
@@ -95,10 +95,6 @@ public sealed class PublicVerificationTaskQueue(UpdateAdminDbContext database, T
     private IQueryable<ReleaseJob> Owned(string id, string workerId, long now) => database.ReleaseJobs.Where(job => job.Id == id
         && job.Kind == "publish" && job.State == PublishJobState.PublicVerifying && job.LeaseOwner == workerId && job.LeaseExpiresUtcMs > now);
 
-    private async Task AddEventAsync(string id, string stage, string message, CancellationToken token)
-    {
-        long sequence = (await database.JobEvents.Where(item => item.JobId == id).MaxAsync(item => (long?)item.Sequence, token) ?? 0) + 1;
-        database.JobEvents.Add(new JobEvent { JobId = id, Sequence = sequence, Stage = stage, Message = message, CreatedUtcMs = Now });
-        await database.SaveChangesAsync(token);
-    }
+    private Task AddEventAsync(string id, string stage, string message, CancellationToken token)
+        => events.AppendAsync(id, stage, message, token);
 }

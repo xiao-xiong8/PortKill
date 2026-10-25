@@ -101,6 +101,7 @@ public sealed class ReleaseJob : IVersionedEntity
     public long? PublicCheckCompletedUtcMs { get; set; }
     public bool? PublicCheckSucceeded { get; set; }
     public string? PublicCheckErrorCode { get; set; }
+    public long LastEventSequence { get; set; }
     public long CreatedUtcMs { get; set; }
     public long Revision { get; set; }
 }

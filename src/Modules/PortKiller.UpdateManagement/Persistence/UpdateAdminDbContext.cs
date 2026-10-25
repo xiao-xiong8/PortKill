@@ -66,6 +66,7 @@ public sealed class UpdateAdminDbContext(DbContextOptions<UpdateAdminDbContext> 
         builder.Entity<JobEvent>(entity =>
         {
             entity.HasKey(x => new { x.JobId, x.Sequence });
+            entity.HasIndex(x => new { x.CreatedUtcMs, x.JobId, x.Sequence });
             entity.HasOne<ReleaseJob>().WithMany().HasForeignKey(x => x.JobId).OnDelete(DeleteBehavior.Cascade);
             entity.Property(x => x.Message).HasMaxLength(1000);
         });

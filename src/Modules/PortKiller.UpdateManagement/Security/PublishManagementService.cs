@@ -12,7 +12,7 @@ using PortKiller.UpdateManagement.Persistence.Entities;
 namespace PortKiller.UpdateManagement.Security;
 
 public sealed class PublishManagementService(UpdateAdminDbContext database, AdminOptions options, TimeProvider clock,
-    AdminSessionService sessions, AdminAuditService audit, IPublishedReleaseReader source)
+    AdminSessionService sessions, AdminAuditService audit, IPublishedReleaseReader source, JobEventJournal events)
 {
     private const string Operation = "publish.confirm";
     private long Now => clock.GetUtcNow().ToUnixTimeMilliseconds();
@@ -116,7 +116,7 @@ public sealed class PublishManagementService(UpdateAdminDbContext database, Admi
                 ExpectedManifestSha256 = baseline, CreatedUtcMs = Now
             };
             database.ReleaseJobs.Add(job);
-            database.JobEvents.Add(new JobEvent { JobId = job.Id, Sequence = 1, Stage = "queued", Message = "publish_queued", CreatedUtcMs = Now });
+            await events.AppendAsync(job.Id, "queued", "publish_queued", token);
             audit.Stage("publish.confirmed", job.Id, actorUserId: actor.User.Id);
         }
         database.IdempotencyRequests.Add(new IdempotencyRequest
@@ -190,9 +190,7 @@ public sealed class PublishManagementService(UpdateAdminDbContext database, Admi
                 .SetProperty(job => job.LeaseOwner, (string?)null).SetProperty(job => job.LeaseExpiresUtcMs, (long?)null)
                 .SetProperty(job => job.ErrorCode, (string?)null).SetProperty(job => job.Revision, job => job.Revision + 1), token);
         if (changed != 1) throw new AdminFailure("publish_busy", 409, "任务状态已经变化，请刷新后重试。");
-        long sequence = (await database.JobEvents.Where(item => item.JobId == id).MaxAsync(item => (long?)item.Sequence, token) ?? 0) + 1;
-        database.JobEvents.Add(new JobEvent { JobId = id, Sequence = sequence, Stage = "public_check_queued",
-            Message = "public_check_retry_requested", CreatedUtcMs = Now });
+        await events.AppendAsync(id, "public_check_queued", "public_check_retry_requested", token);
         audit.Stage("publish.public_check_retried", id, actorUserId: actor.User.Id);
         await database.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
@@ -243,9 +241,12 @@ public sealed class PublishManagementService(UpdateAdminDbContext database, Admi
             && string.Equals(draft.PackageSha256, approval.PackageSha256, StringComparison.OrdinalIgnoreCase);
 
     private PublishJobResponse Response(ReleaseJob job, PublishApproval approval)
+        => Response(job, approval, Now);
+
+    internal static PublishJobResponse Response(ReleaseJob job, PublishApproval approval, long now)
         => new(job.Id, job.DraftId, job.Application, job.Channel, job.State, approval.Version, approval.Sequence,
             approval.ManifestSha256, approval.PackageSha256, approval.ExpectedManifestSha256, job.CreatedUtcMs, job.ErrorCode,
-            job.ActivatedUtcMs, CurrentReleaseService.Check(job, Now));
+            job.ActivatedUtcMs, CurrentReleaseService.Check(job, now));
 
     private static bool IsDigest(string? value) => value is { Length: 64 } && value.All(Uri.IsHexDigit);
     private static bool Busy(Exception exception)

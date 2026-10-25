@@ -36,6 +36,8 @@ public static class AdminApiHost
         builder.Services.AddAdminIdentity(administration);
         builder.AddRequestSecurity();
         builder.Services.AddScoped<AdminCookieEvents>();
+        builder.Services.AddSingleton<JobStreamConnections>();
+        builder.Services.AddSingleton<JobEventStream>();
         if (requireDatabase) builder.Services.AddHostedService<AdminRuntimeService>();
         builder.Services.AddHostedService<SessionMaintenanceService>();
         if (string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
@@ -89,6 +91,7 @@ public static class AdminApiHost
         app.MapAdminAccounts();
         app.MapUploadEndpoints();
         app.MapPublishEndpoints();
+        app.MapJobEventEndpoints();
         app.MapGet("/api/v1/validation-tasks/{id}", async (string id, ValidationTaskQueue queue, HttpContext context)
             => await queue.GetAsync(context.User, id, context.RequestAborted))
             .RequireAuthorization(AdminPermissions.Read).WithName("GetValidationTask").ProducesProblem(404);

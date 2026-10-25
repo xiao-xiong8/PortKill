@@ -51,6 +51,7 @@ public static class AdminIdentity
         services.AddScoped<UploadManagementService>();
         services.AddScoped<PublishManagementService>();
         services.AddScoped<CurrentReleaseService>();
+        services.AddScoped<JobEventQuery>();
         services.AddAdminWorkerServices();
         return services;
     }
@@ -64,6 +65,7 @@ public static class AdminWorkerServices
     public static IServiceCollection AddAdminWorkerServices(this IServiceCollection services)
     {
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
+        services.AddScoped<JobEventJournal>();
         services.AddScoped<ValidationTaskQueue>();
         services.AddScoped<ValidationTaskExecutor>();
         services.AddScoped<PublishTaskQueue>();

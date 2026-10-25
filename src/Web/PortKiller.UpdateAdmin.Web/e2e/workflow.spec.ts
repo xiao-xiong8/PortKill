@@ -1,5 +1,7 @@
 import { createHmac } from 'node:crypto';
-import { expect, test, type Page } from '@playwright/test';
+import { fileURLToPath } from 'node:url';
+import { statSync } from 'node:fs';
+import { expect, test, type Page, type BrowserContext } from '@playwright/test';
 
 function totp(key: string, offset = 0) {
   const bytes: number[] = []; let bits = 0, buffer = 0;
@@ -11,8 +13,10 @@ function totp(key: string, offset = 0) {
 
 test.describe.serial('authenticated administration with real HTTPS API', () => {
   let page: Page;
-  test.beforeAll(async ({ browser }) => { page = await browser.newPage({ ignoreHTTPSErrors: true }); });
-  test.afterAll(async () => { await page.close(); });
+  let context: BrowserContext;
+  const fixtures = fileURLToPath(new URL('../../../../.local/artifacts/admin-browser/runtime/fixtures/', import.meta.url));
+  test.beforeAll(async ({ browser }) => { context = await browser.newContext({ ignoreHTTPSErrors: true }); page = await context.newPage(); });
+  test.afterAll(async () => { await context.close(); });
   test('password, MFA binding, recovery acknowledgement, refresh, recovery login and strong authentication', async () => {
     await page.goto('/');
     await page.getByLabel('账号', { exact: true }).fill('browser-admin');
@@ -56,5 +60,39 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await page.getByLabel('任务类型').selectOption('publish');
     await expect(page.getByRole('button', { name: '下一页' })).toBeDisabled();
     await expect(page.locator('.pagination')).toContainText('共 0 条');
+  });
+  test('tampered signed package is rejected by the production validation worker', async () => {
+    await page.getByRole('button', { name: '上传版本', exact: true }).click();
+    await page.getByLabel('签名清单（manifest.json）', { exact: true }).setInputFiles(fixtures + 'manifest.json');
+    await page.getByLabel('四文件更新包（ZIP）', { exact: true }).setInputFiles(fixtures + 'tampered.zip');
+    await page.getByRole('button', { name: '上传并校验' }).click();
+    await expect(page).toHaveURL(/#job\//);
+    await expect(async () => { await page.getByRole('button', { name: '刷新任务' }).click(); await expect(page.locator('.status-label').first()).toHaveText('校验拒绝'); }).toPass({ timeout: 20000, intervals: [500, 1000] });
+  });
+  test('actual byte transfer can stop, reload, resume an unconfirmed file and validate literal signed notes', async () => {
+    test.setTimeout(60000);
+    await page.getByRole('button', { name: '上传版本', exact: true }).click();
+    const network = await page.context().newCDPSession(page);
+    await network.send('Network.enable');
+    // Budget the real transfer for eight seconds at either fixture size, so cancellation happens mid-file.
+    await network.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: Math.max(8192, Math.floor(statSync(fixtures + 'package.zip').size / 8)) });
+    await page.getByLabel('签名清单（manifest.json）', { exact: true }).setInputFiles(fixtures + 'manifest.json');
+    await page.getByLabel('四文件更新包（ZIP）', { exact: true }).setInputFiles(fixtures + 'package.zip');
+    await page.getByRole('button', { name: '上传并校验' }).click();
+    await expect(page).toHaveURL(/#upload\//);
+    await expect.poll(() => page.getByRole('progressbar', { name: '更新包传输进度' }).getAttribute('value')).not.toBe('0');
+    await page.getByRole('button', { name: '停止传输' }).click();
+    await expect(page.getByRole('button', { name: '上传并校验' })).toBeEnabled();
+    await page.reload();
+    await expect(page.getByText('已恢复上传记录，请重新选择原文件')).toBeVisible();
+    await page.getByLabel('签名清单（manifest.json）', { exact: true }).setInputFiles(fixtures + 'manifest.json');
+    await page.getByLabel('四文件更新包（ZIP）', { exact: true }).setInputFiles(fixtures + 'package.zip');
+    await page.getByRole('button', { name: '上传并校验' }).click();
+    await expect(page).toHaveURL(/#job\//, { timeout: 30000 });
+    await expect(async () => { await page.getByRole('button', { name: '刷新任务' }).click(); await expect(page.locator('.status-label').first()).toHaveText('可确认发布'); }).toPass({ timeout: 20000, intervals: [500, 1000] });
+    await expect(page.locator('.log-lines')).toContainText('<img src=x onerror=window.__releaseXss=1>');
+    expect(await page.locator('.log-lines img').count()).toBe(0);
+    await network.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: 104857600, uploadThroughput: 104857600 });
+    await network.detach();
   });
 });

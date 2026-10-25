@@ -137,6 +137,14 @@ pwsh -File scripts/release/Publish-Update.ps1 -Resume <ReleaseId> -SshUser updat
 
 ## 自动化验收入口
 
+正式交付前可运行一次上线准备检查。它会重新生成并审查服务端 `linux-x64` 交付包，核对源码凭据与调试旁路、API 契约、架构边界、迁移、前端锁文件和许可证、systemd/Nginx/备份恢复/监测模板以及 Git 交付范围：
+
+```powershell
+pwsh -File scripts/checks/Test-ReleaseReadiness.ps1
+```
+
+结果保存在 `.local/artifacts/admin-execution/P8-05/result.json`。检查器不会推送或部署；缺少真实 Authenticode 首装信任、旧客户端公钥轮换迁移、Linux/systemd 运行、生产 Nginx/TLS 或公网路径时会明确报告 `blocked`，不能把交叉构建和回环测试当作生产上线验收。
+
 Windows 预签名及网站发布闭环验收：
 
 ```powershell

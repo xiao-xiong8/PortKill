@@ -23,6 +23,7 @@ let sessionController: AbortController | undefined;
 const showCreate = ref(false), createUserName = ref(''), createPassword = ref(''), createPasswordAgain = ref('');
 const createRoles = ref<string[]>(['Viewer']);
 const editingAccount = ref<Account>(), roleDraft = ref<string[]>(), roleDialog = ref<HTMLDialogElement>();
+const roleDialogReturnFocus = ref<HTMLElement | null>(null);
 const recoveryCodes = ref<string[]>([]);
 const currentPassword = ref(''), newPassword = ref(''), newPasswordAgain = ref('');
 
@@ -78,11 +79,15 @@ async function createAccount() {
 }
 
 async function openRoles(account: Account) {
+  roleDialogReturnFocus.value = document.activeElement as HTMLElement | null;
   editingAccount.value = account; roleDraft.value = [...account.roles];
-  await nextTick(); roleDialog.value?.showModal();
+  await nextTick(); roleDialog.value?.showModal(); roleDialog.value?.querySelector<HTMLElement>('input')?.focus();
 }
 
-function closeRoles() { roleDialog.value?.close(); editingAccount.value = undefined; roleDraft.value = undefined; }
+function closeRoles() {
+  roleDialog.value?.close(); editingAccount.value = undefined; roleDraft.value = undefined;
+  const target = roleDialogReturnFocus.value; roleDialogReturnFocus.value = null; target?.focus();
+}
 
 async function saveRoles() {
   const account = editingAccount.value, roles = roleDraft.value ?? [];
@@ -160,7 +165,7 @@ onBeforeUnmount(() => { accountController?.abort(); sessionController?.abort(); 
       <div class="actions"><button type="button" @click="resetCreateForm">取消</button><button class="primary" :disabled="!!mutation">创建账号</button></div>
     </form>
     <p v-if="accountError" class="notice danger" role="alert">{{ accountError }}</p><p v-else-if="accountBusy" class="muted" role="status">正在加载账号…</p>
-    <div v-else-if="accountData?.items.length" class="table-scroll"><table><thead><tr><th>账号</th><th>状态</th><th>MFA</th><th>角色</th><th>操作</th></tr></thead><tbody><tr v-for="account in accountData.items" :key="account.id"><td>{{ account.userName }}<br><span class="muted mono">{{ redact(account.id) }}</span></td><td><span :class="['status-label', account.disabled ? 'failed' : '']">{{ account.disabled ? '已停用' : '有效' }}</span></td><td>{{ account.mfaEnabled ? (account.recoveryAcknowledged ? '已启用' : '待确认恢复码') : '未绑定' }}</td><td>{{ account.roles.map(roleLabel).join('、') }}</td><td><div class="actions"><button class="text-button" :disabled="!!mutation" @click="openRoles(account)">编辑角色</button><button class="text-button" :disabled="!!mutation" @click="setAccountDisabled(account)">{{ account.disabled ? '启用' : '停用' }}</button><button class="text-button danger-button" :disabled="!!mutation" @click="resetMfa(account)">重置 MFA</button></div></td></tr></tbody></table></div>
+    <div v-else-if="accountData?.items.length" class="table-scroll"><table aria-label="管理员账号列表"><thead><tr><th scope="col">账号</th><th scope="col">状态</th><th scope="col">MFA</th><th scope="col">角色</th><th scope="col">操作</th></tr></thead><tbody><tr v-for="account in accountData.items" :key="account.id"><td>{{ account.userName }}<br><span class="muted mono">{{ redact(account.id) }}</span></td><td><span :class="['status-label', account.disabled ? 'failed' : '']">{{ account.disabled ? '已停用' : '有效' }}</span></td><td>{{ account.mfaEnabled ? (account.recoveryAcknowledged ? '已启用' : '待确认恢复码') : '未绑定' }}</td><td>{{ account.roles.map(roleLabel).join('、') }}</td><td><div class="actions"><button class="text-button" :disabled="!!mutation" @click="openRoles(account)">编辑角色</button><button class="text-button" :disabled="!!mutation" @click="setAccountDisabled(account)">{{ account.disabled ? '启用' : '停用' }}</button><button class="text-button danger-button" :disabled="!!mutation" @click="resetMfa(account)">重置 MFA</button></div></td></tr></tbody></table></div>
     <div v-else-if="!accountBusy" class="empty-workspace"><h3>暂无账号</h3><p class="muted">创建第一个管理账号后，它会显示在这里。</p></div>
     <PageControls :page="accountPage" :total="accountData?.total" :busy="accountBusy || !!mutation" @change="changeAccountPage" />
   </section>
@@ -168,7 +173,7 @@ onBeforeUnmount(() => { accountController?.abort(); sessionController?.abort(); 
   <section class="surface" :aria-busy="sessionBusy">
     <div class="section-heading"><div><h2>当前账号会话</h2><p class="muted">撤销其他浏览器会话会立即生效；撤销当前会话后将返回登录页。</p></div><button :disabled="sessionBusy || !!mutation" @click="loadSessions">刷新</button></div>
     <p v-if="sessionError" class="notice danger" role="alert">{{ sessionError }}</p><p v-else-if="sessionBusy" class="muted" role="status">正在加载会话…</p>
-    <div v-else-if="sessionData?.items.length" class="table-scroll"><table><thead><tr><th>会话</th><th>认证方式</th><th>阶段</th><th>创建时间</th><th>最近活动</th><th>到期</th><th>操作</th></tr></thead><tbody><tr v-for="item in sessionData.items" :key="item.id"><td><span class="mono">{{ redact(item.id) }}</span><span v-if="item.current" class="status-label"> · 当前</span></td><td>{{ item.authenticationMethod === 'totp' ? '密码 + MFA' : item.authenticationMethod === 'recovery' ? '恢复码' : '密码' }}</td><td>{{ item.phase === 'full' ? '完整会话' : item.phase }}</td><td>{{ time(item.createdUtcMs) }}</td><td>{{ time(item.lastSeenUtcMs) }}</td><td>{{ time(item.expiresUtcMs) }}</td><td><button class="text-button danger-button" :disabled="!!mutation" @click="revokeSession(item.id, item.current)">撤销</button></td></tr></tbody></table></div>
+    <div v-else-if="sessionData?.items.length" class="table-scroll"><table aria-label="当前账号会话列表"><thead><tr><th scope="col">会话</th><th scope="col">认证方式</th><th scope="col">阶段</th><th scope="col">创建时间</th><th scope="col">最近活动</th><th scope="col">到期</th><th scope="col">操作</th></tr></thead><tbody><tr v-for="item in sessionData.items" :key="item.id"><td><span class="mono">{{ redact(item.id) }}</span><span v-if="item.current" class="status-label"> · 当前</span></td><td>{{ item.authenticationMethod === 'totp' ? '密码 + MFA' : item.authenticationMethod === 'recovery' ? '恢复码' : '密码' }}</td><td>{{ item.phase === 'full' ? '完整会话' : item.phase }}</td><td>{{ time(item.createdUtcMs) }}</td><td>{{ time(item.lastSeenUtcMs) }}</td><td>{{ time(item.expiresUtcMs) }}</td><td><button class="text-button danger-button" :disabled="!!mutation" @click="revokeSession(item.id, item.current)">撤销</button></td></tr></tbody></table></div>
     <div v-else-if="!sessionBusy" class="empty-workspace"><h3>暂无有效会话</h3></div>
     <PageControls :page="sessionPage" :total="sessionData?.total" :busy="sessionBusy || !!mutation" @change="changeSessionPage" />
   </section>

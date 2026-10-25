@@ -28,3 +28,10 @@ test('narrow viewport has no horizontal overflow', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '登录发布管理' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test('skip link moves focus to the main workspace', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('link', { name: '跳到主内容' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#main-content')).toBeFocused();
+});

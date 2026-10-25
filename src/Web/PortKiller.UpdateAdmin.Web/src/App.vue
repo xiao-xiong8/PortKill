@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ConfigProvider, Switch, theme } from 'ant-design-vue';
 import AuthPanel from './components/AuthPanel.vue';
 import StrongAuthentication from './components/StrongAuthentication.vue';
@@ -31,6 +31,7 @@ async function refresh() { error.value = ''; try { await auth.restore(); } catch
 async function logout() { try { await auth.logout(); } catch (cause) { error.value = errorText(cause); } }
 function changeTheme(value: boolean | string | number) { dark.value = !!value; try { localStorage.setItem('portkill.theme', dark.value ? 'dark' : 'light'); } catch { /* Optional preference. */ } }
 function onFocus() { if (session.value) void refresh(); }
+watch(location, async () => { await nextTick(); document.getElementById('main-content')?.focus(); });
 onMounted(() => { void refresh(); window.addEventListener('hashchange', onHash); window.addEventListener('focus', onFocus); });
 onBeforeUnmount(() => { window.removeEventListener('hashchange', onHash); window.removeEventListener('focus', onFocus); });
 </script>

@@ -58,7 +58,7 @@ public class AppSettings
     public string SettingsTab { get; set; } = "startup";
 
     // ── 表格列状态（列宽拖拽与列顺序 · 持久化） ────────────────────────
-    /// <summary>8 个数据列的宽度，CSV；0 表示星号列（进程名）。默认 96,132,132,0,78,180,132,144。</summary>
+    /// <summary>8 个数据列的像素宽度，CSV；所有业务列均可拖拽调整。默认 96,132,132,220,78,180,132,144。</summary>
     public string ColWidths { get; set; } = ColumnSettingsMigrator.Widths;
 
     /// <summary>8 个数据列的视觉顺序（逻辑列下标排列），CSV；默认 0,1,2,7,3,4,5,6（应用名称 ID 7 位于进程名之前）。</summary>

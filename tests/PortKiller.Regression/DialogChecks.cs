@@ -263,7 +263,27 @@ internal static class DialogChecks
 
     private static void CheckRoundedOutline(ContentControl card, SKBitmap image, double scale, string label)
     {
-        using var mask = Render(card.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "DialogOutlineLayer"), scale);
+        var surfaces = card.GetVisualDescendants().OfType<Border>().Where(b => b.Name == "DialogSurface").ToArray();
+        Program.Assert(surfaces.Length == 1, $"{label} 弹窗卡片必须只有一个圆角表面，实际为 {surfaces.Length} 个。");
+        Program.Assert(!card.GetVisualDescendants().OfType<Border>().Any(b => b.Name is "DialogClip" or "DialogOutlineLayer"),
+            $"{label} 仍存在旧的嵌套圆角层。");
+        // 用不含标题栏/底栏的独立表面作为描边基准，不能把待测内容也画进基准图。
+        // 否则被矩形背景盖掉的圆弧会同时出现在实际图和基准图中，导致漏检。
+        var surface = surfaces[0];
+        var reference = new Border
+        {
+            Background = surface.Background, BorderBrush = surface.BorderBrush,
+            // 独立控件不属于窗口，布局缩放为 1；直接使用真实窗口已舍入的内缩量，
+            // 避免把 150% 布局尺寸再次按 100% 舍入后产生错误基准。
+            BorderThickness = new Thickness(surface.Child!.Bounds.X, surface.Child.Bounds.Y,
+                surface.Bounds.Width - surface.Child.Bounds.Right, surface.Bounds.Height - surface.Child.Bounds.Bottom),
+            CornerRadius = surface.CornerRadius, UseLayoutRounding = false
+        };
+        reference.Measure(surface.Bounds.Size);
+        reference.Arrange(new Rect(surface.Bounds.Size));
+        using var mask = Render(reference, scale);
+        var color = ((ISolidColorBrush)surface.BorderBrush!).Color;
+        var outline = new SKColor(color.R, color.G, color.B, color.A);
         foreach (bool right in new[] { false, true })
         foreach (bool bottom in new[] { false, true })
         {
@@ -275,7 +295,7 @@ internal static class DialogChecks
                 int px = right ? image.Width - 1 - x : x, py = bottom ? image.Height - 1 - y : y;
                 var expected = mask.GetPixel(px, py);
                 // 仅比较实色线芯，抗锯齿像素会与下方表面混色。
-                if (expected.Alpha < 254) continue;
+                if (expected.Alpha < 254 || Distance(expected, outline) > 3) continue;
                 var actual = image.GetPixel(px, py);
                 Program.Assert(actual.Alpha >= 245 && Distance(actual, expected) < 10,
                     $"{label} 内容遮住圆角描边：({px},{py}) actual={actual}, outline={expected}, card={card.Bounds}。");
@@ -313,8 +333,11 @@ internal static class DialogChecks
     private static SKBitmap Render(Control visual, double scale)
     {
         using var target = new RenderTargetBitmap(new PixelSize((int)Math.Ceiling(visual.Bounds.Width * scale),
-            (int)Math.Ceiling(visual.Bounds.Height * scale)), new Vector(96 * scale, 96 * scale));
-        target.Render(visual);
+            (int)Math.Ceiling(visual.Bounds.Height * scale)), new Vector(96, 96));
+        // 使用显式变换，避免当前 Skia 离屏后端在阴影恢复画布后重复应用隐藏 DPI 矩阵。
+        using (var context = target.CreateDrawingContext())
+        using (context.PushTransform(Matrix.CreateScale(scale, scale)))
+            context.DrawRectangle(new VisualBrush(visual), null, new Rect(visual.Bounds.Size));
         using var png = new MemoryStream(); target.Save(png, PngBitmapEncoderOptions.Default); png.Position = 0;
         return SKBitmap.Decode(png) ?? throw new InvalidOperationException("无法读取弹窗离屏渲染结果。");
     }

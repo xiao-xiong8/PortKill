@@ -14,7 +14,7 @@ internal static class ApplicationNameChecks
         var old = new AppSettings { ColWidths = "91,121,122,0,73,161,117", ColOrder = "6,4,3,5,2,1,0",
             ColVisible = "True,False,True,False,True,False,True" };
         ColumnSettingsMigrator.Migrate(old);
-        Program.Assert(old.ColWidths == "91,121,122,0,73,161,117,144" && old.ColOrder == "6,4,7,3,5,2,1,0"
+        Program.Assert(old.ColWidths == "91,121,122,220,73,161,117,144" && old.ColOrder == "6,4,7,3,5,2,1,0"
             && old.ColVisible == "True,False,True,False,True,False,True,True", "旧列布局迁移丢失用户设置。");
         var migrated = (old.ColWidths, old.ColOrder, old.ColVisible);
         ColumnSettingsMigrator.Migrate(old);
@@ -23,7 +23,7 @@ internal static class ApplicationNameChecks
         old.ColOrder = "7,7,3,99,0";
         old.ColVisible = "False,bad,False";
         ColumnSettingsMigrator.Migrate(old);
-        Program.Assert(old.ColWidths == "88,132,132,0,72,180,116,150"
+        Program.Assert(old.ColWidths == "88,132,132,220,72,180,116,150"
             && old.ColOrder.Split(',').Select(int.Parse).Order().SequenceEqual(Enumerable.Range(0, 8))
             && old.ColVisible.StartsWith("False,True,False,"), "异常字段修复未保留其他有效值。");
     }

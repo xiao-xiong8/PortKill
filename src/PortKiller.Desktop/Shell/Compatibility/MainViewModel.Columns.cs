@@ -35,9 +35,19 @@ public partial class MainViewModel
     /// <summary>MinWidth 保护规格（拖到底手柄停住并转琥珀色）。操作列不可拖。</summary>
     public static readonly double[] ColMinWidths = { 88, 120, 118, 140, 72, 150, 116, 104 };
 
-    private double[] _colWidths = { 96, 132, 132, 0, 78, 180, 132, 144 }; // 0 = 星号列（进程名）
+    private const double SelectionColumnWidth = 44;
+    private const double TableTrailingGap = 16;
+    private double[] _colWidths = { 96, 132, 132, 220, 78, 180, 132, 144 };
     private int[] _colOrder = { 0, 1, 2, 7, 3, 4, 5, 6 };
     private bool[] _colVisible = { true, true, true, true, true, true, true, true };
+    // 只保留可见列的显示顺序。表头和数据行都通过这一个快照取 Grid.Column，
+    // 隐藏列不会再留下零宽占位，列宽与内容因此始终使用同一套坐标系。
+    private int[] _displayOrder = { 0, 1, 2, 7, 3, 4, 5, 6 };
+    // 每次列顺序或可见性拓扑改变时递增。虚拟化行据此整体重建，
+    // 避免 Avalonia Grid 在旧模板缓存上执行动态列重排。
+    private int _columnLayoutVersion;
+    // 列宽变化只需要重新测量行，不应伪装成列拓扑变化。
+    private int _columnMeasureVersion;
     private int _sortCol;
     private bool _sortAsc = true;
 
@@ -55,25 +65,43 @@ public partial class MainViewModel
     public GridLength ColWidth6 => ColWidthAt(6);
 
     public GridLength ColWidth7 => ColWidthAt(7);
-    public double TableMinWidth => 60 + Enumerable.Range(0, ColumnSettingsMigrator.Count)
-        .Where(i => _colVisible[i]).Sum(i => i == 3 ? Math.Max(140, _colWidths[i]) : Math.Max(ColMinWidths[i], _colWidths[i]));
+    public int ColumnLayoutVersion => _columnLayoutVersion;
+    public int ColumnMeasureVersion => _columnMeasureVersion;
+    public double TableMinWidth => SelectionColumnWidth + TableTrailingGap + _displayOrder.Sum(MinimumColumnWidth);
+
+    private double MinimumColumnWidth(int logical)
+        => Math.Max(ColMinWidths[logical], _colWidths[logical]);
 
     private GridLength ColWidthAt(int position)
     {
-        int logical = _colOrder[position];
-        if (!_colVisible[logical]) return new GridLength(0);
-        if (_colWidths[logical] == 0) return new GridLength(1, GridUnitType.Star);
-        return new GridLength(_colWidths[logical]);
+        if (position < 0 || position >= _displayOrder.Length) return new GridLength(0);
+        int logical = _displayOrder[position];
+        return new GridLength(MinimumColumnWidth(logical));
     }
 
     private void RebuildColumns()
     {
-        OnPropertyChanged(nameof(TableMinWidth));
+        var nextDisplayOrder = _colOrder.Where(i => i >= 0 && i < _colVisible.Length && _colVisible[i]).ToArray();
+        bool topologyChanged = !_displayOrder.SequenceEqual(nextDisplayOrder);
+        _displayOrder = nextDisplayOrder;
+        if (topologyChanged)
+        {
+            _columnLayoutVersion++;
+            OnPropertyChanged(nameof(ColumnLayoutVersion));
+        }
+        if (topologyChanged)
+        {
+            _columnMeasureVersion++;
+            OnPropertyChanged(nameof(ColumnMeasureVersion));
+        }
         for (int i = 0; i < ColumnSettingsMigrator.Count; i++)
         {
             OnPropertyChanged($"ColWidth{i}");
             OnPropertyChanged($"ColIdx{i}");
         }
+        // 先让表头和已实现行收到新的列宽，再更新滚动内容的最小宽度；
+        // 反过来会让虚拟化面板在旧 Grid 定义上进入一次 Arrange，Avalonia 12 可能抛 NRE。
+        OnPropertyChanged(nameof(TableMinWidth));
     }
 
     /// <summary>校验旧配置，拒绝非有限宽度和重复列索引以防布局异常。</summary>
@@ -84,7 +112,7 @@ public partial class MainViewModel
         _colOrder = settings.ColOrder.Split(',').Select(int.Parse).ToArray();
         _colVisible = settings.ColVisible.Split(',').Select(bool.Parse).ToArray();
         for (int i = 0; i < _colWidths.Length; i++)
-            if (i != 3 || _colWidths[i] > 0) _colWidths[i] = Math.Max(ColMinWidths[i], _colWidths[i]);
+            _colWidths[i] = Math.Max(ColMinWidths[i], _colWidths[i]);
         RebuildColumns();
         NotifyColVisible();
     }
@@ -102,6 +130,10 @@ public partial class MainViewModel
     /// <summary>逻辑列的可见位置（0 = 勾选列之后第一列），供单元格 Grid.Column 绑定。</summary>
     private int PositionOf(int logical)
     {
+        for (int i = 0; i < _displayOrder.Length; i++)
+            if (_displayOrder[i] == logical) return i;
+        // 隐藏列不参与显示坐标；保留其原始顺序槽位，避免切换可见性时
+        // 让已隐藏控件也移动一次 Grid.Column，虚拟化行可平滑完成重排。
         for (int i = 0; i < _colOrder.Length; i++)
             if (_colOrder[i] == logical) return i;
         return 0;
@@ -132,10 +164,18 @@ public partial class MainViewModel
     /// <summary>拖拽过程中实时写入列宽（不落盘）；松手时由视图调用 SaveColumnState() 持久化。</summary>
     public void SetColumnWidth(int logical, double width)
     {
-        if (logical == 3) return; // 星号列宽度由窗口分配
+        if (logical < 0 || logical >= ColumnSettingsMigrator.Count) return;
         if (!double.IsFinite(width)) return;
-        _colWidths[logical] = Math.Clamp(Math.Round(width), ColMinWidths[logical], ColumnSettingsMigrator.MaximumWidth);
-        RebuildColumns();
+        double next = Math.Clamp(Math.Round(width), ColMinWidths[logical], ColumnSettingsMigrator.MaximumWidth);
+        if (Math.Abs(_colWidths[logical] - next) < 0.1) return;
+
+        _colWidths[logical] = next;
+        int position = Array.IndexOf(_displayOrder, logical);
+        if (position >= 0)
+            OnPropertyChanged($"ColWidth{position}");
+        _columnMeasureVersion++;
+        OnPropertyChanged(nameof(ColumnMeasureVersion));
+        OnPropertyChanged(nameof(TableMinWidth));
     }
 
     /// <summary>列是否已拖到最小宽度（手柄转琥珀色提示「已到下限」）。</summary>
@@ -144,9 +184,23 @@ public partial class MainViewModel
     /// <summary>列顺序拖拽落位：把 logical 移到数据列的第 targetPos 位。</summary>
     public void ReorderColumn(int logical, int targetPos)
     {
+        if (logical < 0 || logical >= ColumnSettingsMigrator.Count || !_colVisible[logical]) return;
         var list = _colOrder.ToList();
         list.Remove(logical);
-        list.Insert(Math.Clamp(targetPos, 0, ColumnSettingsMigrator.Count - 1), logical);
+        int visibleCount = list.Count(i => _colVisible[i]);
+        int visibleTarget = Math.Clamp(targetPos, 0, visibleCount);
+        int insertAt = list.Count;
+        int seen = 0;
+        for (int i = 0; i < list.Count; i++)
+        {
+            if (!_colVisible[list[i]]) continue;
+            if (seen++ >= visibleTarget)
+            {
+                insertAt = i;
+                break;
+            }
+        }
+        list.Insert(insertAt, logical);
         _colOrder = list.ToArray();
         RebuildColumns();
         PersistColumns();
@@ -222,7 +276,7 @@ public partial class MainViewModel
     [RelayCommand]
     public void ResetColumns()
     {
-        _colWidths = new double[] { 96, 132, 132, 0, 78, 180, 132, 144 };
+        _colWidths = new double[] { 96, 132, 132, 220, 78, 180, 132, 144 };
         _colOrder = new[] { 0, 1, 2, 7, 3, 4, 5, 6 };
         _colVisible = new[] { true, true, true, true, true, true, true, true };
         RebuildColumns();

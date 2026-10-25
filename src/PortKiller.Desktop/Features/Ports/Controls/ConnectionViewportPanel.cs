@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -13,12 +14,50 @@ namespace PortKiller.Views;
 /// </summary>
 public sealed class ConnectionViewportPanel : VirtualizingPanel
 {
+    public static readonly StyledProperty<int> ColumnLayoutVersionProperty =
+        AvaloniaProperty.Register<ConnectionViewportPanel, int>(nameof(ColumnLayoutVersion));
+
+    public static readonly StyledProperty<int> ColumnMeasureVersionProperty =
+        AvaloniaProperty.Register<ConnectionViewportPanel, int>(nameof(ColumnMeasureVersion));
+
+    public int ColumnLayoutVersion
+    {
+        get => GetValue(ColumnLayoutVersionProperty);
+        set => SetValue(ColumnLayoutVersionProperty, value);
+    }
+
+    public int ColumnMeasureVersion
+    {
+        get => GetValue(ColumnMeasureVersionProperty);
+        set => SetValue(ColumnMeasureVersionProperty, value);
+    }
+
     internal const double RowHeight = 48;
     private const double BufferScreens = 0.5;
     private readonly Dictionary<Control, int> _indices = new();
     private readonly Dictionary<int, Control> _containers = new();
     private readonly List<Control> _free = new();
     private Rect _viewport;
+    private bool _layoutResetPending;
+
+    static ConnectionViewportPanel()
+    {
+        ColumnLayoutVersionProperty.Changed.AddClassHandler<ConnectionViewportPanel>(
+            (panel, _) =>
+            {
+                panel._layoutResetPending = true;
+                panel.InvalidateMeasure();
+            });
+        ColumnMeasureVersionProperty.Changed.AddClassHandler<ConnectionViewportPanel>(
+            (panel, _) =>
+            {
+                // Avalonia 12 can retain stale Grid column state after a width
+                // binding changes. Recycle the realized rows before Arrange so a
+                // resized header and its virtualized rows always share definitions.
+                panel._layoutResetPending = true;
+                panel.InvalidateMeasure();
+            });
+    }
 
     public ConnectionViewportPanel()
         => EffectiveViewportChanged += (_, e) =>
@@ -29,6 +68,9 @@ public sealed class ConnectionViewportPanel : VirtualizingPanel
 
     protected override Size MeasureOverride(Size availableSize)
     {
+        if (_layoutResetPending)
+            ResetRealizedContainers();
+
         double width = double.IsFinite(availableSize.Width) ? availableSize.Width
             : Math.Max(MinWidth, double.IsFinite(_viewport.Width) ? _viewport.Width : 0);
         int itemCount = Items.Count;
@@ -99,6 +141,20 @@ public sealed class ConnectionViewportPanel : VirtualizingPanel
         }
         _free.Clear();
         return new Size(width, extent);
+    }
+
+    private void ResetRealizedContainers()
+    {
+        var generator = ItemContainerGenerator;
+        foreach (var child in Children.ToArray())
+        {
+            generator?.ClearItemContainer(child);
+            RemoveInternalChild(child);
+        }
+        _indices.Clear();
+        _containers.Clear();
+        _free.Clear();
+        _layoutResetPending = false;
     }
 
     protected override Size ArrangeOverride(Size finalSize)

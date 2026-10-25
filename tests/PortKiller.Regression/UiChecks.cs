@@ -40,6 +40,7 @@ internal static class UiChecks
                 if (updatesOnly)
                 { await UpdateUiChecks.StatesAndWindowLifetime(); completed = true; return; }
                 ShellChecks.NavigationAndExtensionLifetime();
+                CheckThemeTransitionPolicy();
                 FontChecks.EmbeddedFacesAndFallback();
                 await FontLicenseChecks.ViewerAndDocuments();
                 await ContextMenuChecks.HoverTransitions();
@@ -62,6 +63,26 @@ internal static class UiChecks
         Dispatcher.UIThread.MainLoop(stop.Token);
         if (failure != null) throw new InvalidOperationException("窗口回归失败。", failure);
         Program.Assert(completed, "窗口验证超时，可能存在 UI 阻塞。");
+    }
+
+    private static void CheckThemeTransitionPolicy()
+    {
+        Program.Assert(MainViewModel.ShouldAnimateThemeTransition("跟随系统", "深色模式", false),
+            "跟随系统切换到深色应该启用主题过渡。");
+        Program.Assert(MainViewModel.ShouldAnimateThemeTransition("深色模式", "浅色模式", false),
+            "深色切换到浅色应该启用主题过渡。");
+        Program.Assert(MainViewModel.ShouldAnimateThemeTransition("浅色模式", "深色模式", false) &&
+            MainViewModel.ShouldAnimateThemeTransition("深色模式", "跟随系统", false),
+            "反向相邻主题切换应该同样启用主题过渡。");
+        Program.Assert(!MainViewModel.ShouldAnimateThemeTransition("跟随系统", "浅色模式", false),
+            "跨过中间档的主题切换不应该播放过渡。");
+        Program.Assert(!MainViewModel.ShouldAnimateThemeTransition("浅色模式", "跟随系统", false),
+            "反向跨档的主题切换不应该播放过渡。");
+        Program.Assert(!MainViewModel.ShouldAnimateThemeTransition("浅色模式", "跟随系统", true),
+            "开启减少界面动效后不应该播放主题过渡。");
+        Program.Assert(!MainViewModel.ShouldAnimateThemeTransition("未知主题", "深色模式", false),
+            "未知主题值不应该误触发过渡。");
+        Console.WriteLine("PASS 主题切换仅在相邻档位且允许动效时启用过渡");
     }
 
     /// <summary>列表滚动必须实时、带惯性且不在行悬停时启动背景动画。</summary>

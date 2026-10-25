@@ -352,7 +352,7 @@
                                                 </Grid>
                                             </Border>
 
-                                            <!-- 进程名 · 逻辑列 3（星号列，不参与列宽拖拽） -->
+                                            <!-- 进程名 · 逻辑列 3（与其他业务列使用同一套像素宽度拖拽） -->
                                             <Border Grid.Column="{Binding ColIdx3}" Classes="thCell" Tag="3"
                                                     IsVisible="{Binding IsColVisible3}"
                                                     PointerPressed="OnHeaderSortPressed">
@@ -376,6 +376,12 @@
                                                             </Panel>
                                                         </Viewbox>
                                                     </StackPanel>
+                                                    <Border Classes="colHandle" Tag="3" PointerPressed="OnColHandlePressed"
+                                                            VerticalAlignment="Stretch" HorizontalAlignment="Right" Width="7"
+                                                            Background="Transparent" Cursor="SizeWestEast">
+                                                        <Border Classes="colHandleBar" Width="1" Height="14" CornerRadius="2"
+                                                                Background="{DynamicResource HandleBar}" VerticalAlignment="Center" />
+                                                    </Border>
                                                 </Grid>
                                             </Border>
 
@@ -445,7 +451,7 @@
                                                 </Grid>
                                             </Border>
 
-                                            <!-- 操作 · 逻辑列 6（不可排序） -->
+                                            <!-- 操作 · 逻辑列 6（不可排序，但允许调整动作区宽度） -->
                                             <Border Grid.Column="{Binding ColIdx6}" Classes="thCell" Tag="6"
                                                     IsVisible="{Binding IsColVisible6}">
                                                 <Grid>
@@ -496,7 +502,9 @@
                                     <views:ConnectionItemsControl ItemsSource="{Binding FilteredItems}">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
-                                                <views:ConnectionViewportPanel MinWidth="{Binding TableMinWidth}" />
+                                                <views:ConnectionViewportPanel MinWidth="{Binding TableMinWidth}"
+                                                                               ColumnLayoutVersion="{Binding ColumnLayoutVersion}"
+                                                                               ColumnMeasureVersion="{Binding ColumnMeasureVersion}" />
                                             </ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
@@ -529,7 +537,7 @@
                                                                           VerticalAlignment="Center" HorizontalAlignment="Left" />
                                                             </Border>
 
-                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx0}" Classes="port"
+                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx0}" Classes="port tableCell"
                                                                        IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible0}"
                                                                        Classes.web="{Binding IsCatWeb}"
                                                                        Classes.db="{Binding IsCatDb}"
@@ -537,56 +545,54 @@
                                                                        Classes.net="{Binding IsCatNet}"
                                                                        Classes.sys="{Binding IsCatSys}"
                                                                        Classes.app="{Binding IsCatApp}"
-                                                                       Text="{Binding LocalPort}" Margin="8,0,0,0" />
+                                                                       Text="{Binding LocalPort}" />
 
-                                                            <Border Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx1}" Padding="8,0"
+                                                            <Border Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx1}" Classes="pill"
+                                                                    Margin="8,0"
+                                                                    Classes.listen="{Binding IsPillListen}"
+                                                                    Classes.est="{Binding IsPillEstablished}"
+                                                                    Classes.wait="{Binding IsPillTimeWait}"
+                                                                    Classes.kernel="{Binding IsPillKernel}"
+                                                                    Classes.idle="{Binding IsPillIdle}"
                                                                     IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible1}">
-                                                                <Border Classes="pill"
-                                                                        Classes.listen="{Binding IsPillListen}"
-                                                                        Classes.est="{Binding IsPillEstablished}"
-                                                                        Classes.wait="{Binding IsPillTimeWait}"
-                                                                        Classes.kernel="{Binding IsPillKernel}"
-                                                                        Classes.idle="{Binding IsPillIdle}">
-                                                                    <TextBlock Text="{Binding StatusBadge}"
-                                                                               FontFamily="{DynamicResource AppFontUi}" />
-                                                                </Border>
+                                                                <TextBlock Text="{Binding StatusBadge}" FontFamily="{DynamicResource AppFontUi}" />
                                                             </Border>
 
-                                                            <Border Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx2}" Padding="8,0"
+                                                            <Border Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx2}" Classes="tag"
+                                                                    Margin="8,0"
+                                                                    Classes.web="{Binding IsCatWeb}"
+                                                                    Classes.db="{Binding IsCatDb}"
+                                                                    Classes.dev="{Binding IsCatDev}"
+                                                                    Classes.net="{Binding IsCatNet}"
+                                                                    Classes.sys="{Binding IsCatSys}"
+                                                                    Classes.app="{Binding IsCatApp}"
                                                                     IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible2}">
-                                                                <Border Classes="tag"
-                                                                        Classes.web="{Binding IsCatWeb}"
-                                                                        Classes.db="{Binding IsCatDb}"
-                                                                        Classes.dev="{Binding IsCatDev}"
-                                                                        Classes.net="{Binding IsCatNet}"
-                                                                        Classes.sys="{Binding IsCatSys}"
-                                                                        Classes.app="{Binding IsCatApp}">
-                                                                    <TextBlock Text="{Binding ServiceCategory}" />
-                                                                </Border>
+                                                                <TextBlock Text="{Binding ServiceCategory}" />
                                                             </Border>
 
-                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx7}" Classes="ellipsis" Margin="8,0"
+                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx7}" Classes="ellipsis tableCell"
                                                                        IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible7}"
                                                                        Text="{Binding ApplicationNameDisplay}" ToolTip.Tip="{Binding ApplicationNameTip}"
                                                                        FontSize="{DynamicResource TypeBody}" Foreground="{DynamicResource TextPrimary}" />
 
-                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx3}" Classes="ellipsis" Margin="8,0"
+                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx3}" Classes="ellipsis tableCell"
                                                                        IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible3}"
                                                                        Text="{Binding ProcessDisplay}" ToolTip.Tip="{Binding ProcessDisplay}" FontSize="{DynamicResource TypeBody}"
                                                                        FontWeight="Medium"
                                                                        Foreground="{DynamicResource TextPrimary}" />
 
-                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx4}" Classes="mono" Margin="8,0"
+                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx4}" Classes="mono tableCell"
                                                                        IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible4}"
                                                                        Text="{Binding Pid}" FontSize="{DynamicResource TypeMono}"
                                                                        Foreground="{DynamicResource TextTertiary}" />
 
-                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx5}" Classes="mono" Margin="8,0"
+                                                            <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx5}" Classes="mono tableCell"
                                                                        IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible5}"
                                                                        Text="{Binding LocalEndpoint}" FontSize="{DynamicResource TypeMonoCaption}"
                                                                        Foreground="{DynamicResource TextMuted}" />
 
-                                                            <Grid Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx6}" Margin="8,0,0,0"
+                                                            <Grid Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx6}" Margin="8,0"
+                                                                  VerticalAlignment="Center" HorizontalAlignment="Left"
                                                                   IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible6}">
                                                                 <Button Classes="danger" Width="76" Height="26"
                                                                         Content="终止" FontSize="{DynamicResource TypeCaption}" Padding="0"

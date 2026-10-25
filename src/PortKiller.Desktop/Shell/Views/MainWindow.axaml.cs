@@ -1,12 +1,15 @@
 using System;
 using System.Linq;
 using Avalonia;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -18,6 +21,11 @@ namespace PortKiller.Views;
 
 public partial class MainWindow : Window
 {
+    private static readonly TimeSpan ThemeTransitionDuration = TimeSpan.FromMilliseconds(190);
+    private DispatcherTimer? _themeTransitionTimer;
+    private RenderTargetBitmap? _themeTransitionFrame;
+    private int _themeTransitionGeneration;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -38,6 +46,103 @@ public partial class MainWindow : Window
         Resized += (_, _) => PokeListInteraction();
 
         UpdateMaxButtonVisual();
+    }
+
+    /// <summary>相邻主题切换时淡出旧画面；跨过一档及减少动态效果时直接切换。</summary>
+    private void OnThemeChangeRequested(string previous, string next)
+    {
+        if (Vm is not { ReduceMotion: false } ||
+            !MainViewModel.ShouldAnimateThemeTransition(previous, next, reduceMotion: false))
+        {
+            CancelThemeTransition();
+            return;
+        }
+
+        var overlay = this.FindControl<Image>("ThemeTransitionOverlay");
+        var frameBorder = this.FindControl<Border>("WindowFrameBorder");
+        if (overlay is null || frameBorder is null) return;
+
+        // 如果用户在动画中再次切换，抓取当前主题底图而不是前一张覆盖帧。
+        StopThemeTransitionTimer();
+        overlay.Transitions = null;
+        overlay.Opacity = 1;
+        overlay.IsVisible = false;
+        RenderTargetBitmap? frame = null;
+        try
+        {
+            double scale = Math.Max(1, RenderScaling);
+            var size = new PixelSize(
+                Math.Max(1, (int)Math.Ceiling(frameBorder.Bounds.Width * scale)),
+                Math.Max(1, (int)Math.Ceiling(frameBorder.Bounds.Height * scale)));
+            frame = new RenderTargetBitmap(size, new Vector(96 * scale, 96 * scale));
+            frame.Render(frameBorder);
+        }
+        catch
+        {
+            frame?.Dispose();
+            CancelThemeTransition();
+            return;
+        }
+
+        int generation = ++_themeTransitionGeneration;
+        ReleaseThemeTransitionFrame();
+        _themeTransitionFrame = frame;
+        overlay.Source = frame;
+        overlay.Transitions = new Transitions
+        {
+            new DoubleTransition
+            {
+                Property = Visual.OpacityProperty,
+                Duration = ThemeTransitionDuration,
+                Easing = new CubicEaseOut()
+            }
+        };
+        overlay.Opacity = 1;
+        overlay.IsVisible = true;
+
+        // 让主题资源先完成一次布局与绘制，旧画面再在其上淡出。
+        Dispatcher.UIThread.Post(() => Dispatcher.UIThread.Post(() =>
+        {
+            if (generation != _themeTransitionGeneration || !overlay.IsVisible) return;
+            overlay.Opacity = 0;
+            _themeTransitionTimer = new DispatcherTimer(DispatcherPriority.Background)
+            { Interval = ThemeTransitionDuration + TimeSpan.FromMilliseconds(35) };
+            _themeTransitionTimer.Tick += (_, _) =>
+            {
+                StopThemeTransitionTimer();
+                if (generation == _themeTransitionGeneration) CancelThemeTransition();
+            };
+            _themeTransitionTimer.Start();
+        }, DispatcherPriority.Render), DispatcherPriority.Background);
+    }
+
+    private void StopThemeTransitionTimer()
+    {
+        if (_themeTransitionTimer is null) return;
+        _themeTransitionTimer.Stop();
+        _themeTransitionTimer = null;
+    }
+
+    private void ReleaseThemeTransitionFrame()
+    {
+        var frame = _themeTransitionFrame;
+        _themeTransitionFrame = null;
+        if (this.FindControl<Image>("ThemeTransitionOverlay") is { } overlay) overlay.Source = null;
+        frame?.Dispose();
+    }
+
+    private void CancelThemeTransition()
+    {
+        _themeTransitionGeneration++;
+        StopThemeTransitionTimer();
+        var overlay = this.FindControl<Image>("ThemeTransitionOverlay");
+        if (overlay is not null)
+        {
+            overlay.Transitions = null;
+            overlay.Opacity = 0;
+            overlay.IsVisible = false;
+        }
+        ReleaseThemeTransitionFrame();
     }
 
     /// <summary>最大化 / 还原时同步标题栏按钮图标与提示（双击标题栏、拖向屏幕边缘也会触发）。</summary>
@@ -594,9 +699,21 @@ public partial class MainWindow : Window
     private double _resizeStartWidth;
     private double _resizeStartX;
     private Border? _resizeHandle;
+    private bool _resizeFrameQueued;
+    private int _pendingResizeLogical = -1;
+    private double _pendingResizeWidth;
 
     private static int ParseTag(object? tag)
         => int.TryParse(tag as string, out int i) ? i : -1;
+
+    /// <summary>
+    /// Resize math is deliberately independent of the moving header grid. The grid is
+    /// re-laid out on every pointer move, so its local X coordinate is not a stable drag
+    /// origin and can make a rightward drag look like a leftward resize.
+    /// </summary>
+    internal static double ComputeColumnWidth(double startWidth, double startPointerX,
+        double currentPointerX, double minWidth, double maxWidth)
+        => Math.Clamp(Math.Round(startWidth + currentPointerX - startPointerX), minWidth, maxWidth);
 
     /// <summary>表头按下：左键记录起点，水平拖动 > 4px 进入列顺序拖拽，否则松手时触发排序。</summary>
     internal void OnHeaderSortPressed(object? sender, PointerPressedEventArgs e)
@@ -644,9 +761,10 @@ public partial class MainWindow : Window
         {
             double gx = e.GetPosition(grid).X;
             double bestX = -1;
-            foreach (var child in grid.Children.OfType<Border>().OrderBy(c => c.Bounds.X))
+            foreach (var child in grid.Children.OfType<Border>()
+                .Where(c => c.IsEffectivelyVisible && Grid.GetColumn(c) >= 1)
+                .OrderBy(c => c.Bounds.X))
             {
-                if (Grid.GetColumn(child) == 0) continue;
                 double right = child.Bounds.Right;
                 if (Math.Abs(right - bestX) > 0.5 && (bestX < 0 || Math.Abs(gx - right) < Math.Abs(gx - bestX)))
                     bestX = right;
@@ -675,17 +793,18 @@ public partial class MainWindow : Window
                 {
                     double gx = e.GetPosition(grid).X;
                     var cells = grid.Children.OfType<Border>()
-                        .Where(c => Grid.GetColumn(c) >= 1)
+                        .Where(c => c.IsEffectivelyVisible && Grid.GetColumn(c) >= 1)
                         .OrderBy(c => c.Bounds.X).ToList();
-                    int draggedPos = cells.IndexOf(cell);
+                    var otherCells = cells.Where(c => !ReferenceEquals(c, cell)).ToList();
                     int boundaries = 0;
-                    foreach (var c in cells)
+                    foreach (var c in otherCells)
                     {
                         if (gx > c.Bounds.X + c.Bounds.Width / 2) boundaries++;
                     }
-                    insertAt = boundaries - (boundaries > draggedPos ? 1 : 0);
+                    // insertAt 以“拖动列移除后”的可见列序号计算，隐藏列不参与落位。
+                    insertAt = boundaries;
                 }
-                Vm.ReorderColumn(_sortLogical, Math.Clamp(insertAt, 0, MainViewModel.ColTitles.Length - 1));
+                Vm.ReorderColumn(_sortLogical, insertAt);
             }
             else if (_sortLogical >= 0)
             {
@@ -707,11 +826,12 @@ public partial class MainWindow : Window
         if (!e.GetCurrentPoint(handle).Properties.IsLeftButtonPressed) return;
 
         _resizeLogical = ParseTag(handle.Tag);
-        if (_resizeLogical < 0 || _resizeLogical == 3) return; // 星号列不参与
+        if (_resizeLogical < 0 || _resizeLogical >= MainViewModel.ColTitles.Length) return;
 
         _resizeHandle = handle;
         handle.Classes.Add("dragging");
-        _resizeStartX = e.GetPosition(HeaderGrid).X;
+        // MainWindow 的原点不会因为列宽重排或水平滚动而移动。
+        _resizeStartX = e.GetPosition(this).X;
         _resizeStartWidth = Vm.GetColWidth(_resizeLogical);
 
         handle.PointerMoved += OnHandleMoved;
@@ -724,9 +844,10 @@ public partial class MainWindow : Window
     {
         if (Vm == null || _resizeLogical < 0) return;
 
-        double dx = e.GetPosition(HeaderGrid).X - _resizeStartX;
-        double newW = _resizeStartWidth + dx;
+        double currentX = e.GetPosition(this).X;
         double min = Vm.GetColMin(_resizeLogical);
+        double newW = ComputeColumnWidth(_resizeStartWidth, _resizeStartX, currentX, min,
+            PortKiller.Services.ColumnSettingsMigrator.MaximumWidth);
         bool locked = newW <= min + 0.5;
 
         if (_resizeHandle is { } h)
@@ -735,7 +856,15 @@ public partial class MainWindow : Window
             else h.Classes.Remove("locked");
         }
 
-        Vm.SetColumnWidth(_resizeLogical, newW);
+        // PointerMoved 可以远快于屏幕刷新。把列宽提交合并到下一帧，避免每个
+        // 原始鼠标事件都触发表头、内容网格和 ScrollViewer 的完整布局。
+        _pendingResizeLogical = _resizeLogical;
+        _pendingResizeWidth = newW;
+        if (!_resizeFrameQueued)
+        {
+            _resizeFrameQueued = true;
+            Dispatcher.UIThread.Post(ApplyPendingResize, DispatcherPriority.Render);
+        }
 
         // 实时宽度提示
         if (HeaderOverlay is { } overlay)
@@ -756,6 +885,7 @@ public partial class MainWindow : Window
     private void OnHandleReleased(object? sender, PointerReleasedEventArgs e)
     {
         if (sender is not Border handle) return;
+        ApplyPendingResize();
         handle.PointerMoved -= OnHandleMoved;
         handle.PointerReleased -= OnHandleReleased;
         handle.Classes.Remove("dragging");
@@ -765,8 +895,16 @@ public partial class MainWindow : Window
 
         Vm?.SaveColumnState();
         _resizeLogical = -1;
+        _pendingResizeLogical = -1;
         _resizeHandle = null;
         e.Handled = true;
+    }
+
+    private void ApplyPendingResize()
+    {
+        _resizeFrameQueued = false;
+        if (_resizeLogical < 0 || _pendingResizeLogical != _resizeLogical || Vm == null) return;
+        Vm.SetColumnWidth(_resizeLogical, _pendingResizeWidth);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -805,6 +943,7 @@ public partial class MainWindow : Window
         Vm.RequestShowMainWindow += ShowFromTray;
         Vm.RequestShowUpdates += ShowUpdateWindow;
         Vm.PropertyChanged += OnVmPropertyChanged;
+        Vm.ThemeChangeRequested += OnThemeChangeRequested;
 
         InitTrayIcon();
         if (Vm.IsHudVisible) ShowHud();
@@ -814,7 +953,11 @@ public partial class MainWindow : Window
 
     private void OnVmPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainViewModel.IsHudVisible))
+        if (e.PropertyName == nameof(MainViewModel.ReduceMotion) && Vm is { ReduceMotion: true })
+        {
+            CancelThemeTransition();
+        }
+        else if (e.PropertyName == nameof(MainViewModel.IsHudVisible))
         {
             if (Vm is { IsHudVisible: true }) ShowHud();
             else CloseHud();
@@ -849,6 +992,7 @@ public partial class MainWindow : Window
     {
         if (_exitConfirmed) return;
         _exitConfirmed = true;
+        CancelThemeTransition();
         _memoryDiagnostics?.Stop();
         _listIdleTimer?.Stop();
         _listPokeHoldActive = false;
@@ -860,6 +1004,7 @@ public partial class MainWindow : Window
             Vm.RequestShowMainWindow -= ShowFromTray;
             Vm.RequestShowUpdates -= ShowUpdateWindow;
             Vm.PropertyChanged -= OnVmPropertyChanged;
+            Vm.ThemeChangeRequested -= OnThemeChangeRequested;
         }
         if (_trayIcon is { } tray)
         {

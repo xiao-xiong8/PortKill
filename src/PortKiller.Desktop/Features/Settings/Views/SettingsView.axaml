@@ -442,7 +442,7 @@
                                                             Margin="0,0,16,0">
                                                     <TextBlock Text="减少界面动效" FontSize="{DynamicResource TypeBody}"
                                                                FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
-                                                    <TextBlock Text="关闭悬浮过渡、开关滑块位移与 Toast 淡入；默认沿用系统「显示动画」偏好"
+                                                    <TextBlock Text="关闭主题切换、悬浮过渡、开关滑块位移与 Toast 淡入；默认沿用系统「显示动画」偏好"
                                                                FontSize="{DynamicResource TypeCaption}"
                                                                Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
                                                 </StackPanel>

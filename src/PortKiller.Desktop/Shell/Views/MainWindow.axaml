@@ -377,6 +377,13 @@
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>
+        <!-- 所有普通单元格共用同一条内边距和垂直基线，避免 PID/地址/名称列因
+             不同外层容器而产生“镜像”般的左右错位。 -->
+        <Style Selector="TextBlock.tableCell">
+            <Setter Property="Margin" Value="8,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
         <Style Selector="TextBlock.ellipsis">
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
             <Setter Property="VerticalAlignment" Value="Center" />
@@ -1335,6 +1342,10 @@
                 </Grid>
             </ContentControl>
         </Panel>
+
+        <!-- 主题切换时暂存旧画面并淡出，让整页颜色同步过渡。 -->
+        <Image x:Name="ThemeTransitionOverlay" Stretch="Fill" Opacity="1"
+               IsVisible="False" IsHitTestVisible="False" ZIndex="1000" />
     </Grid>
     </Border>
 </Window>

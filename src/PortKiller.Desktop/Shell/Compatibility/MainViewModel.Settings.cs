@@ -21,6 +21,25 @@ namespace PortKiller.ViewModels;
 /// <summary>MainViewModel 分部类：设置与排版（主题 / 自启动 / 字号字体 / 设置页）。</summary>
 public partial class MainViewModel
 {
+    /// <summary>在主题选择切换前通知视图，以便在旧主题仍可见时捕获过渡帧。</summary>
+    internal event Action<string, string>? ThemeChangeRequested;
+
+    internal static bool ShouldAnimateThemeTransition(string previous, string next, bool reduceMotion)
+    {
+        if (reduceMotion) return false;
+        static int Index(string theme) => theme switch
+        {
+            "跟随系统" => 0,
+            "深色模式" => 1,
+            "浅色模式" => 2,
+            _ => -100
+        };
+
+        int previousIndex = Index(previous);
+        int nextIndex = Index(next);
+        return previousIndex >= 0 && nextIndex >= 0 && Math.Abs(previousIndex - nextIndex) == 1;
+    }
+
     private bool SaveSettings()
     {
         if (_suppressSettingsSave || !_started) return true;
@@ -67,6 +86,9 @@ public partial class MainViewModel
     [RelayCommand]
     public void SetTheme(string theme)
     {
+        if (string.Equals(SelectedTheme, theme, StringComparison.Ordinal)) return;
+        // 也通知跨档位切换，视图需要同步取消当前尚未结束的过渡帧。
+        ThemeChangeRequested?.Invoke(SelectedTheme, theme);
         SelectedTheme = theme;
     }
 

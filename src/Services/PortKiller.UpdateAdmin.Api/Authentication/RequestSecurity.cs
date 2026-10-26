@@ -13,6 +13,14 @@ public static class RequestSecurity
     public const string CsrfHeader = "X-PortKill-CSRF";
     public static void AddRequestSecurity(this WebApplicationBuilder builder)
     {
+        var knownProxies = new HashSet<IPAddress> { IPAddress.Loopback, IPAddress.IPv6Loopback };
+        foreach (string address in builder.Configuration.GetSection("ReverseProxy:KnownProxies").Get<string[]>() ?? [])
+        {
+            if (!IPAddress.TryParse(address, out var proxy)
+                || proxy.Equals(IPAddress.Any) || proxy.Equals(IPAddress.IPv6Any))
+                throw new InvalidOperationException("ReverseProxy:KnownProxies must contain explicit proxy IP addresses.");
+            knownProxies.Add(proxy);
+        }
         builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 64 * 1024);
         builder.Services.AddAntiforgery(options =>
         {
@@ -28,7 +36,7 @@ public static class RequestSecurity
             options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
             options.ForwardLimit = 1;
             options.KnownIPNetworks.Clear(); options.KnownProxies.Clear();
-            options.KnownProxies.Add(IPAddress.Loopback); options.KnownProxies.Add(IPAddress.IPv6Loopback);
+            foreach (var proxy in knownProxies) options.KnownProxies.Add(proxy);
         });
         builder.Services.AddRateLimiter(options =>
         {

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using PortKiller.Updates;
 
 namespace PortKiller.UpdateTool;
 
@@ -43,7 +44,7 @@ public sealed class ToolProcessGuard : IDisposable
     public void Check()
     {
         if (_runtime.Elapsed >= _maximumRuntime || _owner.HasExited
-            || _owner.StartTime.ToUniversalTime().Ticks != _ownerStartTicks)
+            || PublisherProcessIdentity.ReadStartToken(_owner) != _ownerStartTicks)
             throw new InvalidOperationException("The publisher process or execution deadline is no longer valid.");
     }
 

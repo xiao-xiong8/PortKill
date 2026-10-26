@@ -4,4 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PortKiller.UpdateAdmin.Tests" />
+  </ItemGroup>
 </Project>

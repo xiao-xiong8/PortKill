@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using PortKiller.UpdateManagement.Configuration;
 using PortKiller.UpdateManagement.Persistence;
+using PortKiller.Updates;
 
 namespace PortKiller.UpdateManagement.Security;
 
@@ -229,7 +230,7 @@ public sealed class UpdateToolClient(UpdateToolOptions options)
         using (var owner = Process.GetCurrentProcess())
         {
             AddArgument(start, "--owner-pid", owner.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            AddArgument(start, "--owner-start-ticks", owner.StartTime.ToUniversalTime().Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            AddArgument(start, "--owner-start-ticks", PublisherProcessIdentity.ReadStartToken(owner).ToString(System.Globalization.CultureInfo.InvariantCulture));
             AddArgument(start, "--max-runtime-seconds", ((timeoutSeconds ?? options.TimeoutSeconds) + 3).ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
         start.ArgumentList.Add("--json-errors");

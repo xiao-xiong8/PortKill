@@ -9,6 +9,7 @@ using PortKiller.UpdateManagement.Contracts;
 using PortKiller.UpdateManagement.Persistence;
 using PortKiller.UpdateManagement.Persistence.Entities;
 using PortKiller.UpdateManagement.Security;
+using PortKiller.Updates;
 
 namespace PortKiller.UpdateAdmin.Tests;
 
@@ -275,7 +276,7 @@ public sealed class PublishRecoveryTests
         await fixture.ConfirmAsync(upload.DraftId);
         var task = await BeginInterruptedAttemptAsync(fixture);
         await using var owner = Child.Start(FindTestHost(), ["--portkill-test-child-hang"]);
-        long ticks = owner.Process.StartTime.ToUniversalTime().Ticks;
+        long ticks = PublisherProcessIdentity.ReadStartToken(owner.Process);
         if (deadOwner) { owner.Process.Kill(); await owner.ExitAsync(); }
         await using var child = StartActivation(fixture, task, PublishFixture.FindTool(), owner.Process.Id, deadOwner ? ticks : ticks + 1);
 
@@ -330,7 +331,7 @@ public sealed class PublishRecoveryTests
             "--package", Path.Combine(fixture.App.Root, "archive", task.ArchiveId, "package.zip"),
             "--expected", task.ExpectedManifestSha256, "--manifest-sha256", task.ManifestSha256, "--package-sha256", task.PackageSha256,
             "--owner-pid", (ownerPid ?? current.Id).ToString(CultureInfo.InvariantCulture),
-            "--owner-start-ticks", (ownerStart ?? current.StartTime.ToUniversalTime().Ticks).ToString(CultureInfo.InvariantCulture),
+            "--owner-start-ticks", (ownerStart ?? PublisherProcessIdentity.ReadStartToken(current)).ToString(CultureInfo.InvariantCulture),
             "--max-runtime-seconds", "55", "--json-errors"]);
     }
 

@@ -1,0 +1,55 @@
+PortKill 通知服务覆盖更新
+
+本包包含已编译的 Linux x64 notifier、对应变更源码和固定更新脚本。
+适用于原部署目录中的 docker-compose.yml 与 docker/Dockerfile；无需修改镜像名。
+本包不是完整安装包，不能放入新目录替代原站点。
+
+在原服务器部署目录执行（ZIP 先上传到这个目录）：
+
+  cd ~/PortKill-Docker-Kit-20261026
+  unzip -o PortKill-Docker-Update.zip
+  sudo bash docker/update.sh
+
+以后仍覆盖同一个目录并执行相同命令，不新建版本目录。
+脚本校验本包文件，构建 notifier，随后只重建 notifier 容器。
+Caddy、API、Worker 容器不会因这条更新命令被重建。
+构建前先核对原容器实际镜像，并用固定临时标签保护；兼容 containerd 的镜像索引与平台清单 ID。
+如果旧镜像清单内容已缺失，可识别按下述方式导出的恢复镜像；脚本先核对其来源容器标签、运行账号和工作目录，再离线验证旧通知程序能启动。
+如果找不到匹配的旧镜像或有效恢复镜像，或无法保护旧镜像，会在构建前停止，保留原容器。
+构建期间原容器继续运行。新容器通过 Docker 内网检查 SSE 首包，尚未发布版本也能通过。
+更新检查失败时尝试恢复更新前的镜像；命令仍返回失败，方便判断本次更新未成功。
+上一镜像使用固定名称：portkill-notifier:previous。构建临时标签 portkill-notifier:update-base 在正常结束后移除。
+Docker 构建缓存和无标签镜像不自动清理。
+
+手动恢复上一镜像：
+
+  sudo bash docker/update.sh --rollback
+
+恢复的是运行镜像，磁盘中的新编译产物保留。
+不要重新执行 docker-setup.sh：它用于首次安装，会重新写配置和初始化管理员。
+本包不覆盖 .env、verification.json、Compose、Dockerfile、Caddyfile 或 data/。
+本包也不包含桌面 AOT 程序；UseSystemProxy 是桌面端配置，与本次 Docker 更新分开。
+
+部署后可额外检查公网代理链路：
+
+  curl -N https://xiaoxiongupdate.duckdns.org/stable/events
+
+应立即出现 : connected；连接持续接收心跳，按 Ctrl+C 结束。
+未正式发布版本时，/stable/manifest.json 返回 404 仍符合当前状态。
+
+要求：原 Linux x64 Docker 部署、Docker Compose v2、Python 3、sha256sum、flock。发布工具还需要私有状态挂载：`./data/state:/srv/portkill/.stable-update-state` 只挂到 worker，宿主目录由 10001:10001 拥有且权限为 0700；该目录保存发布锁、事务和回执，不能与 data/public 共用。
+文件 SHA256 用于完整性校验，不等同于发布者签名。
+
+若 inspect 报 `/srv/portkill/.stable-update-state` 无访问权限，旧 Compose 缺少这个状态挂载。将补丁包中的 `docker/fix-publish-state.sh` 放到部署目录后执行：
+
+  sudo bash docker/fix-publish-state.sh
+
+脚本会备份并幂等更新 Compose、创建正确权限的状态目录并只重建 worker；保留清单、更新包、API、Caddy 和公开数据。原任务会继续重试，不需要重新上传。若仍报告 operation_conflict，需要继续诊断工具进程身份，不能仅凭目录检查成功判断发布完成。
+
+旧容器仍保留文件系统、但旧镜像引用和清单内容已缺失时，可在原部署目录先生成一次恢复镜像：
+
+  sudo bash -o pipefail -c 'old_container=$(docker compose ps -aq notifier); test -n "$old_container" && docker export "$old_container" | docker image import --change "USER 10001:10001" --change "WORKDIR /opt/portkill" --change "ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" --change "LABEL io.portkill.recovery.container=$old_container" - portkill-notifier:update-base'
+
+此步骤只适用于本部署包的通知容器。导出不包含挂载的数据卷，也不停止旧容器；完整根文件系统会占用一个恢复镜像的空间。
+如果该命令已保存为 portkill-notifier:latest，本修订也会识别并验证，无需重复导出。
+随后仍运行 sudo bash docker/update.sh；新容器切换和首包检查成功之前，脚本会保留可恢复的旧通知镜像。

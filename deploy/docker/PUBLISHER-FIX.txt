@@ -1,0 +1,33 @@
+PortKill Docker 发布组件修复 r2（Linux x64）
+
+适用于原 PortKill-Docker-Kit-20261026 部署，且已执行状态目录修复。
+本包修复 Worker 与发布工具之间的 Linux 进程启动身份比较。
+.NET Linux 的 Process.StartTime 包含各进程独立计算的启动时刻估计，不能作为跨进程完全相等的身份标识。
+Linux 改为核对 /proc/<pid>/stat 的第 22 字段，Windows 继续使用原来的 UTC ticks。
+父进程存活、进程身份、执行期限、签名校验、发布锁和事务恢复均保留。
+Worker 与工具必须同时使用本包中的编译文件。
+
+将 ZIP 上传到原部署目录，然后执行：
+
+  cd ~/PortKill-Docker-Kit-20261026
+  unzip -o PortKill-Docker-Publisher-Fix-r2.zip
+  sudo bash docker/update-publisher.sh
+
+脚本校验文件并保护当前镜像，使用原 Dockerfile 构建，再离线运行新 Worker 与工具联合自检。
+自检使用随机临时目录，不挂载数据库或正式发布目录，不激活任何版本。
+自检不加载或验证 Administration 配置，避免临时容器缺少 DataRoot 导致提前退出；正式 Worker 仍保留配置校验。
+自检 JSON 包含 SelfCheckSchema:2，便于确认使用的是 r2。
+出现 Succeeded:true、HasCurrent:false 才继续重建 Worker；API、Caddy、notifier 不重建。
+更新失败会尝试恢复原镜像，保留固定的 portkill-publisher:previous 回滚标签。
+运行库、Compose、Dockerfile、.env、verification.json、证书和数据不在本覆盖包中。
+不需要 chmod 777，也不需要重复上传或重新签名 0.1.1。
+
+部署完成后刷新原发布任务，确认它离开 recovery_pending 并进入激活和公网下载检查阶段。
+仅有容器 Up 或自检通过不能证明原发布任务已完成。
+若仍失败，提供脚本输出及原任务最后几条阶段；可另读取最近日志：
+
+  sudo docker compose logs --since=5m --tail=80 worker
+
+本地已完成相关 .NET 发布/恢复回归、Worker 联合自检和部署失败回滚模拟。
+Windows 主机无法执行 Linux 容器；实际 Linux 验证在服务器脚本中完成。
+SHA256 用于传输完整性校验，不代替发布者签名。

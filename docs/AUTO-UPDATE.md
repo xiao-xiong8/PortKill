@@ -1,12 +1,12 @@
 # 自动更新实现与操作
 
-2026-10-25。项目依赖与目录职责见 [架构说明](ARCHITECTURE.md)。新增能力需要部署通知服务并发布新客户端，代码完成不等于线上已经生效。内部实施计划及历史验证记录保存在本地 `.local/docs/`，不随源码分发。
+2026-10-26。项目依赖与目录职责见 [架构说明](ARCHITECTURE.md)。桌面端默认接入真实更新站；新客户端需要安装包含线上配置的完整 AOT 包，服务端发布签名清单后才会出现可下载的新版本。内部实施计划及历史验证记录保存在本地 `.local/docs/`，不随源码分发。
 
 ## 客户端流程
 
-启动完成后延迟 10–15 秒检查，保留 300–330 秒轮询。第一次检查后建立同源 `/stable/events` SSE；事件仅是提示，重新拉取并验证清单后才接受版本。支持网络恢复、Windows 电源恢复消息、长时间挂起恢复及重新打开自动检查时补查。自动检查关闭会取消事件连接，手动检查继续可用。
+启动完成后延迟 10–15 秒检查，保留 30 秒后台静默轮询。第一次检查后建立同源 `/stable/events` SSE；事件仅是提示，重新拉取并验证清单后才接受版本。支持网络恢复、Windows 电源恢复消息、长时间挂起恢复及重新打开自动检查时补查。自动检查关闭会取消事件连接，手动检查继续可用。
 
-`UpdateCoordinator` 后台合并检查意图，最多保留一次；推送增加 0–500ms 抖动，自动检查最小间隔 2 秒，手动冷却 30 秒，所有检查遵守服务器退避。检查、验签、缓存 hash、信任记录及阶段日志都在后台执行。下载通过独立可取消任务运行，暂停立即取消传输，保留 Range 半成品；暂停时不由通知恢复下载，用户继续后处理待检查版本。退出取消并观察协调任务，解除网络与窗口消息订阅。
+`UpdateCoordinator` 后台合并检查意图，最多保留一次；推送增加 0–500ms 抖动，自动检查最小间隔 2 秒。手动检查不设本地冷却，进行中合并重复点击，仍遵守服务器 Retry-After。检查时保留现有页面，独立显示至少 600ms 的检查动画；后台检查不发布临时 Checking 状态，重复结果不刷新整页，系统设置保留稳定的结果文字。检查、验签、缓存 hash、信任记录及阶段日志都在后台执行。下载通过独立可取消任务运行，暂停立即取消传输，保留 Range 半成品；暂停时不由通知恢复下载，用户继续后处理待检查版本。退出取消并观察协调任务，解除网络与窗口消息订阅。
 
 发现只提醒，用户点击后才下载，再次确认后才重启。当前更新窗口和深浅主题保留。UI 快照与主窗口状态分别只排队一个最新回调，不随网络事件数量增长。更新包只替换四文件：`PortKiller.exe`、`av_libglesv2.dll`、`libHarfBuzzSharp.dll`、`libSkiaSharp.dll`，不覆盖本机更新配置和用户设置。
 
@@ -18,7 +18,13 @@
 
 `PortKiller.UpdateProtocol` 供客户端、发布工具、通知服务共用。清单上限 64 KiB；RSA ≥ 2048，SHA-256；有效期最多 180 天，默认签名 90 天；包最多 256 MiB。schema 2 有序号、版本和有效期约束。schema 1 仅保留旧 HTTPS 客户端兼容；新服务端激活要求 schema 2。
 
-只从运行目录 `update-settings.json` 读取地址和公钥；缺失或 Disabled 不联网。新增 `RealtimeEnabled=true` 和可选同源 `EventsUrl`，未填写时从清单目录派生 `events`。完整样例在 `deploy/examples/update-settings.example.json`，占位公钥必须换成已有可信公钥。清单及包禁止凭据、查询、片段和重定向，必须同源。HTTP 需要显式允许且每次重新验签，不使用 ETag；HTTPS 在清单有效期内可复用 ETag。
+默认发布源定义在 `src/Modules/PortKiller.Updates/Configuration/production-feed.json`，以嵌入资源随更新模块分发，同时复制为桌面构建和 AOT 发布目录的 `update-settings.json`。默认启用 HTTPS 更新、SSE、30 秒轮询及直连；可信 RSA 公钥由既有部署公钥固定，不能从网络获取或替换。真实清单地址为 `https://xiaoxiongupdate.duckdns.org/stable/manifest.json`，公钥 SPKI SHA-256 为 `02066F8B6F5CFAFA51A4B34ECE9DDCEA19A10F014F6A0266B3210CB5CD104CE5`。AOT 脚本会复核产物中的默认配置与该资源一致。自动更新保留外部配置：原线上源的默认 300 秒配置在内存中迁为 30 秒，不写回文件，自定义更新源的间隔仍保留。
+
+运行目录存在外部 `update-settings.json` 时优先使用它，以兼容自定义源与显式禁用；配置无效会报错，不静默改用其他来源。外部配置缺失时加载内置线上配置。`RealtimeEnabled=true` 和可选同源 `EventsUrl` 控制事件连接，未填写时从清单目录派生 `events`。完整自定义样例在 `deploy/examples/update-settings.example.json`，占位公钥必须换成已有可信公钥。清单及包禁止凭据、查询、片段和重定向，必须同源。HTTP 需要显式允许且每次重新验签，不使用 ETag；HTTPS 在清单有效期内可复用 ETag。
+
+清单返回 404 时仍以独立的 `NoRelease` 状态保留空源身份，界面统一显示“当前版本为最新”，不记录为网络失败；保留实时监听和轮询。此时清理内存中的旧清单、ETag 及就绪版本，磁盘缓存和防回放信任记录保留；后续发布重新验签后才显示新版本与更新说明。真实公网检查可显式执行 `dotnet run --project tests/PortKiller.UpdateRegression -c Release -- --production-check <desktop-directory>`，只读取清单和 SSE 首包，不上传、下载包或安装。
+
+自定义配置未填写 `UseSystemProxy` 时仍默认 `true`，兼容既有系统代理行为；本产品的线上默认配置明确设为 `false`，避免已确认的本机代理 TLS 中断。更新清单、下载和 SSE 共用所选连接池，不更改系统代理，也不在失败后自动绕过代理。两种方式均保留 TLS 证书验证和签名校验，各自复用连接池。
 
 本地信任记录位于 `%LocalAppData%/PortKiller/update-trust.json`，拒绝较低版本/序号及同序号不同内容。ZIP 缓存和阶段日志在其 `updates` 子目录，阶段日志 `operations.jsonl` 约 1 MiB 轮转并只保留一个旧文件，不逐条记录进度。现有错误日志继续由宿主管理。没有默认上传诊断数据。
 
@@ -50,6 +56,8 @@ sudo bash deploy/ubuntu/install-update-server.sh <existing-ssh-user> \
 P7-03 的 Nginx 模板位于 `deploy/nginx/portkiller-admin.conf.example` 和 `deploy/nginx/portkiller-download-tls.conf.example`。管理域名和更新域名分开填写，证书可用同一台服务器上的免费 Let's Encrypt 证书；模板不包含真实域名、证书或私钥。启用前替换 `server_name` 及证书路径，先执行 `nginx -t` 再 reload。管理站点将 `/api/v1/` 和管理 SSE 代理到回环 API，关闭请求/响应缓冲并允许 257 MiB 流式请求；API 路径没有 SPA 回退，Cookie 仍由 HTTPS 同源管理域名承载。下载站点只公开签名清单、版本 ZIP 和 `/stable/events`，保留 Range、不可变 ZIP 缓存及清单 `no-cache`，其他路径返回 404。
 
 旧客户端的 HTTP 更新源不要通过 301/308 强制迁移；客户端明确拒绝重定向时，继续保留 `portkiller-updates.conf` 的旧静态入口，待客户端配置逐步切换到 TLS 下载域名后再评估下线旧入口。
+
+管理 API 默认只信任回环反向代理。Docker 中 Caddy/Nginx 使用独立容器地址时，通过 `ReverseProxy__KnownProxies__0`（多个代理继续使用 `__1`、`__2`）指定可信代理的固定 IP，并通过 `AllowedHosts` 配置管理域名。代理需转发 `X-Forwarded-Proto` 和 `X-Forwarded-For`。API 保持一跳转发限制、HTTPS 安全 Cookie 和 CSRF 校验；容器地址需由独立代理网络固定，API 不发布宿主机端口。否则 HTTPS 在代理终止后，API 仍可能将请求视为 HTTP，导致 CSRF 令牌生成失败。未配置此项时，现有回环 Nginx/systemd 部署行为保持不变。
 
 首次部署或迁移版本后，先停止 API 与 Worker，再运行维护迁移；服务不会在启动时自动迁移：
 
@@ -90,9 +98,23 @@ sudo systemctl start portkiller-update-api.service portkiller-update-worker.serv
 
 P7-05 增加一个不依赖第三方平台的本机监测 timer：`portkiller-update-monitor.timer` 每 5 分钟运行一次 `monitor-update-server.py`，通过回环 `/health/ready`、Notifier `/health` 和本机旧下载入口检查管理 API、SQLite 就绪状态、验证/发布队列、磁盘容量、正式清单有效期以及静态分发可用性。API、Worker、Notifier 和监测器输出 JSON 结构化日志到 journald；监测账号只读，认证密钥和上传内容不进入日志；结果以原子 JSON 快照保存在 `/run/portkiller-update-monitor/status.json`。可用 `journalctl -u portkiller-update-monitor.service` 查看告警，阈值由 `/etc/portkiller-updates/monitor.env` 调整。API 或 Worker 停止时，只要 Nginx 静态目录和 Notifier 仍健康，监测会标记 `distribution_only`，桌面端继续使用既有下载/通知链；静态清单或只读通知不可用则单独告警。备份和恢复会同时暂停 monitor timer，避免维护期间读取中间状态。
 
-通知服务仅监听 `127.0.0.1:8091`，由 Nginx 精确路由 `/stable/events` 代理，关闭缓冲、缓存和压缩，读超时 90 秒。心跳 25 秒，客户端闲置超时 75 秒，单行 4 KiB、单事件 8 KiB。客户端在 404/405/501、401/403 时约 30 分钟后再探测，继续轮询；其他断开指数退避并遵守 Retry-After。
+通知服务仅监听 `127.0.0.1:8091`，由 Nginx 精确路由 `/stable/events` 代理，关闭缓冲、缓存和压缩，读超时 90 秒。连接建立后立即发送并刷新 SSE 注释首包，未发布或无有效清单时也不等待第一条 25 秒心跳，以满足客户端 8 秒响应头超时。后续心跳 25 秒，客户端闲置超时 75 秒，单行 4 KiB、单事件 8 KiB；首包和后续帧均有 5 秒写超时。客户端在 404/405/501、401/403 时约 30 分钟后再探测，继续轮询；其他断开指数退避并遵守 Retry-After。首次尚未发布时清单地址可以返回 404，客户端按没有可用更新展示。
 
 服务端只读取原子激活的清单，FileSystemWatcher 加 1 秒文件身份检查兜底；内容未变不重复验签。每连接只保留最新一条提示，慢连接写超时 5 秒。重启从当前有效清单恢复，坏清单/序号倒退不广播。`/health` 仅 loopback 可读，区分运行状态、清单有效状态、序号、连接数和剩余有效天数。生产前检查发行版、CPU、端口、权限、Nginx worker_connections 和证书；本地 Kestrel 连接压测不等于 Nginx 生产容量。
+
+## Docker 通知服务覆盖更新
+
+现有 Docker 部署可用 `scripts/release/New-DockerNotifierUpdate.ps1` 生成通知服务更新 ZIP。`-KitDirectory` 指向原完整部署包，`-ArchivePath` 指定 ZIP；加 `-ApplyToKit` 会同时将载荷覆盖到本机原部署包。脚本交叉编译自包含的 Linux x64 通知程序、更新组件摘要，并校验原 Compose、Dockerfile、Caddyfile、`.env` 和验签配置没有改变。ZIP 包含通知程序、对应变更源码、校验清单及固定更新脚本，不包含业务数据或部署凭据。
+
+将 ZIP 上传到原服务器部署目录，执行 `unzip -o PortKill-Docker-Update.zip`，再执行 `sudo bash docker/update.sh`。此脚本沿用原 Compose 的镜像名与构建路径，只构建并重建 `notifier`，通过 Docker 内网验证即时 SSE 首包；未发布版本时也可验证。构建前先匹配原容器实际镜像，兼容 containerd 的镜像索引与平台清单 ID，并以固定临时标签保护旧镜像；不能把容器 `.Image` 字段直接当作可打标签的镜像 ID，也不能将已移动的 Compose 标签当作旧镜像。匹配或保护失败时在构建前停止。构建失败保留运行容器，启动或首包检查失败会尝试恢复更新前镜像。`sudo bash docker/update.sh --rollback` 可手动恢复固定标签 `portkill-notifier:previous`；恢复运行镜像不会回退磁盘中的更新文件。临时标签 `portkill-notifier:update-base` 在正常结束后移除，自动恢复失败时保留以供处理。更新不执行 `docker-setup.sh`，也不重建 Caddy、API、Worker 或变更数据卷。Docker 自身仍可能保留构建缓存和无标签镜像，脚本不自动清理。
+
+旧镜像清单内容确实缺失时，`docker commit` 也可能失败。原容器文件系统仍可读取时，按 `deploy/docker/UPDATE.txt` 的恢复命令通过 `docker export/import` 创建快照；挂载的数据卷不进入快照。修订 3 可以识别 `portkill-notifier:update-base` 或 `portkill-notifier:latest` 的恢复镜像，要求 `io.portkill.recovery.container` 标签匹配原容器完整 ID、运行账号及工作目录一致，并以无网络、无业务挂载的临时容器确认旧程序可启动，才允许用该镜像备份和回滚。快照属于恢复材料，占用完整根文件系统空间，不自动创建任意容器快照。
+
+部署要求 Linux x64、Docker Compose v2、Python 3、`sha256sum` 与 `flock`。`scripts/checks/Test-DockerNotifierUpdate.py` 使用模拟 Docker 验证更新与失败恢复分支，并通过真实本地 HTTP 验证首包探针；这不代替真实 Linux Docker 构建、容器启动和公网代理链路验收。
+
+Docker 管理发布还需要私有状态挂载：`data/state:/srv/portkill/.stable-update-state` 只挂到 Worker，宿主目录由 `10001:10001` 拥有且权限为 `0700`。状态目录保存发布锁、事务和回执，不能与公开 `data/public` 共用。旧部署若 `inspect` 报该目录无访问权限，运行补丁包中的 `sudo bash docker/fix-publish-state.sh`；脚本会备份并幂等更新 Compose、创建权限正确的目录并只重建 Worker。原任务继续重试，不需要重复上传；若仍在 `operation_conflict` 和 `recovery_pending` 间循环，需要继续核对工具进程身份，目录检查成功不代表发布成功。
+
+Linux Worker 与工具的父进程身份使用 `/proc/<pid>/stat` 的第 22 字段 `starttime`，同一 PID 命名空间内精确比较；Windows 继续比较 UTC 启动 ticks。Linux 的 `Process.StartTime` 依赖每个进程独立估算的系统启动时刻，不适合跨进程严格相等比较。Worker 和工具需要同步更新，保留父进程退出检测、执行期限和看门狗。Docker 补丁通过 `sudo bash docker/update-publisher.sh` 构建后，在断网临时容器中运行 `--self-check-tool-owner`，通过后仅切换 Worker；自检不访问正式发布目录或数据库。r2 自检在读取后台配置前执行，仅绑定工具配置，并在结果中输出 `SelfCheckSchema:2`，因此不依赖临时容器中的 Administration 数据目录；正式 Worker 仍加载并校验原后台配置。原发布任务自动恢复，不重新上传更新包；最终成功以任务激活及公网下载验证完成为准。
 
 ## 发布、恢复与续签
 
@@ -107,7 +129,11 @@ pwsh -File scripts/release/Publish-Update.ps1 -PrepareOnly -Version 0.2.0 `
 
 PrepareOnly 在独立 ReleaseId 目录生成已验签的 `manifest.json`、四文件更新 ZIP 和本地记录；将前两项上传管理网站。此入口在服务端查询、SSH/scp、激活和公网检查之前返回，不生成首装 ZIP，不读取 SSH 主机配置。公开 URL 必须明确提供；离线准备时服务器基线未知，由网站确认接口重新核对。`-PrepareOnly -Resume <ReleaseId>` 仅复核现有签名产物，不能把准备记录隐式转为 SSH 发布；准备模式与 SSH/LocalRoot 参数组合会被拒绝。
 
+多台电脑分发同一更新地址和公钥的首装客户端，后续一次网站发布即可供各客户端自行比较版本、下载和确认安装；客户端无需管理账号或私钥。签名私钥由发布者保管，Docker 部署仅挂载 `verification.json` 公钥配置，不能从部署包恢复私钥。同机多个 Windows 用户建议各自使用独立安装目录；当前安装器不负责协调共享目录内多个账号的进程和写入权限。已有客户端使用旧版时，本次更新的界面行为要在下载并重启到新版后生效。
+
 制作记录 schema 2 保存制作模式、Git 提交及脏状态、公钥指纹、签名清单的版本/序号/有效期、两个文件的大小和摘要，以及 ZIP 内实际 EXE 的文件版本和摘要。`NativeAot` 由 win-x64 PE 结构和 Native AOT 运行时导出检查得出，普通托管 apphost 即使删去配套 DLL 也会被拒绝。准备模式记录 `BaselineKnown=false`、`Expected=null`。私钥及其路径不写入制作记录；网站始终从签名清单和实际更新包取得权威信息，不接收本地记录代替验签。
+
+发布脚本生成的客户端配置也明确使用直连，避免首装包再次落回系统代理。需要系统代理的自定义部署可传 `-UseSystemProxy`；恢复已有发布记录继续使用该记录保留的配置。
 
 新发布默认要求干净 Git 工作区，CI 使用明确版本。本地隔离演练可以显式 `-AllowDirty`，记录会保留 Dirty 状态。版本未指定时基于项目和服务端已激活版本递增；不修改项目源文件版本。
 

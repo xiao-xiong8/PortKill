@@ -36,6 +36,7 @@ public static class UpdateInstaller
             string probe = Path.Combine(install, ".update-write-test-" + Guid.NewGuid().ToString("N"));
             using (File.Create(probe)) { }
             File.Delete(probe);
+            UpdateStorage.Installation(install, package);
             CleanupWorkers(install);
         }
         string worker = Path.Combine(Root(install), "worker-" + Guid.NewGuid().ToString("N"));
@@ -67,7 +68,7 @@ public static class UpdateInstaller
             if (!fullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase)
                 || !(name.StartsWith("worker-", StringComparison.Ordinal) || name.StartsWith("recovery-", StringComparison.Ordinal))
                 || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) continue;
-            try { Directory.Delete(fullPath, true); }
+            try { UpdateCleanup.DeleteTree(fullPath); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
         }
@@ -96,8 +97,11 @@ public static class UpdateInstaller
             ExtractPackage(package, stage);
             File.WriteAllText(Path.Combine(worker, "armed"), "ready");
             if (!parent.WaitForExit(60000)) throw new TimeoutException("主进程未在 60 秒内退出，取消安装。");
-            var journal = new UpdateJournal { Version = manifest.Version, Token = Guid.NewGuid().ToString("N") };
+            var journal = new UpdateJournal { Version = manifest.Version, Token = Guid.NewGuid().ToString("N"),
+                PreviousVersion = UpdateService.CurrentVersion, PackageSha256 = manifest.Sha256,
+                WorkerName = Path.GetFileName(Path.TrimEndingDirectorySeparator(worker)) };
             Process? candidate = null;
+            bool committed = false;
             try
             {
                 ApplyFiles(install, stage, journal, AfterReplaceForTesting);
@@ -111,14 +115,26 @@ public static class UpdateInstaller
                     Thread.Sleep(100);
                 }
                 journal.Phase = "committed"; WriteJournal(install, journal);
-                File.WriteAllText(Path.Combine(Root(install), "result.txt"), $"更新成功：{journal.Version}");
+                committed = true;
+                UpdateResult.Write(Root(install), journal, "installed");
                 File.Delete(JournalPath(install)); File.Delete(health);
             }
-            catch
+            catch (Exception ex) when (committed)
+            {
+                // 健康确认后的回执/清理失败不能再终止已经正常运行的新版。
+                // 保留 committed 日志，下次恢复只完成收尾，不回滚已提交文件。
+                UpdateLog.Write("UpdateCommitReceipt", ex);
+            }
+            catch (Exception ex)
             {
                 if (candidate is { HasExited: false }) { candidate.Kill(); candidate.WaitForExit(5000); }
-                Rollback(install);
-                File.WriteAllText(Path.Combine(Root(install), "result.txt"), $"版本 {journal.Version} 安装失败，已恢复旧版本。");
+                Rollback(install, keepJournal: true);
+                try
+                {
+                    UpdateResult.Write(Root(install), journal, "rolled_back", ex.Message);
+                    File.Delete(JournalPath(install));
+                }
+                catch (Exception receipt) { UpdateLog.Write("UpdateRollbackReceipt", receipt); }
                 // 释放锁后才能正常启动旧版本。
                 lease.Dispose();
                 StartApplication(install, null).Dispose();
@@ -172,7 +188,7 @@ public static class UpdateInstaller
         journal.Phase = "awaiting-health"; WriteJournal(install, journal);
     }
 
-    internal static void Rollback(string install)
+    internal static void Rollback(string install, bool keepJournal = false)
     {
         if (!File.Exists(JournalPath(install))) return;
         var journal = ReadJournal(install);
@@ -186,7 +202,7 @@ public static class UpdateInstaller
                 else File.Move(temporary, target);
             }
         }
-        File.Delete(JournalPath(install));
+        if (!keepJournal) File.Delete(JournalPath(install));
     }
 
     public static bool RecoverBeforeStartup(string install, string[] args)
@@ -237,8 +253,11 @@ public static class UpdateInstaller
             catch (ArgumentException) { }
             using (Lock(install))
             {
-                Rollback(install);
-                File.WriteAllText(Path.Combine(Root(install), "result.txt"), "检测到中断的更新，已恢复可用版本。");
+                var journal = ReadJournal(install);
+                Rollback(install, keepJournal: true);
+                UpdateResult.Write(Root(install), journal, journal.Phase == "committed" ? "installed" : "interrupted",
+                    recoveryWorkerName: Path.GetFileName(Path.TrimEndingDirectorySeparator(AppContext.BaseDirectory)));
+                File.Delete(JournalPath(install));
             }
             StartApplication(install, null).Dispose();
             return 0;

@@ -26,4 +26,13 @@ if (args.Length == 2 && args[0] == "--update-health")
     UpdateInstaller.ConfirmHealth();
 }
 File.WriteAllText(Path.Combine(sandbox, "launched-version"), UpdateService.CurrentVersion);
+string cache = Path.Combine(sandbox, "cache");
+var notice = await UpdateMaintenance.RunAsync(AppContext.BaseDirectory, cache,
+    UpdateService.CurrentVersion, CancellationToken.None, args.Length == 2 && args[0] == "--update-health");
+if (notice != null)
+{
+    File.AppendAllText(Path.Combine(sandbox, "notices.txt"), notice.Message + "\n");
+    UpdateMaintenance.MarkConsumed(AppContext.BaseDirectory, cache, notice, UpdateService.CurrentVersion);
+}
+File.WriteAllText(Path.Combine(sandbox, "maintenance-complete"), "done");
 return 0;

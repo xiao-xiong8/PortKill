@@ -32,8 +32,11 @@ internal static class AotChecks
                 foreach (string name in ReleasePackage.Files)
                     System.IO.Compression.ZipFileExtensions.CreateEntryFromFile(zip, name == "PortKiller.exe" ? newExe : Path.Combine(newDirectory, name), name);
             File.WriteAllBytes(package + ".manifest", fixture.Envelope(newVersion, 100, File.ReadAllBytes(package)));
+            string cache = Path.Combine(fixture.Root, "cache"); Directory.CreateDirectory(cache);
+            string cached = Path.Combine(cache, Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(package))).ToLowerInvariant() + ".zip");
+            File.Copy(package, cached); File.Copy(package + ".manifest", cached + ".manifest");
             using (var locked = mode == "locked-file" ? new FileStream(Path.Combine(install, "libSkiaSharp.dll"), FileMode.Open, FileAccess.Read, FileShare.Read) : null)
-                await RunProbe(install, fixture.Root, "--install", package);
+                await RunProbe(install, fixture.Root, "--install", cached);
             string journal = Path.Combine(install, ".portkiller-update", "transaction.json"), result = Path.Combine(install, ".portkiller-update", "result.txt");
             if (mode is "interrupted" or "locked-file")
             {
@@ -43,6 +46,7 @@ internal static class AotChecks
             }
             await Eventually(() => File.Exists(result) && !File.Exists(journal), 60000);
             await Eventually(() => File.Exists(Path.Combine(fixture.Root, "launched-version")), 10000);
+            await Eventually(() => File.Exists(Path.Combine(fixture.Root, "maintenance-complete")), 15000);
             string launched = File.ReadAllText(Path.Combine(fixture.Root, "launched-version"));
             That(UpdateManifest.ParseVersion(launched) == UpdateManifest.ParseVersion(mode == "success" ? newVersion : oldVersion), $"Unexpected launched version ({mode}): {launched}");
             foreach (string name in ReleasePackage.Files)
@@ -51,6 +55,18 @@ internal static class AotChecks
                 That(expected.SequenceEqual(SHA256.HashData(File.ReadAllBytes(Path.Combine(install, name)))), "File mismatch: " + mode + ": " + name);
             }
             That(File.ReadAllBytes(Path.Combine(install, "update-settings.json")).SequenceEqual(settings) && File.ReadAllText(Path.Combine(install, "user-settings.txt")) == "preserved-settings", "Settings overwritten");
+            // 再次正常启动应幂等清理文件锁导致的暂时残留，并且不重复提示。
+            await RunProbe(install, fixture.Root);
+            string updateRoot = Path.Combine(install, ".portkiller-update");
+            var receipt = UpdateResult.Read(updateRoot, mode == "success" ? newVersion : oldVersion);
+            That(receipt != null && receipt.Outcome == (mode == "success" ? "installed"
+                : mode is "interrupted" or "locked-file" ? "interrupted" : "rolled_back"), "Missing/incorrect structured result: " + mode);
+            That(!Directory.Exists(Path.Combine(updateRoot, "backup"))
+                && !Directory.EnumerateDirectories(updateRoot).Any(path => Path.GetFileName(path).StartsWith("worker-")
+                    || Path.GetFileName(path).StartsWith("recovery-")), "Completed installation left workers/backups: " + mode);
+            That(File.ReadAllLines(Path.Combine(fixture.Root, "notices.txt")).Length == 1, "Result displayed more than once: " + mode);
+            That(mode == "success" ? !File.Exists(cached) && !File.Exists(cached + ".manifest") : File.Exists(cached),
+                "Installed package cleanup/retry package retention failed: " + mode);
             Console.WriteLine($"PASS AOT {mode}: {oldVersion} -> {newVersion}; four hashes/settings/startup/journal verified");
         }
         if (OperatingSystem.IsWindows()) await DeniedDirectory(oldDirectory, newExe, newVersion);

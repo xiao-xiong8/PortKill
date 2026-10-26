@@ -812,8 +812,13 @@
                                                TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
                                 <Button Grid.Column="2" Classes="bare" Padding="6,4" FontSize="{DynamicResource TypeBody}"
+                                        IsVisible="{Binding !IsUpdateToast}"
                                         Foreground="{DynamicResource AccentFg}" Content="复制报告"
                                         Command="{Binding CopyOperationReportCommand}" VerticalAlignment="Center" />
+                                <Button Grid.Column="2" Classes="bare" Padding="6,4" FontSize="{DynamicResource TypeBody}"
+                                        IsVisible="{Binding IsUpdateToast}" x:Name="ToastUpdateButton"
+                                        Foreground="{DynamicResource AccentFg}" Content="{Binding UpdateToastActionText}"
+                                        Command="{Binding OpenUpdateEntryCommand}" VerticalAlignment="Center" />
                                 <Button Grid.Column="3" Classes="bare" Width="20" Height="20" Padding="0"
                                         Click="OnDismissToast" VerticalAlignment="Center">
                                     <Viewbox Width="14" Height="14">

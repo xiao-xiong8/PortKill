@@ -36,6 +36,8 @@ internal static class Program
         }
         try
         {
+            int dpiProbe = Array.IndexOf(args, "--update-dpi-probe");
+            if (dpiProbe >= 0) { UpdateDpiProbe.Run(args[dpiProbe + 1], dpiProbe + 2 < args.Length ? args[dpiProbe + 2] : "badge"); return 0; }
             int probeIndex = Array.IndexOf(args, "--application-name-probe");
             if (probeIndex >= 0)
             { ApplicationNameProbe.Run(int.Parse(args[probeIndex + 1]), args[probeIndex + 2]).GetAwaiter().GetResult(); return 0; }
@@ -82,6 +84,8 @@ internal static class Program
             RunAsync("更新校验失败与退出取消", UpdateChecks.InvalidAndCancelled).GetAwaiter().GetResult();
             RunAsync("更新超时、503 与 404 策略", UpdateChecks.TimeoutAndServerFailure).GetAwaiter().GetResult();
             Run("更新安装失败、中断恢复与安装锁", UpdateChecks.TransactionAndRecovery);
+            RunAsync("安装回执等待、版本关联、一次性消费和旧格式兼容", UpdateMaintenanceChecks.Results).GetAwaiter().GetResult();
+            RunAsync("更新收尾清理、锁定重试、缓存期限与未完成事务保护", UpdateCleanupChecks.Run).GetAwaiter().GetResult();
             RunAsync("HTTP 签名清单有效期、同源及回放保护", UpdateChecks.HttpAndFreshness).GetAwaiter().GetResult();
             Run("更新压缩包路径与 HTTP 显式配置", UpdateChecks.ArchiveAndConfiguration);
             RunAsync("更新先检测后下载、进度与签名说明", UpdateChecks.DiscoveryAndProgress).GetAwaiter().GetResult();

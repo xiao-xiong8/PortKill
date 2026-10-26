@@ -164,6 +164,8 @@
                                     <StackPanel Spacing="10">
                                         <TextBlock Text="应用更新" FontSize="{DynamicResource TypeCard}"
                                                    FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
+                                        <TextBlock Text="管理更新状态；主界面版本号旁也可直接下载或重启更新。"
+                                                   TextWrapping="Wrap" Foreground="{DynamicResource TextMuted}" />
                                         <TextBlock Text="{Binding ApplicationVersion}" Foreground="{DynamicResource TextSecondary}" />
                                         <TextBlock Text="{Binding UpdateStatus}" TextWrapping="Wrap"
                                                    Foreground="{DynamicResource TextMuted}" />

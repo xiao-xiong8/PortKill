@@ -7,6 +7,48 @@ namespace PortKiller.UpdateRegression;
 
 internal static class ClientChecks
 {
+    internal static async Task StorageAndReadyDuringOutage()
+    {
+        using var fixture = new Fixture(); fixture.Options.RealtimeEnabled = false;
+        byte[] package = fixture.Package(); byte[] envelope = fixture.Envelope("1.0.2", 1, package);
+        int downloads = 0, failedCalls = 0;
+        bool offline = false;
+        using var http = new HttpClient(new Handler((request, _) =>
+        {
+            if (offline) { Interlocked.Increment(ref failedCalls); throw new HttpRequestException("模拟后台断网"); }
+            if (request.RequestUri!.AbsolutePath.EndsWith(".zip"))
+            { downloads++; return Task.FromResult(Bytes(package)); }
+            return Task.FromResult(Bytes(envelope));
+        }));
+        string cache = Path.Combine(fixture.Root, "cache");
+        var lowSpace = new UpdateService(fixture.Options, cache, http, "0.1",
+            trustPath: Path.Combine(fixture.Root, "trust.json"), availableSpace: _ => 0);
+        await lowSpace.CheckAsync(default);
+        That(lowSpace.Snapshot is { Stage: UpdateStage.Failed, Failure: UpdateFailure.Storage }
+            && lowSpace.Snapshot.ErrorDetail.Contains("空间不足") && downloads == 0
+            && !Directory.EnumerateFiles(cache, "*.partial").Any(), "Low disk space downloaded or created partial files");
+        var clock = new TestClock();
+        var service = new UpdateService(fixture.Options, cache, http, "0.1", delay: (_, _) => Task.CompletedTask,
+            clock: clock, trustPath: Path.Combine(fixture.Root, "trust.json"));
+        await service.CheckAsync(default);
+        That(service.Snapshot.Stage == UpdateStage.Ready && downloads == 1, "Recovery after freeing disk failed");
+        offline = true;
+        using var cancellation = new CancellationTokenSource();
+        Task run = service.RunAsync(cancellation.Token);
+        try
+        {
+            await Task.Delay(100); clock.Advance(); service.NotifyEnvironmentChanged();
+            await Eventually(() => failedCalls >= 3 && service.Snapshot.ErrorDetail.Length > 0);
+            That(service.Snapshot.Stage == UpdateStage.Ready, "Background network error hid a prepared update");
+            using var lease = service.TryAcquireInstallation();
+            That(lease != null && lease.Update.Manifest.Version == "1.0.2", "Prepared update lost its install lease");
+        }
+        finally { cancellation.Cancel(); await run; }
+        long requirement = 0;
+        UpdateStorage.Download(cache, fixture.Root, 1000, 100, _ => { requirement++; return long.MaxValue; });
+        That(requirement == 1, "Same-volume disk requirements were not combined");
+    }
+
     internal static async Task ManualChecksAndSilentPolling()
     {
         using var fixture = new Fixture(); fixture.Options.RealtimeEnabled = false;

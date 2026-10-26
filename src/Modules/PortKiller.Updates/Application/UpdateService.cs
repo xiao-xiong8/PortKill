@@ -27,6 +27,8 @@ public sealed class UpdateService
     private readonly HttpClient _client;
     private readonly UpdateOptions _options;
     private readonly string _cache;
+    private readonly string? _installDirectory;
+    private readonly Func<string, long>? _availableSpace;
     private readonly Version _current;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
@@ -64,9 +66,11 @@ public sealed class UpdateService
     public string VersionLabelAot => VersionLabel + " · Native AOT";
     public event Action<string, bool>? Status;
     public UpdateService(UpdateOptions options, string cache, HttpClient? client = null, string? current = null,
-        Func<TimeSpan, CancellationToken, Task>? delay = null, TimeProvider? clock = null, string? trustPath = null)
+        Func<TimeSpan, CancellationToken, Task>? delay = null, TimeProvider? clock = null, string? trustPath = null,
+        string? installDirectory = null, Func<string, long>? availableSpace = null)
     {
         _options = options; _cache = cache;
+        _installDirectory = installDirectory; _availableSpace = availableSpace;
         _client = client ?? (options.UseSystemProxy ? SharedClient : DirectClient);
         _current = UpdateManifest.ParseVersion(current ?? CurrentVersion); _delay = delay ?? Task.Delay;
         _clock = clock ?? TimeProvider.System;
@@ -177,7 +181,15 @@ public sealed class UpdateService
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception ex)
         {
-            Fail(ex);
+            if (automatic && ex is (HttpRequestException or HttpIOException or OperationCanceledException or TransientUpdateException)
+                && Prepared is { } ready && Available != null && ready.Identity == ReleaseIdentity.From(Available)
+                && (ready.Manifest.Schema < 2 || ready.Manifest.ExpiresUtc > _clock.GetUtcNow()))
+            {
+                UpdateLog.Write("UpdateBackgroundCheck", ex);
+                Publish(new(UpdateStage.Ready, $"版本 {ready.Manifest.Version} 已就绪，最近一次联网检查失败", ready.Manifest,
+                    ready.Manifest.Size, ErrorDetail: ex.Message));
+            }
+            else Fail(ex);
         }
         finally { _gate.Release(); }
         return _serverNextCheck <= _clock.GetUtcNow();
@@ -240,7 +252,11 @@ public sealed class UpdateService
         try
         {
             if (!await IsValidPackageAsync(package, manifest, cancellation.Token))
+            {
+                long partial = File.Exists(package + ".partial") ? new FileInfo(package + ".partial").Length : 0;
+                UpdateStorage.Download(_cache, _installDirectory, manifest.Size, partial <= manifest.Size ? partial : 0, _availableSpace);
                 await DownloadAsync(package, manifest, cancellation.Token);
+            }
             await MarkReadyAsync(package, manifest, envelope, cancellation.Token);
         }
         catch (OperationCanceledException) when (_pauseRequested && !token.IsCancellationRequested)
@@ -399,17 +415,7 @@ public sealed class UpdateService
 
     private void TrimCache(string current)
     {
-        try
-        {
-            // 保留当前包和一个最近的包；崩溃残留的半成品不长期累积。
-            var old = new DirectoryInfo(_cache).EnumerateFiles("*.zip")
-                .Where(x => !x.FullName.Equals(current, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(x => x.LastWriteTimeUtc).Skip(1);
-            foreach (var file in old) { file.Delete(); File.Delete(file.FullName + ".manifest"); }
-            foreach (var file in new DirectoryInfo(_cache).EnumerateFiles("*.partial")) file.Delete();
-        }
-        catch (IOException) { } // 清理不影响已校验的更新包
-        catch (UnauthorizedAccessException) { }
+        UpdateCleanup.BestEffort(() => UpdateCleanup.Cache(_cache, current));
     }
 
     private static async Task<byte[]> ReadBoundedAsync(HttpResponseMessage response, int limit, CancellationToken token)

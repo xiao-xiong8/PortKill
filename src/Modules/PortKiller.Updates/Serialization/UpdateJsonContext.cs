@@ -7,5 +7,6 @@ namespace PortKiller.Updates;
 [JsonSerializable(typeof(SignedUpdate))]
 [JsonSerializable(typeof(UpdateManifest))]
 [JsonSerializable(typeof(UpdateJournal))]
+[JsonSerializable(typeof(UpdateResult))]
 [JsonSerializable(typeof(TrustedRelease))]
 internal partial class UpdateJsonContext : JsonSerializerContext { }

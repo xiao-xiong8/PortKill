@@ -234,6 +234,10 @@ public partial class MainWindow : Window
 
     private void OnTitleBarPressed(object? sender, PointerPressedEventArgs e)
     {
+        // 标题栏左侧同时承载版本更新徽章；按钮点击不能冒泡成窗口拖动。
+        if (e.Source is Visual visual &&
+            (visual is Button || visual.FindAncestorOfType<Button>() != null)) return;
+
         var point = e.GetCurrentPoint(this);
         if (!point.Properties.IsLeftButtonPressed) return;
 
@@ -912,6 +916,7 @@ public partial class MainWindow : Window
     // ══════════════════════════════════════════════════════════════
 
     private TrayIcon? _trayIcon;
+    private NativeMenuItem? _updateMenuItem;
     private HudWindow? _hud;
     private bool _exitConfirmed;
     private bool _vmHooked;
@@ -967,6 +972,12 @@ public partial class MainWindow : Window
         {
             UpdateTrayTooltip();
         }
+        else if (e.PropertyName is nameof(MainViewModel.IsUpdateBadgeVisible)
+                 or nameof(MainViewModel.UpdateBadgeText)
+                 or nameof(MainViewModel.UpdateBadgeMenuText))
+        {
+            UpdateTrayTooltip();
+        }
     }
 
     private void ShowFromTray()
@@ -1011,6 +1022,7 @@ public partial class MainWindow : Window
             tray.IsVisible = false;
             tray.Dispose();
             _trayIcon = null;
+            _updateMenuItem = null;
             if (Application.Current is { } app) TrayIcon.GetIcons(app)?.Clear();
         }
         if (_hud != null)
@@ -1075,6 +1087,12 @@ public partial class MainWindow : Window
         pause.Click += (_, _) => { Vm?.ToggleWatchFromTrayCommand.Execute(null); UpdateTrayTooltip(); };
         var settingsItem = new NativeMenuItem("打开系统设置");
         settingsItem.Click += (_, _) => Vm?.OpenSettingsFromTrayCommand.Execute(null);
+        _updateMenuItem = new NativeMenuItem(Vm?.UpdateBadgeMenuText ?? "打开软件更新");
+        _updateMenuItem.Click += (_, _) =>
+        {
+            ShowFromTray();
+            Vm?.OpenUpdateEntryCommand.Execute(null);
+        };
         var exit = new NativeMenuItem("退出 PortKiller");
         exit.Click += (_, _) =>
         {
@@ -1086,6 +1104,7 @@ public partial class MainWindow : Window
         menu.Items.Add(pause);
         menu.Items.Add(new NativeMenuItemSeparator());
         menu.Items.Add(settingsItem);
+        menu.Items.Add(_updateMenuItem);
         menu.Items.Add(exit);
 
         _trayIcon = new TrayIcon
@@ -1103,9 +1122,11 @@ public partial class MainWindow : Window
     private void UpdateTrayTooltip()
     {
         if (_trayIcon == null || Vm == null) return;
+        if (_updateMenuItem != null) _updateMenuItem.Header = Vm.UpdateBadgeMenuText;
+        string update = Vm.IsUpdateBadgeVisible ? $" · {Vm.UpdateBadgeText}" : string.Empty;
         _trayIcon.ToolTipText = Vm.IsAutoRefresh
-            ? $"PortKiller · 共 {Vm.TotalCount} 个端口 · 监听中"
-            : $"PortKiller · 共 {Vm.TotalCount} 个端口 · 监听已暂停";
+            ? $"PortKiller · 共 {Vm.TotalCount} 个端口 · 监听中{update}"
+            : $"PortKiller · 共 {Vm.TotalCount} 个端口 · 监听已暂停{update}";
     }
 
     // ── HUD ──

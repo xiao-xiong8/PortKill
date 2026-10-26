@@ -38,7 +38,7 @@ internal static class UiChecks
                 if (applicationNamesOnly)
                 { await ApplicationNameUiChecks.Run(); completed = true; return; }
                 if (updatesOnly)
-                { await UpdateUiChecks.StatesAndWindowLifetime(); completed = true; return; }
+                { await UpdateUiChecks.StatesAndWindowLifetime(); await UpdateBadgeChecks.Run(); completed = true; return; }
                 ShellChecks.NavigationAndExtensionLifetime();
                 CheckThemeTransitionPolicy();
                 FontChecks.EmbeddedFacesAndFallback();
@@ -46,6 +46,7 @@ internal static class UiChecks
                 await ContextMenuChecks.HoverTransitions();
                 await DialogChecks.RoundedCardsAndInteraction();
                 await UpdateUiChecks.StatesAndWindowLifetime();
+                await UpdateBadgeChecks.Run();
                 CheckTemplates();
                 await CheckFontLoadingAsync(stop.Token);
                 CheckListScrollingContract();

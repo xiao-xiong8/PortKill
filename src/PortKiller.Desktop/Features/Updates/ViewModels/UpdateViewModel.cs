@@ -128,10 +128,40 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
         : _snapshot.Remaining is { } remaining ? remaining.TotalSeconds < 60 ? $"预计剩余 {Math.Ceiling(remaining.TotalSeconds):0} 秒" : $"预计剩余 {Math.Ceiling(remaining.TotalMinutes):0} 分钟" : "正在估算剩余时间";
     public string PrimaryText => IsInstalling ? "准备安装…" : IsAvailable ? "立即更新" : IsPaused ? "继续下载"
         : IsReady ? "立即重启" : IsFailed ? "重新检查" : IsLatest ? "完成" : IsChecking ? "检查中…" : "检查更新";
-    public string SecondaryText => IsFailed ? "稍后再说" : IsAvailable ? "稍后提醒" : IsReady ? "稍后重启" : "后台运行";
+    public string SecondaryText => IsFailed || IsAvailable ? "稍后再说" : IsReady ? "稍后重启" : "后台运行";
     public string ConfirmText => IsInstalling ? "准备安装…" : "确认重启安装";
     public string FooterHint => IsTransfer ? "可在后台下载，不影响当前工作" : IsReady ? "由你确认重启安装" : IsLatest ? "所有功能均已准备就绪" : "当前版本仍可正常使用";
     public string DetailText => $"PortKiller {UpdateService.CurrentVersion}\n{_snapshot.Failure}\n{_snapshot.ErrorDetail}\n{_snapshot.Message}";
+
+    /// <summary>
+    /// 供主窗口版本徽章和托盘入口使用的统一操作入口。
+    /// 入口只复用当前服务和当前窗口状态，不创建第二个下载或安装流程。
+    /// </summary>
+    public async Task OpenOrRunUpdateAsync()
+    {
+        if (_disposed || IsBusy || IsConfirming || IsLatest) return;
+        if (IsReady)
+        {
+            RequestRestartConfirmation();
+            return;
+        }
+
+        if (_service == null)
+        {
+            Notice = "更新服务尚未就绪，请稍后重试。";
+            return;
+        }
+
+        if (IsAvailable || IsPaused)
+        {
+            await _service.DownloadAvailableAsync(_lifetime);
+            return;
+        }
+
+        // Failed 和 Idle 重新走统一检查入口；最新版本只展示结果，手动检查仍由检查按钮触发。
+        // 检查入口自身负责单飞、取消和服务器 Retry-After。
+        await CheckAsync();
+    }
 
     public UpdateViewModel(CancellationToken lifetime = default, Func<bool>? beginInstall = null,
         Func<Task<string?>>? install = null, Action? cancelInstall = null, Func<bool, bool>? saveAutomaticCheck = null,

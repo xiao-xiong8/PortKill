@@ -464,6 +464,7 @@ public partial class MainViewModel
         ToastTitle = title;
         ToastDescription = description;
         ToastIsError = isError;
+        IsUpdateToast = false;
         ToastHasDetailAction = true;
         IsToastVisible = true;
 

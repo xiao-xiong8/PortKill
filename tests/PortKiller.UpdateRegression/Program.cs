@@ -9,9 +9,11 @@ try
     if (prepared >= 0) { await ProductionFeedChecks.PreparedRelease(Path.GetFullPath(args[prepared + 1]), Path.GetFullPath(args[prepared + 2])); return 0; }
     if (args.Contains("--key-lifecycle")) { await KeyLifecycleChecks.Run(); return 0; }
     if (args.Contains("--manual-only")) { await ServerChecks.ManualLatency(); return 0; }
+    if (args.Contains("--desktop-update-only")) { await ClientChecks.StorageAndReadyDuringOutage(); Console.WriteLine("PASS 桌面空间预检查与就绪更新断网保留"); return 0; }
     var checks = new (string Name, Func<Task> Run)[] {
         ("线上默认源、公钥加载与显式配置覆盖", ProductionFeedChecks.DefaultsAndOverrides),
         ("手动无本地冷却与 30 秒静默后台检查", ClientChecks.ManualChecksAndSilentPolling),
+        ("空间不足下载前拒绝、同盘预算与后台断网保留就绪目标", ClientChecks.StorageAndReadyDuringOutage),
         ("未发布状态、实时首次发布、真实说明与确认下载", ProductionFeedChecks.EmptyFeedThenRealtimePublication),
         ("清单撤回清理旧就绪状态和 ETag，恢复后复验缓存", ProductionFeedChecks.MissingFeedClearsStaleReadyAndEtag),
         ("系统代理默认兼容、显式直连清单/下载/SSE", TransportChecks.ProxySelection),

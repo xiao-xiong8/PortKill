@@ -16,22 +16,30 @@
 
 # Generated output and local tooling.
 /.local/
+/aotpush/
+/updatepush/
 **/bin/
 **/obj/
 **/__pycache__/
 **/.venv/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
 **/node_modules/
 **/dist/
 **/.vite/
 **/coverage/
 **/playwright-report/
 **/test-results/
+**/TestResults/
 **/.vs/
 **/.idea/
 **/.vscode/
 *.user
 *.suo
 *.pyc
+*.trx
+*.tsbuildinfo
 *.pdb
 *.exe
 *.dll
@@ -68,6 +76,7 @@
 *.local.toml
 *.local.yaml
 *.local.yml
+**/Properties/launchSettings.json
 update-settings*.json
 appsettings.*.json
 credentials*.json

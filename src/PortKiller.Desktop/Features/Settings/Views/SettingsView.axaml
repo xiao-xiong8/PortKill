@@ -169,7 +169,8 @@
                                                    Foreground="{DynamicResource TextMuted}" />
                                         <WrapPanel Margin="0,6,-12,-12">
                                             <Button Classes="updateAction primary" Content="打开更新窗口" Command="{Binding OpenUpdatesCommand}" />
-                                            <Button Classes="updateAction" Content="检查更新" Command="{Binding CheckForUpdatesCommand}" />
+                                            <Button Classes="updateAction" Content="{Binding UpdateUi.CheckButtonText}" Command="{Binding CheckForUpdatesCommand}"
+                                                    IsEnabled="{Binding UpdateUi.CanPrimary}" />
                                             <Button Classes="updateAction" Content="重启并安装…" Command="{Binding RequestInstallUpdateCommand}"
                                                     IsVisible="{Binding IsUpdateReady}" />
                                         </WrapPanel>

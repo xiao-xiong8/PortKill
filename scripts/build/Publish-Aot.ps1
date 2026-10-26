@@ -24,7 +24,11 @@ if ($VcVarsAllPath) {
 }
 & dotnet @publishArgs
 if ($LASTEXITCODE -ne 0) { throw "AOT 发布失败：$LASTEXITCODE" }
-foreach ($name in @('PortKiller.exe', 'av_libglesv2.dll', 'libHarfBuzzSharp.dll', 'libSkiaSharp.dll')) {
+foreach ($name in @('PortKiller.exe', 'av_libglesv2.dll', 'libHarfBuzzSharp.dll', 'libSkiaSharp.dll', 'update-settings.json')) {
     if (-not (Test-Path -LiteralPath (Join-Path $OutputDirectory $name))) { throw "发布缺少文件：$name" }
+}
+$productionFeed = Join-Path $projectRoot 'src/Modules/PortKiller.Updates/Configuration/production-feed.json'
+if ((Get-FileHash -LiteralPath (Join-Path $OutputDirectory 'update-settings.json')).Hash -ne (Get-FileHash -LiteralPath $productionFeed).Hash) {
+    throw 'AOT 包中的默认更新配置不是当前可信的线上发布源。'
 }
 Write-Output "AOT 发布完成：$OutputDirectory"

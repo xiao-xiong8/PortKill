@@ -8,6 +8,40 @@ namespace PortKiller.UpdateRegression;
 
 internal static class ServerChecks
 {
+    internal static async Task EmptyFeedStartsImmediately()
+    {
+        foreach (bool malformed in new[] { false, true })
+        {
+            using var fixture = new Fixture();
+            if (malformed) File.WriteAllText(Path.Combine(fixture.Public, "manifest.json"), "broken");
+            await using var app = await fixture.HostAsync();
+            var monitor = app.Services.GetRequiredService<ReleaseMonitor>();
+            using var http = new HttpClient(new SocketsHttpHandler { UseProxy = false }) { Timeout = Timeout.InfiniteTimeSpan };
+            using var lifetime = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            var watch = Stopwatch.StartNew();
+            using var response = await http.GetAsync(fixture.Options.GetEventsUri(), HttpCompletionOption.ResponseHeadersRead, lifetime.Token);
+            response.EnsureSuccessStatusCode();
+            That(response.Content.Headers.ContentType?.MediaType == "text/event-stream", "Missing SSE content type");
+            using var reader = new StreamReader(await response.Content.ReadAsStreamAsync(lifetime.Token));
+            using (var firstFrame = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token))
+            {
+                firstFrame.CancelAfter(TimeSpan.FromSeconds(5));
+                string? line = await reader.ReadLineAsync(firstFrame.Token);
+                That(line?.StartsWith(':') == true && await reader.ReadLineAsync(firstFrame.Token) == "", "Initial frame is not a complete SSE comment");
+            }
+            Console.WriteLine($"METRIC SSE initial-frame manifest={(malformed ? "invalid" : "missing")} elapsed={watch.Elapsed.TotalMilliseconds:F0}ms");
+            That(watch.Elapsed < TimeSpan.FromSeconds(8), "Initial frame exceeded the client header deadline");
+
+            Task<ReleaseHint> hint = ReadReleaseHintAsync(reader, lifetime.Token);
+            That(!hint.IsCompleted, "Empty feed emitted a release before publication");
+            File.WriteAllBytes(Path.Combine(fixture.Public, "manifest.json"), fixture.Envelope("1.0.0", 1, fixture.Package()));
+            var published = await hint.WaitAsync(TimeSpan.FromSeconds(8));
+            That(published.Sequence == 1 && published.Version == "1.0.0", "Publication was not received on the existing SSE connection");
+            response.Dispose();
+            await Eventually(() => monitor.Connections == 0);
+        }
+    }
+
     internal static async Task NotificationsAndLoad()
     {
         using var fixture = new Fixture();
@@ -38,9 +72,8 @@ internal static class ServerChecks
                 foreach (var response in opened)
                 {
                     var reader = new StreamReader(await response.Content.ReadAsStreamAsync(token.Token));
-                    string? line; int count = 0;
-                    do { line = await reader.ReadLineAsync(token.Token); count++; } while (!string.IsNullOrEmpty(line) && count < 10);
-                    That(count >= 3, "Connection did not receive current signed-release hint");
+                    var hint = await ReadReleaseHintAsync(reader, token.Token);
+                    That(hint.Sequence == 3 && hint.Version == "1.0.0", "Connection did not receive current signed-release hint");
                 }
                 process.Refresh();
                 Console.WriteLine($"METRIC SSE connections={monitor.Connections} RSS={process.WorkingSet64 / 1048576d:F1}MiB");
@@ -110,5 +143,23 @@ internal static class ServerChecks
         manualLatency.Sort();
         Console.WriteLine($"METRIC manual check n=100 cooldown-clock-advanced loopback P95={manualLatency[94]:F1}ms max={manualLatency[^1]:F1}ms");
         That(manualLatency[94] <= 2000, "Manual check P95 exceeded 2s");
+    }
+
+    private static async Task<ReleaseHint> ReadReleaseHintAsync(StreamReader reader, CancellationToken token)
+    {
+        string? eventName = null, data = null;
+        while (await reader.ReadLineAsync(token) is { } line)
+        {
+            if (line.Length == 0)
+            {
+                if (eventName == "release" && data != null)
+                    return System.Text.Json.JsonSerializer.Deserialize(data, ProtocolJsonContext.Default.ReleaseHint)
+                        ?? throw new InvalidDataException("Missing release hint");
+                eventName = data = null;
+            }
+            else if (line.StartsWith("event: ")) eventName = line[7..];
+            else if (line.StartsWith("data: ")) data = line[6..];
+        }
+        throw new EndOfStreamException("SSE closed before a release hint");
     }
 }

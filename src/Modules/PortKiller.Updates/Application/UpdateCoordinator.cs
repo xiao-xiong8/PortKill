@@ -7,8 +7,9 @@ namespace PortKiller.Updates;
 
 /// <summary>Only one pending check is retained. Busy periods and server cooldowns never discard it.</summary>
 internal sealed class UpdateCoordinator(UpdateOptions options, HttpClient client, Func<bool> enabled,
-    Func<bool> available, Func<CancellationToken, Task<bool>> check)
+    Func<bool> available, Func<CancellationToken, Task<bool>> check, TimeProvider? clock = null)
 {
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private readonly SemaphoreSlim _wake = new(0, 1);
     private int _pending;
     private long _hintAfter;
@@ -22,7 +23,7 @@ internal sealed class UpdateCoordinator(UpdateOptions options, HttpClient client
     private void RequestHint()
     {
         if (Interlocked.CompareExchange(ref _pending, 1, 0) != 0) return;
-        Interlocked.Exchange(ref _hintAfter, DateTimeOffset.UtcNow.AddMilliseconds(Random.Shared.Next(501)).UtcTicks);
+        Interlocked.Exchange(ref _hintAfter, _clock.GetUtcNow().AddMilliseconds(Random.Shared.Next(501)).UtcTicks);
         try { _wake.Release(); } catch (SemaphoreFullException) { }
     }
 
@@ -32,13 +33,13 @@ internal sealed class UpdateCoordinator(UpdateOptions options, HttpClient client
         Task? events = null;
         bool wasEnabled = false;
         bool firstTick = true;
-        var nextPoll = DateTimeOffset.UtcNow.AddSeconds(10 + Random.Shared.NextDouble() * 5);
-        var lastTick = DateTimeOffset.UtcNow;
+        var nextPoll = _clock.GetUtcNow().AddSeconds(10 + Random.Shared.NextDouble() * 5);
+        var lastTick = _clock.GetUtcNow();
         try
         {
             while (!token.IsCancellationRequested)
             {
-                var now = DateTimeOffset.UtcNow;
+                var now = _clock.GetUtcNow();
                 bool active = enabled();
                 // A suspended machine does not tick; the first tick after resume requests a check.
                 if (active && now - lastTick > TimeSpan.FromSeconds(30)) RequestCheck();
@@ -53,7 +54,7 @@ internal sealed class UpdateCoordinator(UpdateOptions options, HttpClient client
                 if (active && now >= nextPoll)
                 {
                     RequestCheck();
-                    nextPoll = now.AddSeconds(options.PollSeconds + Random.Shared.NextDouble() * 30);
+                    nextPoll = now.AddSeconds(options.PollSeconds);
                 }
                 if (active && Volatile.Read(ref _pending) != 0 && now.UtcTicks >= Interlocked.Read(ref _hintAfter) && available())
                 {

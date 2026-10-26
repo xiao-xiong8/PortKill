@@ -1,5 +1,8 @@
 using Avalonia;
 using System.Diagnostics;
+using System.Net;
+using System.Net.Http;
+using System.Security.Cryptography;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -147,6 +150,7 @@ internal static class UpdateUiChecks
                     manifest.ReleaseNotes = [];
                     vm.Apply(new(UpdateStage.Available, "发现更新", manifest));
                     Program.Assert(vm.ReleaseNotes.Single().Contains("未提供"), "旧清单缺少更新说明时没有兜底。");
+                    await CheckAnimationAndStableContent(vm, window, theme.ToString(), output);
                 }
                 finally { window.CloseForShutdown(); }
             }
@@ -202,6 +206,12 @@ internal static class UpdateUiChecks
         Program.Assert(vm.PercentNumber == "40" && ReferenceEquals(items, vm.ReleaseNoteItems)
             && !notifications.Contains("") && !notifications.Contains(nameof(vm.ReleaseNoteItems))
             && notifications.Contains(nameof(vm.PercentNumber)), "同阶段进度重建了说明或通知全部界面。");
+        vm.Apply(new(UpdateStage.NoRelease, "当前版本为最新"));
+        Program.Assert(vm.IsLatest && !vm.IsFailed && vm.Title == "当前版本为最新" && vm.PrimaryText == "完成"
+            && !vm.IsReleaseNotesVisible, "没有可用更新时未显示当前版本为最新，或虚构了更新说明。");
+        notifications.Clear();
+        vm.Apply(vm.Snapshot);
+        Program.Assert(notifications.Count == 0, "相同后台检查结果触发了界面刷新。");
         vm.Apply(new(UpdateStage.Latest, "已是最新"));
         Program.Assert(vm.StatusSubtitle.Contains("上次检查"), "最新页面没有真实检查时间。");
         vm.AutomaticCheck = false;
@@ -227,6 +237,60 @@ internal static class UpdateUiChecks
         using var stream = new MemoryStream();
         image.Save(stream, PngBitmapEncoderOptions.Default);
         return stream.ToArray();
+    }
+
+    private static async Task CheckAnimationAndStableContent(UpdateViewModel vm, UpdateWindow window, string theme, string? output)
+    {
+        string sandbox = Path.Combine(Path.GetTempPath(), "PortKillUpdateUi-" + Guid.NewGuid().ToString("N"));
+        using var key = RSA.Create(2048);
+        using var handler = new EmptyFeedHandler();
+        using var http = new HttpClient(handler);
+        var service = new UpdateService(new UpdateOptions { Enabled = true,
+            ManifestUrl = "https://updates.example/stable/manifest.json", PublicKeyPem = key.ExportSubjectPublicKeyInfoPem() },
+            Path.Combine(sandbox, "cache"), http, current: "0.1", trustPath: Path.Combine(sandbox, "trust.json"));
+        try
+        {
+            vm.Attach(service);
+            await vm.CheckAsync();
+            window.UpdateLayout();
+            var artwork = window.FindControl<ContentControl>("UpdateStatusArtwork")!;
+            var visual = artwork.GetVisualChildren().Single();
+            var bounds = artwork.Bounds;
+            var notifications = new List<string?>();
+            vm.PropertyChanged += (_, change) => notifications.Add(change.PropertyName);
+            long started = Stopwatch.GetTimestamp();
+            var check = vm.CheckAsync();
+            await Task.Delay(120);
+            window.UpdateLayout();
+            Program.Assert(vm.IsChecking && !vm.CanPrimary && vm.IsLatest && vm.Title == "当前版本为最新"
+                && window.FindControl<ProgressBar>("UpdateCheckProgress")!.IsEffectivelyVisible,
+                $"{theme} 快速检查未保留最新版本页面和持续动画。");
+            Program.Assert(ReferenceEquals(visual, artwork.GetVisualChildren().Single()) && artwork.Bounds == bounds
+                && !notifications.Contains(string.Empty), $"{theme} 检查期间重建了页面或改变了布局。");
+            await vm.CheckAsync();
+            if (output != null)
+            {
+                using var image = new RenderTargetBitmap(new PixelSize(560, 400), new Vector(96, 96));
+                image.Render(window.FindControl<Border>("UpdateSurfaceRoot")!);
+                image.Save(Path.Combine(output, theme + "-ManualChecking-100.png"), PngBitmapEncoderOptions.Default);
+            }
+            await check;
+            Program.Assert(handler.Calls == 2 && !vm.IsChecking && vm.CanPrimary && Stopwatch.GetElapsedTime(started).TotalMilliseconds >= 550,
+                $"{theme} 检查动画过短或重复点击产生了并发请求。");
+            await vm.CheckAsync();
+            Program.Assert(handler.Calls == 3 && !vm.HasNotice, $"{theme} 手动检查仍被本地冷却阻止。");
+        }
+        finally { if (Directory.Exists(sandbox)) Directory.Delete(sandbox, true); }
+    }
+
+    private sealed class EmptyFeedHandler : HttpMessageHandler
+    {
+        internal int Calls;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref Calls);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
     }
 
 }

@@ -21,6 +21,11 @@ public sealed class PreparationTests
         Assert.Equal("PrepareOnly", record.RootElement.GetProperty("Mode").GetString());
         Assert.Equal("Verified", record.RootElement.GetProperty("Phase").GetString());
         Assert.Equal(JsonValueKind.Null, record.RootElement.GetProperty("Expected").ValueKind);
+        using var clientOptions = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "verification.json")));
+        Assert.True(clientOptions.RootElement.GetProperty("Enabled").GetBoolean());
+        Assert.True(clientOptions.RootElement.GetProperty("RealtimeEnabled").GetBoolean());
+        Assert.False(clientOptions.RootElement.GetProperty("UseSystemProxy").GetBoolean());
+        Assert.Equal(30, clientOptions.RootElement.GetProperty("PollSeconds").GetInt32());
         var options = new ManifestVerificationOptions { ManifestUrl = "https://updates.example/stable/manifest.json", PublicKeyPem = await File.ReadAllTextAsync(fixture.PublicKey) };
         var manifest = UpdateManifest.Verify(await File.ReadAllBytesAsync(Path.Combine(directory, "manifest.json")), options);
         using var package = ZipFile.OpenRead(Path.Combine(directory, "PortKiller-" + fixture.Version + "-win-x64.zip"));

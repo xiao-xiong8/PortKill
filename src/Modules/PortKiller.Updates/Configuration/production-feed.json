@@ -1,0 +1,11 @@
+{
+  "Enabled": true,
+  "UseSystemProxy": false,
+  "AllowHttp": false,
+  "ManifestUrl": "https://xiaoxiongupdate.duckdns.org/stable/manifest.json",
+  "PublicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEA2RKbBDg0+3OxTyxH88Z3\nZneSpP1gX+/ay1v6eQovazPkRM45UDJbiUYnIXlVlxJlu1ZLoTyyvTHS0qIS7vTm\nuALkSJjV1aW5k985jkp1uGsMBk+1ofU936PuHEKGmnrh8u8mmbpt+kY78UEwcbxe\nK80ejfPxiPYefM0c0NTJf2+wr6jWjayuoSgv4c5fDJ3pYekGVtpKVbhJwZWKQO7+\nrDfp/ReeciAj3xLWDy+T2ED7AiH88Uut6ge8dyKCfRDto61h6mXldrhJRRqB6fRd\nxrOk9RnxYJ1Cmp674YV0ggIvsmo/u7Va9GHzuECFT0vW/rHC+8iQZ7kThLOuXmY8\nGshfMyTb/dgUI6+B7up+bIi8Ef5NGh9JfJyUr8/g5BhAQtFzl/B1tKkKw4q5yRJw\nXPXTltTvyqgDpUpU/jIBBBkn/DIAq1UioZulVnEu/eD0yrz3gz/6E8wYb2TEsGN+\nkGw4vAUTF2b15Y4I7c1dl/ADVTLee5zDXcY3JF6X3qsVAgMBAAE=\n-----END PUBLIC KEY-----",
+  "RealtimeEnabled": true,
+  "PollSeconds": 30,
+  "CheckTimeoutSeconds": 8,
+  "DownloadTimeoutSeconds": 180
+}

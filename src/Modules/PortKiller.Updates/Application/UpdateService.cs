@@ -15,8 +15,12 @@ namespace PortKiller.Updates;
 /// <summary>单飞检测/下载；不接触正在运行的二进制。UI 和轮询共享同一个入口。</summary>
 public sealed class UpdateService
 {
-    private static readonly HttpClient SharedClient = new(new SocketsHttpHandler
+    private static readonly HttpClient SharedClient = CreateClient(useSystemProxy: true);
+    private static readonly HttpClient DirectClient = CreateClient(useSystemProxy: false);
+
+    private static HttpClient CreateClient(bool useSystemProxy) => new(new SocketsHttpHandler
     {
+        UseProxy = useSystemProxy,
         AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(5),
         PooledConnectionLifetime = TimeSpan.FromMinutes(5)
     }) { Timeout = Timeout.InfiniteTimeSpan };
@@ -31,7 +35,6 @@ public sealed class UpdateService
     private readonly UpdateOperationLog _operations;
     private string? _etag;
     private DateTimeOffset? _verifiedManifestExpiresUtc;
-    private DateTimeOffset _nextCheck;
     private DateTimeOffset _serverNextCheck;
     private DateTimeOffset _nextAutomaticCheck;
     private PreparedUpdate? _prepared;
@@ -42,7 +45,6 @@ public sealed class UpdateService
     private volatile bool _pauseRequested;
     private UpdateSnapshot _snapshot = new(UpdateStage.Idle, "检查并获取最新版本");
     public UpdateSnapshot Snapshot => Volatile.Read(ref _snapshot);
-    public int CheckCooldownSeconds => (int)Math.Clamp(Math.Ceiling((_nextCheck - _clock.GetUtcNow()).TotalSeconds), 0, int.MaxValue);
     public UpdateManifest? Available { get; private set; }
     public event Action<UpdateSnapshot>? Changed;
     public PreparedUpdate? Prepared => Volatile.Read(ref _prepared);
@@ -64,7 +66,8 @@ public sealed class UpdateService
     public UpdateService(UpdateOptions options, string cache, HttpClient? client = null, string? current = null,
         Func<TimeSpan, CancellationToken, Task>? delay = null, TimeProvider? clock = null, string? trustPath = null)
     {
-        _options = options; _cache = cache; _client = client ?? SharedClient;
+        _options = options; _cache = cache;
+        _client = client ?? (options.UseSystemProxy ? SharedClient : DirectClient);
         _current = UpdateManifest.ParseVersion(current ?? CurrentVersion); _delay = delay ?? Task.Delay;
         _clock = clock ?? TimeProvider.System;
         _trustPath = trustPath ?? UpdateTrustStore.DefaultPath;
@@ -81,7 +84,7 @@ public sealed class UpdateService
             _coordinator = new UpdateCoordinator(_options, _client,
                 automaticCheckEnabled ?? (() => true),
                 () => Snapshot.Stage != UpdateStage.Paused && _gate.CurrentCount != 0,
-                ct => CheckCoreAsync(ct, false, true));
+                ct => CheckCoreAsync(ct, false, true), _clock);
             await _coordinator.RunAsync(token);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
@@ -102,12 +105,12 @@ public sealed class UpdateService
         {
             token.ThrowIfCancellationRequested();
             var now = _clock.GetUtcNow();
-            if (now < _serverNextCheck || now < (automatic ? _nextAutomaticCheck : _nextCheck)) return false;
-            _nextCheck = _clock.GetUtcNow().AddSeconds(30); // 手动按钮也不能绕过节流
+            if (now < _serverNextCheck || automatic && now < _nextAutomaticCheck) return false;
             _nextAutomaticCheck = now.AddSeconds(2);
             var uri = _options.Validate();
-            Publish(new(UpdateStage.Checking, "正在检查应用更新…", Available));
+            if (!automatic) Publish(new(UpdateStage.Checking, "正在检查应用更新…", Available));
             // 仅成功校验后保留 ETag；下载失败可在下一轮重试同一版本。
+            bool noRelease = false;
             byte[]? envelope = await RetryAsync(async ct =>
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, uri);
@@ -117,6 +120,7 @@ public sealed class UpdateService
                 request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
                 using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
                 ThrowIfTransient(response);
+                if (response.StatusCode == HttpStatusCode.NotFound) { noRelease = true; return null; }
                 if (response.StatusCode == HttpStatusCode.NotModified && trustedEtag) return null;
                 response.EnsureSuccessStatusCode();
                 byte[] bytes = await ReadBoundedAsync(response, 65536, ct);
@@ -128,6 +132,15 @@ public sealed class UpdateService
                 _candidateExpiresUtc = verified.Schema >= 2 ? verified.ExpiresUtc : null;
                 return bytes;
             }, _options.CheckTimeoutSeconds, token);
+            if (noRelease)
+            {
+                // Keep the empty-feed identity separate, while presenting it as no available update.
+                _etag = null; _verifiedManifestExpiresUtc = null;
+                _candidateManifest = null; _candidateEtag = null; _candidateExpiresUtc = null;
+                Available = null; _availableEnvelope = null; Volatile.Write(ref _prepared, null);
+                Publish(new(UpdateStage.NoRelease, "当前版本为最新"));
+                return true;
+            }
             if (envelope == null)
             {
                 if (Prepared is { } prepared && Available != null
@@ -376,7 +389,6 @@ public sealed class UpdateService
             if (retryAfter > TimeSpan.FromSeconds(60))
             {
                 _serverNextCheck = _clock.GetUtcNow().Add(retryAfter.Value);
-                _nextCheck = _serverNextCheck;
                 throw new HttpRequestException("更新服务器要求稍后重试。", null, response.StatusCode);
             }
             throw new TransientUpdateException(retryAfter);

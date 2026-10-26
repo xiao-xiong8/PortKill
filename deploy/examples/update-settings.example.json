@@ -1,10 +1,11 @@
 {
   "Enabled": true,
+  "UseSystemProxy": true,
   "AllowHttp": false,
   "ManifestUrl": "https://updates.example.com/stable/manifest.json",
   "PublicKeyPem": "REPLACE_WITH_YOUR_EXISTING_RSA_PUBLIC_KEY_PEM",
   "RealtimeEnabled": true,
-  "PollSeconds": 300,
+  "PollSeconds": 30,
   "CheckTimeoutSeconds": 8,
   "DownloadTimeoutSeconds": 180
 }

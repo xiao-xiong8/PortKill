@@ -228,15 +228,17 @@
                         </StackPanel>
                         <StackPanel IsVisible="{Binding IsStatusVisible}" Spacing="16" VerticalAlignment="Center">
                             <StackPanel HorizontalAlignment="Stretch">
-                                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource UpdateArtwork}" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                                <ContentControl x:Name="UpdateStatusArtwork" Content="{Binding}" ContentTemplate="{StaticResource UpdateArtwork}" HorizontalAlignment="Center" Margin="0,0,0,8" />
                                 <TextBlock Text="{Binding Title}" Classes="heading status" TextAlignment="Center" />
                                 <TextBlock Text="{Binding StatusSubtitle}" Classes="muted" TextAlignment="Center" TextWrapping="Wrap" Margin="0,6,0,0" />
                             </StackPanel>
                             <Border Classes="updateCard" IsVisible="{Binding IsReady}"><StackPanel><Grid ColumnDefinitions="*,Auto"><StackPanel Orientation="Horizontal" Spacing="7"><TextBlock Text="已校验" FontSize="24" LineHeight="30" FontWeight="SemiBold" /><TextBlock Text="等待重启安装" Foreground="{DynamicResource UpdateBody}" VerticalAlignment="Center" /></StackPanel><TextBlock Grid.Column="1" Text="校验通过" FontSize="11" Foreground="{DynamicResource UpdateSuccess}" VerticalAlignment="Center" /></Grid><TextBlock Text="请先完成当前排查，再确认重启安装" FontSize="11" Foreground="{DynamicResource UpdateMuted}" Margin="0,7,0,0" /></StackPanel></Border>
                             <Border Classes="updateCard" IsVisible="{Binding IsLatest}"><Grid ColumnDefinitions="33,12,*,12,Auto"><Border CornerRadius="9" BorderThickness="1" BorderBrush="{DynamicResource UpdateBorder}" Background="{DynamicResource UpdateSurface}" Width="33" Height="33"><Viewbox Width="18" Height="18"><Canvas Width="24" Height="24"><Path Classes="smallIcon" Data="M20 10a8 8 0 0 0-13.7-4L3 9m0-5v5h5M4 14a8 8 0 0 0 13.7 4L21 15m0 5v-5h-5" /></Canvas></Viewbox></Border><StackPanel Grid.Column="2" Spacing="3"><TextBlock Text="自动检查更新" Foreground="{DynamicResource UpdateBody}" FontWeight="Medium" /><TextBlock Text="{Binding AutomaticCheckDescription}" FontSize="10" Foreground="{DynamicResource UpdateMuted}" /></StackPanel><ToggleButton x:Name="UpdateAutomaticSwitch" Grid.Column="4" Classes="updateSwitch" IsChecked="{Binding AutomaticCheck}" AutomationProperties.Name="自动检查更新" VerticalAlignment="Center" /></Grid></Border>
                             <Border Classes="updateCard errorCard" IsVisible="{Binding IsFailed}"><Grid RowDefinitions="Auto,7,Auto"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding ErrorHeading}" Foreground="{DynamicResource UpdateBody}" /><Button Grid.Column="1" Classes="updateLink" Content="复制详情" Command="{Binding CopyDetailsCommand}" /></Grid><ScrollViewer Grid.Row="2" MaxHeight="36" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><TextBlock Text="{Binding ErrorDetail}" FontSize="11" LineHeight="18" Foreground="{DynamicResource UpdateMuted}" TextWrapping="Wrap" /></ScrollViewer></Grid></Border>
-                            <ProgressBar Width="180" IsIndeterminate="True" IsVisible="{Binding IsChecking}" HorizontalAlignment="Center" />
                         </StackPanel>
+                        <ProgressBar x:Name="UpdateCheckProgress" Width="180" Height="3" IsIndeterminate="True"
+                                     IsVisible="{Binding IsChecking}" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                                     IsHitTestVisible="False" />
                     </Panel>
                 </Border>
                 <Border x:Name="UpdateFooter" Grid.Row="2" BorderBrush="{DynamicResource UpdateBorder}" BorderThickness="0,1,0,0" Padding="24,0">
@@ -253,7 +255,7 @@
                             <Button Content="暂停下载" Command="{Binding PauseCommand}" IsVisible="{Binding CanPause}" />
                             <Button Content="继续下载" Command="{Binding PrimaryCommand}" IsVisible="{Binding IsPaused}" IsEnabled="{Binding CanPrimary}" />
                             <Button Classes="updatePrimary" Content="后台运行" Command="{Binding HideCommand}" IsVisible="{Binding IsTransfer}" />
-                            <Button Content="重新检查" Command="{Binding CheckCommand}" IsVisible="{Binding IsLatest}" IsEnabled="{Binding CanPrimary}" />
+                            <Button Content="{Binding CheckButtonText}" Command="{Binding CheckCommand}" IsVisible="{Binding IsLatest}" IsEnabled="{Binding CanPrimary}" />
                             <Button Content="{Binding SecondaryText}" Command="{Binding SecondaryCommand}" IsVisible="{Binding ShowNonTransferSecondary}" />
                             <Button x:Name="UpdatePrimaryButton" Classes="updatePrimary" Command="{Binding PrimaryCommand}" IsVisible="{Binding !IsTransfer}" IsEnabled="{Binding CanPrimary}" AutomationProperties.Name="{Binding PrimaryText}"><StackPanel Orientation="Horizontal" Spacing="8"><Viewbox Width="15" Height="15" IsVisible="{Binding ShowRestartIcon}"><Canvas Width="24" Height="24"><Path Classes="smallIcon" Data="M20 10a8 8 0 0 0-13.7-4L3 9m0-5v5h5M4 14a8 8 0 0 0 13.7 4L21 15m0 5v-5h-5" /></Canvas></Viewbox><TextBlock Text="{Binding PrimaryText}" VerticalAlignment="Center" /><Viewbox Width="15" Height="15" IsVisible="{Binding IsAvailable}"><Canvas Width="24" Height="24"><Path Classes="smallIcon" Data="M5 12h14m-5-5 5 5-5 5" /></Canvas></Viewbox></StackPanel></Button>
                         </StackPanel>

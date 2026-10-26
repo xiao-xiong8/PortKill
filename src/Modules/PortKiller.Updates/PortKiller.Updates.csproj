@@ -5,6 +5,7 @@
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Configuration/production-feed.json" LogicalName="PortKiller.Updates.ProductionFeed.json" />
     <InternalsVisibleTo Include="PortKiller.Regression" />
     <InternalsVisibleTo Include="PortKiller.UpdateRegression" />
     <InternalsVisibleTo Include="PortKiller.UpdateProbe" />

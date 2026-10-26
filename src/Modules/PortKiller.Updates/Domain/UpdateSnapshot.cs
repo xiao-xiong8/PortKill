@@ -2,7 +2,7 @@ using System;
 
 namespace PortKiller.Updates;
 
-public enum UpdateStage { Idle, Disabled, Checking, Available, Downloading, Paused, Verifying, Ready, Latest, Failed }
+public enum UpdateStage { Idle, Disabled, Checking, Available, Downloading, Paused, Verifying, Ready, Latest, Failed, NoRelease }
 public enum UpdateFailure { None, Network, Server, Integrity, Storage, Configuration, Unknown }
 
 /// <summary>与 UI 框架无关的更新快照。下载进度至多每 200 ms 发布一次。</summary>

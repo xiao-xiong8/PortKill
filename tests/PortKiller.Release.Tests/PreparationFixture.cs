@@ -42,7 +42,7 @@ internal sealed class PreparationFixture : IAsyncDisposable
             $p5Bound = @{}
             for ($p5Index = 0; $p5Index -lt $p5Arguments.Count; $p5Index++) {
                 $p5Name = $p5Arguments[$p5Index].TrimStart('-')
-                if ($p5Name -in @('PrepareOnly','AllowDirty','AllowHttp')) { $p5Bound[$p5Name] = $true }
+                if ($p5Name -in @('PrepareOnly','AllowDirty','AllowHttp','UseSystemProxy')) { $p5Bound[$p5Name] = $true }
                 else { $p5Index++; $p5Bound[$p5Name] = $p5Arguments[$p5Index] }
             }
             $env:PORTKILL_RELEASE_TEST_REAL_DOTNET = (Get-Command dotnet -CommandType Application | Select-Object -First 1).Source

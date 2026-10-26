@@ -20,7 +20,7 @@ public partial class MainViewModel
     public UpdateViewModel UpdateUi { get; private set; } = null!;
     public event Action? RequestShowUpdates;
     [ObservableProperty] private bool _autoCheckForUpdates = true;
-    [ObservableProperty] private string _updateStatus = "自动更新未配置";
+    [ObservableProperty] private string _updateStatus = "等待检查应用更新";
     [ObservableProperty] private bool _isUpdateReady;
     [ObservableProperty] private bool _isUpdateConfirmVisible;
     [ObservableProperty] private bool _isInstallingUpdate;
@@ -104,7 +104,7 @@ public partial class MainViewModel
         Interlocked.Exchange(ref _updateStatusPosted, 0);
         if (_shuttingDown) return;
         var snapshot = _updates?.Snapshot;
-        if (snapshot == null) return;
+        if (snapshot == null || snapshot.Stage == UpdateStage.Checking) return;
         bool firstReady = !IsUpdateReady && _updates?.Ready != null;
         UpdateStatus = snapshot.Message; IsUpdateReady = _updates?.Prepared != null && snapshot.Stage == UpdateStage.Ready;
         if (firstReady) ShowToast("应用更新已下载", "打开系统设置的更新窗口，可确认重启安装。");

@@ -7,6 +7,39 @@ namespace PortKiller.UpdateRegression;
 
 internal static class ClientChecks
 {
+    internal static async Task ManualChecksAndSilentPolling()
+    {
+        using var fixture = new Fixture(); fixture.Options.RealtimeEnabled = false;
+        int calls = 0, checking = 0;
+        using var http = new HttpClient(new Handler((_, _) =>
+        {
+            Interlocked.Increment(ref calls);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }));
+        var clock = new TestClock(); var service = fixture.Service(http, clock);
+        service.Changed += snapshot => { if (snapshot.Stage == UpdateStage.Checking) Interlocked.Increment(ref checking); };
+        await service.CheckAsync(default, false);
+        await service.CheckAsync(default, false);
+        That(calls == 2 && checking == 2, "Completed manual checks still have a local cooldown");
+        checking = 0;
+        using var lifetime = new CancellationTokenSource();
+        var run = service.RunAsync(lifetime.Token);
+        try
+        {
+            await Task.Delay(100); clock.Advance(16); service.NotifyEnvironmentChanged();
+            await Eventually(() => calls == 3);
+            That(checking == 0 && service.Snapshot.Stage == UpdateStage.NoRelease
+                && service.Snapshot.Message == "当前版本为最新", "Background check exposed a transient checking state");
+            clock.Advance(29);
+            await Task.Delay(1200);
+            That(calls == 3, "Background polling ran before 30 seconds");
+            clock.Advance(1);
+            await Eventually(() => calls == 4);
+            That(checking == 0, "Periodic checking replaced the stable status");
+        }
+        finally { lifetime.Cancel(); await run; }
+    }
+
     internal static async Task IdentityAndLease()
     {
         using var fixture = new Fixture();

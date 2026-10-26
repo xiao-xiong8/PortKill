@@ -28,6 +28,8 @@
     <InternalsVisibleTo Include="PortKiller.Regression" />
     <InternalsVisibleTo Include="PortKiller.MemoryProbe" />
     <AvaloniaResource Include="Assets\**" />
+    <None Include="../Modules/PortKiller.Updates/Configuration/production-feed.json" Link="update-settings.json"
+          CopyToOutputDirectory="Always" CopyToPublishDirectory="Always" />
   </ItemGroup>
 
   <ItemGroup>

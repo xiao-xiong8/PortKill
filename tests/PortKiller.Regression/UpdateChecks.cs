@@ -298,7 +298,9 @@ internal static class UpdateChecks
         bool rejected = false;
         try { UpdateInstaller.ExtractPackage(zip, Path.Combine(fixture.Directory, "out")); } catch (InvalidDataException) { rejected = true; }
         Program.Assert(rejected && !File.Exists(Path.Combine(fixture.Directory, "PortKiller.exe")), "路径穿越未阻止。");
-        Program.Assert(!UpdateOptions.Load(fixture.Directory).Enabled, "未配置时自动联网。");
+        var defaults = UpdateOptions.Load(fixture.Directory);
+        Program.Assert(defaults.Enabled && defaults.Validate().Host == "xiaoxiongupdate.duckdns.org" && !defaults.AllowHttp,
+            "缺少外部配置时未加载可信的线上更新源。");
         fixture.Options.ManifestUrl = "http://example.com/manifest.json";
         rejected = false; try { fixture.Options.Validate(); } catch (InvalidDataException) { rejected = true; }
         Program.Assert(rejected, "HTTP 未显式开启时未拒绝。");

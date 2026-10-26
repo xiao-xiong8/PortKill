@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -21,7 +22,7 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
     private readonly Action? _cancelInstall;
     private readonly Func<bool, bool>? _saveAutomaticCheck;
     private readonly string _currentVersion;
-    private bool _settingPreference, _disposed;
+    private bool _settingPreference, _disposed, _manualChecking;
     private UpdateSnapshot _snapshot = new(UpdateStage.Idle, "检查并获取最新版本");
     private UpdateSnapshot? _pendingSnapshot;
     private int _updatePosted;
@@ -45,7 +46,7 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
     public event Action? RequestHide;
     public event Action<string>? RequestCopy;
     public UpdateSnapshot Snapshot => _snapshot;
-    public bool IsBusy => _snapshot.IsBusy || IsInstalling;
+    public bool IsBusy => IsChecking || _snapshot.IsBusy || IsInstalling;
     public bool IsAvailable => _snapshot.Stage == UpdateStage.Available;
     public bool IsTransfer => _snapshot.Stage is UpdateStage.Downloading or UpdateStage.Paused or UpdateStage.Verifying;
     public bool IsPaused => _snapshot.Stage == UpdateStage.Paused;
@@ -54,9 +55,10 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
     public string VerifyStepText => IsVerifying ? "● 正在校验" : "● 校验文件";
     public bool IsReady => _snapshot.Stage == UpdateStage.Ready;
     public bool IsFailed => _snapshot.Stage == UpdateStage.Failed;
-    public bool IsLatest => _snapshot.Stage == UpdateStage.Latest;
+    public bool IsLatest => _snapshot.Stage is UpdateStage.Latest or UpdateStage.NoRelease;
     public bool IsNeutral => !IsAvailable && !IsTransfer && !IsReady && !IsFailed && !IsLatest;
-    public bool IsChecking => _snapshot.Stage == UpdateStage.Checking;
+    public bool IsChecking => _manualChecking || _snapshot.Stage == UpdateStage.Checking;
+    public string CheckButtonText => IsChecking ? "正在检查…" : "检查更新";
     public bool IsReleaseNotesVisible => IsAvailable || IsViewingReleaseNotes;
     public bool IsStatusVisible => !IsReleaseNotesVisible && !IsTransfer;
     public bool IsFailedStatus => IsFailed && !IsViewingReleaseNotes;
@@ -66,8 +68,8 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
     public bool ShowAutomaticCheck => IsAvailable || IsNeutral;
     public bool HasReleaseNotes => _snapshot.Manifest?.ReleaseNotes is { Length: > 0 };
     public IReadOnlyList<UpdateReleaseNoteItem> ReleaseNoteItems => _releaseNoteItems;
-    public string Eyebrow => IsViewingReleaseNotes ? "RELEASE NOTES" : IsTransfer ? "GETTING BETTER" : "NEW RELEASE";
-    public string AutomaticCheckDescription => AutomaticCheck ? "每次启动时，自动为你检查新版本" : "已关闭，可随时手动检查更新";
+    public string Eyebrow => IsViewingReleaseNotes ? "RELEASE NOTES" : IsTransfer ? "GETTING BETTER" : IsLatest ? "SOFTWARE UPDATE" : "NEW RELEASE";
+    public string AutomaticCheckDescription => AutomaticCheck ? "自动检查新版本，发布后及时提醒" : "已关闭，可随时手动检查更新";
     public bool HasNotice => !string.IsNullOrEmpty(Notice);
     public bool CanPause => _snapshot.Stage == UpdateStage.Downloading;
     public bool CanPrimary => !IsBusy && !IsConfirming;
@@ -82,7 +84,7 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
         UpdateStage.Paused => "下载已暂停",
         UpdateStage.Verifying => "正在校验更新包",
         UpdateStage.Ready => "一切就绪，焕新出发",
-        UpdateStage.Latest => "已是最新，安心使用",
+        UpdateStage.Latest or UpdateStage.NoRelease => "当前版本为最新",
         UpdateStage.Failed => "更新暂时遇到一点问题",
         UpdateStage.Checking => "正在检查更新",
         UpdateStage.Disabled => "自动更新尚未配置",
@@ -161,6 +163,16 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
 
     internal void Apply(UpdateSnapshot snapshot)
     {
+        // Manual checks animate over the existing content; background checks never enter Checking.
+        if (_manualChecking) return;
+        string previousSubtitle = StatusSubtitle;
+        if (snapshot.Stage is UpdateStage.Latest or UpdateStage.NoRelease or UpdateStage.Available)
+            _lastCheckedAt = DateTimeOffset.UtcNow;
+        if (snapshot == _snapshot)
+        {
+            if (previousSubtitle != StatusSubtitle) OnPropertyChanged(nameof(StatusSubtitle));
+            return;
+        }
         bool progressOnly = snapshot.Stage == _snapshot.Stage && IsTransfer
             && ReferenceEquals(snapshot.Manifest, _snapshot.Manifest);
         bool stageChanged = snapshot.Stage != _snapshot.Stage;
@@ -171,7 +183,6 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
             return;
         }
         if (stageChanged) IsViewingReleaseNotes = false;
-        if (snapshot.Stage is UpdateStage.Latest or UpdateStage.Available) _lastCheckedAt = DateTimeOffset.UtcNow;
         var notes = snapshot.Manifest?.ReleaseNotes;
         if (!ReferenceEquals(notes, _notesSource))
         {
@@ -213,9 +224,29 @@ public partial class UpdateViewModel : ObservableObject, IDisposable
     public async Task CheckAsync()
     {
         if (_disposed || IsBusy || IsConfirming || _service == null) return;
-        int seconds = _service.CheckCooldownSeconds;
-        if (seconds > 0) { Notice = $"请在 {seconds} 秒后重新检查更新。"; return; }
-        await _service.CheckAsync(_lifetime, download: false);
+        Notice = "";
+        _manualChecking = true;
+        NotifyChecking();
+        long started = Stopwatch.GetTimestamp();
+        try { await _service.CheckAsync(_lifetime, download: false); }
+        finally
+        {
+            // A fast cached response should still show a complete, readable check animation.
+            var remaining = TimeSpan.FromMilliseconds(600) - Stopwatch.GetElapsedTime(started);
+            if (remaining > TimeSpan.Zero)
+            {
+                try { await Task.Delay(remaining, _lifetime); }
+                catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+            }
+            _manualChecking = false;
+            if (!_disposed) { Apply(_service.Snapshot); NotifyChecking(); }
+        }
+    }
+
+    private void NotifyChecking()
+    {
+        foreach (string name in new[] { nameof(IsChecking), nameof(IsBusy), nameof(CanPrimary), nameof(CheckButtonText), nameof(PrimaryText) })
+            OnPropertyChanged(name);
     }
 
     public void RequestRestartConfirmation()

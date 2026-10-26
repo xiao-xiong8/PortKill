@@ -93,7 +93,9 @@ pwsh -File scripts/dev/Start-Admin.ps1 -Service Web
 
 ## 自动更新
 
-客户端仅从程序目录的 `update-settings.json` 读取更新地址和可信公钥。缺失或禁用时不会联网；配置格式见[示例](deploy/examples/update-settings.example.json)，使用前需替换地址和占位公钥。用户设置保存在 `%LocalAppData%/PortKiller/config.json`。
+桌面端默认连接 `https://xiaoxiongupdate.duckdns.org/stable/manifest.json`，内置已确认的 RSA 公钥，启用实时通知及轮询，并使用直连。构建与 AOT 发布会附带真实的 `update-settings.json`；外部文件缺失时使用相同的内置信任配置。显式配置可覆盖默认值，`Enabled: false` 或关闭自动检查可停止自动请求；配置格式见[示例](deploy/examples/update-settings.example.json)。用户设置保存在 `%LocalAppData%/PortKiller/config.json`。
+
+没有可用更新时统一显示“当前版本为最新”。后台每 30 秒静默检查并持续监听发布；手动检查没有本地冷却，使用持续动画提示，不反复切换页面。更新说明、版本号和下载信息来自已验签的线上清单。
 
 发布前编辑 [docs/RELEASE-NOTES.txt](docs/RELEASE-NOTES.txt)，每行一项。现有发布流程会将这些说明加入签名清单，客户端显示对应版本的实际内容。更新由用户确认下载和重启，更新包不会覆盖本机配置。
 

@@ -25,7 +25,8 @@ public static class NotifierHost
             var connection = monitor.Subscribe();
             try
             {
-                await context.Response.StartAsync(context.RequestAborted);
+                // Send a body immediately: proxies may withhold headers until the first frame.
+                await WriteFrameAsync(context, ": connected\n\n");
                 while (!context.RequestAborted.IsCancellationRequested)
                 {
                     ReleaseHint? hint = null;
@@ -36,15 +37,20 @@ public static class NotifierHost
                         catch (OperationCanceledException) when (!context.RequestAborted.IsCancellationRequested) { }
                     }
                     string message = hint == null ? ": heartbeat\n\n" : $"id: {hint.Sequence}\nevent: release\ndata: {JsonSerializer.Serialize(hint, ProtocolJsonContext.Default.ReleaseHint)}\n\n";
-                    using var write = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
-                    write.CancelAfter(TimeSpan.FromSeconds(5));
-                    await context.Response.WriteAsync(message, write.Token);
-                    await context.Response.Body.FlushAsync(write.Token);
+                    await WriteFrameAsync(context, message);
                 }
             }
             catch (Exception ex) when (ex is OperationCanceledException or IOException) { }
             finally { monitor.Unsubscribe(connection.Id); }
         });
         return app;
+    }
+
+    private static async Task WriteFrameAsync(HttpContext context, string message)
+    {
+        using var write = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+        write.CancelAfter(TimeSpan.FromSeconds(5));
+        await context.Response.WriteAsync(message, write.Token);
+        await context.Response.Body.FlushAsync(write.Token);
     }
 }

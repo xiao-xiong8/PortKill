@@ -44,6 +44,12 @@ internal static class UpdateMaintenanceChecks
                 && UpdateMaintenance.MarkConsumed(sandbox, cache, legacy!, "1.0.1")
                 && await UpdateMaintenance.RunAsync(sandbox, cache, "1.0.1", CancellationToken.None) == null,
                 "旧回执兼容、显示重试或一次性确认失败。");
+            Program.Assert(await UpdateMaintenance.RunAsync(sandbox, cache, "1.0.2", CancellationToken.None) == null
+                && !UpdateMaintenance.MarkConsumed(sandbox, cache, legacy!, "1.0.2"), "旧版本成功回执被新版本接受。");
+            File.WriteAllText(Path.Combine(root, "result.txt"), "已更新至 v1.0.2");
+            var next = await UpdateMaintenance.RunAsync(sandbox, cache, "1.0.2", CancellationToken.None);
+            Program.Assert(next is { IsError: false } && next.OperationId != legacy!.OperationId,
+                "后续版本复用了旧提示的已读标记。");
             File.WriteAllText(Path.Combine(root, "result.json"), "broken json");
             Program.Assert(await UpdateMaintenance.RunAsync(sandbox, cache, "1.0.1", CancellationToken.None) == null,
                 "损坏回执阻止启动或回退到旧回执。");

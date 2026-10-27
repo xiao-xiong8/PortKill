@@ -19,11 +19,18 @@ public static class UpdateMaintenance
         string root = Path.Combine(Path.GetFullPath(install), ".portkiller-update");
         if (!Directory.Exists(root)) return null;
         var deadline = DateTimeOffset.UtcNow.AddSeconds(15);
+        int cleanupRetries = 0;
         do
         {
             token.ThrowIfCancellationRequested();
             var attempt = await Task.Run(() => TryRead(root, cache, currentVersion), token).ConfigureAwait(false);
-            if (!attempt.Busy) return attempt.Notice;
+            if (!attempt.Busy)
+            {
+                // 放锁与安装器进程退出之间仍可能短暂占用 EXE；同一次启动有界重试，不阻塞 UI。
+                if (!attempt.PendingCleanup || cleanupRetries == 3) return attempt.Notice;
+                await Task.Delay(100 << cleanupRetries++, token).ConfigureAwait(false);
+                continue;
+            }
             if (!waitForInstaller) return null;
             await Task.Delay(100, token).ConfigureAwait(false);
         } while (DateTimeOffset.UtcNow < deadline);
@@ -48,14 +55,8 @@ public static class UpdateMaintenance
             using (lease)
             {
                 if (File.Exists(Path.Combine(root, "transaction.json"))) return false;
-                string resultPath = Path.Combine(root, "result.json");
-                string? currentOperation = UpdateResult.Read(root, currentVersion)?.OperationId;
-                if (currentOperation == null && !File.Exists(resultPath))
-                {
-                    string legacy = Path.Combine(root, "result.txt");
-                    if (File.Exists(legacy) && new FileInfo(legacy).Length <= 16384)
-                        currentOperation = "legacy-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(File.ReadAllText(legacy).Trim())));
-                }
+                string? currentOperation = UpdateResult.Read(root, currentVersion)?.OperationId
+                    ?? LegacyUpdateResult.Read(root, currentVersion)?.OperationId;
                 if (!string.Equals(currentOperation, notice.OperationId, StringComparison.Ordinal)) return false;
 
                 Directory.CreateDirectory(cache);
@@ -69,52 +70,50 @@ public static class UpdateMaintenance
                 return true;
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException or ArgumentException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or FormatException or ArgumentException)
         { UpdateLog.Write("UpdateMaintenanceAcknowledge", ex); return false; }
     }
 
-    private static (bool Busy, UpdateCompletionNotice? Notice) TryRead(string root, string cache, string currentVersion)
+    private static (bool Busy, bool PendingCleanup, UpdateCompletionNotice? Notice) TryRead(string root, string cache, string currentVersion)
     {
         try
         {
-            if ((File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0) return (false, null);
+            if ((File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0) return (false, false, null);
             string lockPath = Path.Combine(root, "lock");
             FileStream? lease;
             try
             {
                 lease = File.Exists(lockPath) ? new FileStream(lockPath, FileMode.Open, FileAccess.Read, FileShare.None) : null;
             }
-            catch (IOException) { return (true, null); }
+            catch (IOException) { return (true, false, null); }
             using (lease)
             {
-                if (File.Exists(Path.Combine(root, "transaction.json"))) return (true, null);
+                if (File.Exists(Path.Combine(root, "transaction.json"))) return (true, false, null);
                 UpdateResult? result = UpdateResult.Read(root, currentVersion);
-                UpdateCleanup.BestEffort(() => UpdateCleanup.Installation(Path.GetDirectoryName(root)!, cache, result));
+                LegacyUpdateResult? legacy = result == null ? LegacyUpdateResult.Read(root, currentVersion) : null;
+                bool pending = false;
+                UpdateCleanup.BestEffort(() => pending = UpdateCleanup.Installation(Path.GetDirectoryName(root)!, cache, result,
+                    currentVersion, legacy));
                 string? message = result?.Message;
                 string? operation = result?.OperationId;
                 bool error = result != null && result.Outcome != "installed";
                 // 有结构化回执时绝不回退到残留的旧文本（包括版本不匹配的结果）。
-                if (result == null && !File.Exists(Path.Combine(root, "result.json")))
+                if (legacy != null)
                 {
-                    string legacy = Path.Combine(root, "result.txt");
-                    if (File.Exists(legacy) && new FileInfo(legacy).Length <= 16384)
-                    {
-                        message = File.ReadAllText(legacy).Trim();
-                        operation = "legacy-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(message)));
-                        error = !message.StartsWith("更新成功", StringComparison.Ordinal)
-                            && !message.StartsWith("已更新至", StringComparison.Ordinal);
-                    }
+                    message = legacy.Message;
+                    operation = legacy.OperationId;
+                    error = legacy.IsError;
                 }
-                if (string.IsNullOrWhiteSpace(message) || operation == null) return (false, null);
+                if (string.IsNullOrWhiteSpace(message) || operation == null) return (false, pending, null);
                 Directory.CreateDirectory(cache);
                 string installation = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
                     OperatingSystem.IsWindows() ? root.ToUpperInvariant() : root)));
                 string consumed = Path.Combine(cache, "result-read-" + installation + ".txt");
-                if (File.Exists(consumed) && File.ReadAllText(consumed) == operation) return (false, null);
-                return (false, new(message, error, operation));
+                if (File.Exists(consumed) && File.ReadAllText(consumed) == operation) return (false, pending, null);
+                return (false, pending, new(message, error, operation));
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or FormatException or ArgumentException)
-        { UpdateLog.Write("UpdateMaintenance", ex); return (false, null); }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or FormatException or ArgumentException)
+        { UpdateLog.Write("UpdateMaintenance", ex); return (false, false, null); }
     }
 }

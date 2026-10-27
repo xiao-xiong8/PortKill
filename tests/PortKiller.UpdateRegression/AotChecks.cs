@@ -10,6 +10,63 @@ namespace PortKiller.UpdateRegression;
 
 internal static class AotChecks
 {
+    internal static async Task HistoricalThenCurrent(string legacyDirectory, string currentDirectory, string nextDirectory, string firstReceipt)
+    {
+        That(firstReceipt is "text" or "structured", "Unknown historical receipt format");
+        using var fixture = new Fixture();
+        // 历史 0.1.1 要求 >=60 秒；真实旧配置为 300，不能把新默认 30 强塞给旧安装器。
+        fixture.Options.PollSeconds = 300;
+        string install = Path.Combine(fixture.Root, "install"), cache = Path.Combine(fixture.Root, "cache"),
+            root = Path.Combine(install, ".portkiller-update");
+        Directory.CreateDirectory(install); Directory.CreateDirectory(cache);
+        File.WriteAllText(Path.Combine(fixture.Root, "probe-sandbox.marker"), "isolated");
+        File.WriteAllText(Path.Combine(fixture.Root, "mode"), "success");
+        foreach (string name in ReleasePackage.Files)
+            File.Copy(Path.Combine(legacyDirectory, name == "PortKiller.exe" ? "PortKiller.UpdateProbe.exe" : name), Path.Combine(install, name));
+        byte[] settings = JsonSerializer.SerializeToUtf8Bytes(fixture.Options, UpdateJsonContext.Default.UpdateOptions);
+        File.WriteAllBytes(Path.Combine(install, "update-settings.json"), settings);
+        File.WriteAllText(Path.Combine(install, "user-settings.txt"), "preserved-settings");
+        string pending = Path.Combine(cache, new string('f', 64) + ".zip");
+        File.WriteAllText(pending, "unrelated future update");
+        string previous = FileVersionInfo.GetVersionInfo(Path.Combine(install, "PortKiller.exe")).FileVersion!;
+        int notices = 0;
+        foreach (string directory in new[] { currentDirectory, nextDirectory })
+        {
+            string version = FileVersionInfo.GetVersionInfo(Path.Combine(directory, "PortKiller.UpdateProbe.exe")).FileVersion!;
+            That(UpdateManifest.ParseVersion(version) > UpdateManifest.ParseVersion(previous), "Compatibility probe versions must increase");
+            string package = Path.Combine(fixture.Root, "update-" + notices + ".zip");
+            using (var zip = System.IO.Compression.ZipFile.Open(package, System.IO.Compression.ZipArchiveMode.Create))
+                foreach (string name in ReleasePackage.Files)
+                    System.IO.Compression.ZipFileExtensions.CreateEntryFromFile(zip,
+                        Path.Combine(directory, name == "PortKiller.exe" ? "PortKiller.UpdateProbe.exe" : name), name);
+            byte[] bytes = File.ReadAllBytes(package);
+            string cached = Path.Combine(cache, Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant() + ".zip");
+            File.WriteAllBytes(cached, bytes); File.WriteAllBytes(cached + ".manifest", fixture.Envelope(version, ++notices, bytes));
+            File.Delete(Path.Combine(fixture.Root, "maintenance-complete"));
+            await RunProbe(install, fixture.Root, "--install", cached);
+            await Eventually(() => File.Exists(Path.Combine(fixture.Root, "maintenance-complete")), 60000);
+            // 新 UI 可能先于安装器进程彻底退出，下次启动必须完成被占用副本的清理。
+            await RunProbe(install, fixture.Root);
+            That(!File.Exists(Path.Combine(root, "transaction.json")) && !Directory.Exists(Path.Combine(root, "backup"))
+                && !Directory.EnumerateDirectories(root).Any(path => Path.GetFileName(path).StartsWith("worker-")
+                    || Path.GetFileName(path).StartsWith("recovery-"))
+                && !File.Exists(cached) && !File.Exists(cached + ".manifest") && File.Exists(pending),
+                "AOT compatibility upgrade left files or deleted a pending package: " + previous + " -> " + version);
+            That(File.ReadAllLines(Path.Combine(fixture.Root, "notices.txt")).Length == notices,
+                "AOT compatibility completion notice missing or repeated");
+            That(File.Exists(Path.Combine(root, "result.json")) == (notices > 1 || firstReceipt == "structured"),
+                "Historical installer receipt format does not match its baseline");
+            foreach (string name in ReleasePackage.Files)
+                That(SHA256.HashData(File.ReadAllBytes(Path.Combine(install, name))).SequenceEqual(SHA256.HashData(
+                    File.ReadAllBytes(Path.Combine(directory, name == "PortKiller.exe" ? "PortKiller.UpdateProbe.exe" : name)))),
+                    "Compatibility upgrade corrupted installed binary: " + name);
+            That(File.ReadAllBytes(Path.Combine(install, "update-settings.json")).SequenceEqual(settings)
+                && File.ReadAllText(Path.Combine(install, "user-settings.txt")) == "preserved-settings", "Compatibility upgrade changed settings");
+            Console.WriteLine($"PASS historical/current AOT chain {previous} -> {version}: receipt/cleanup/cache/hash/settings/notice");
+            previous = version;
+        }
+    }
+
     internal static async Task Install(string oldDirectory, string newDirectory)
     {
         string oldExe = Path.Combine(oldDirectory, "PortKiller.UpdateProbe.exe"), newExe = Path.Combine(newDirectory, "PortKiller.UpdateProbe.exe");

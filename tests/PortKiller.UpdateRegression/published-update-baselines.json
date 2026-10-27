@@ -1,0 +1,14 @@
+[
+  {
+    "ReleaseVersion": "0.1.1",
+    "Commit": "28d19c7be5aedccab5f25b2bd5907f7646356c8e",
+    "ProbeVersion": "8.0.0",
+    "Receipt": "text"
+  },
+  {
+    "ReleaseVersion": "0.1.2",
+    "Commit": "eb8a9f4104919b24f3d26879fe7331dbc488fa6c",
+    "ProbeVersion": "8.0.1",
+    "Receipt": "structured"
+  }
+]

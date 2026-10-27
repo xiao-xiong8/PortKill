@@ -46,20 +46,25 @@ public sealed class UploadManagementService(UpdateAdminDbContext database, Admin
             throw new AdminFailure("upload_quota_exceeded", 429, "上传预留空间超出账号或服务配额。");
         string userId = UserId(principal); long now = Now;
         await using var transaction = await database.Database.BeginTransactionAsync(token);
-        long userReserved = await database.UploadSessions.Where(x => x.State == UploadState.Uploading || x.State == UploadState.Uploaded)
-            .Where(x => x.OwnerId == userId && x.ExpiresUtcMs > now)
+        // Only release a completed upload's reservation after its staging payload was removed.
+        // Rejected/failed validation records continue to consume quota until their session expires.
+        var activeUploads = database.UploadSessions.Where(x => x.ExpiresUtcMs > now)
+            .Where(x => x.State == UploadState.Uploading || x.State == UploadState.Uploaded
+                && (x.StorageCleanedUtcMs == null || !database.ReleaseDrafts.Any(draft => draft.UploadId == x.Id
+                    && draft.ValidationState == ValidationState.ReadyForApproval)));
+        long userReserved = await activeUploads.Where(x => x.OwnerId == userId)
             .SumAsync(x => (long?)(x.ManifestExpectedBytes + x.PackageExpectedBytes), token) ?? 0;
-        int userCount = await database.UploadSessions.CountAsync(x => (x.State == UploadState.Uploading || x.State == UploadState.Uploaded)
-            && x.OwnerId == userId && x.ExpiresUtcMs > now, token);
-        long totalReserved = await database.UploadSessions.Where(x => x.State == UploadState.Uploading || x.State == UploadState.Uploaded)
-            .Where(x => x.ExpiresUtcMs > now)
+        int userCount = await activeUploads.CountAsync(x => x.OwnerId == userId, token);
+        long totalReserved = await activeUploads
             .SumAsync(x => (long?)(x.ManifestExpectedBytes + x.PackageExpectedBytes), token) ?? 0;
-        int totalCount = await database.UploadSessions.CountAsync(x => (x.State == UploadState.Uploading || x.State == UploadState.Uploaded)
-            && x.ExpiresUtcMs > now, token);
-        if (userCount >= options.MaxActiveUploadsPerUser || totalCount >= options.MaxActiveUploadsTotal
-            || userReserved + reservation > options.MaxReservedUploadBytesPerUser
+        int totalCount = await activeUploads.CountAsync(token);
+        if (userCount >= options.MaxActiveUploadsPerUser || totalCount >= options.MaxActiveUploadsTotal)
+            throw new AdminFailure("upload_quota_exceeded", 429,
+                "活动上传数量已达到上限。未完成或校验失败的上传会继续占用名额至取消或 24 小时会话过期。");
+        if (userReserved + reservation > options.MaxReservedUploadBytesPerUser
             || totalReserved + reservation > options.MaxReservedUploadBytesTotal)
-            throw new AdminFailure("upload_quota_exceeded", 429, "当前活动上传已达到存储配额。");
+            throw new AdminFailure("upload_quota_exceeded", 429,
+                "活动上传预留空间已达到上限。校验成功且临时文件清理后释放空间；校验失败的上传会占用至会话过期。");
         var upload = new UploadSession
         {
             OwnerId = userId, StorageId = Guid.NewGuid().ToString("N"), State = UploadState.Uploading,

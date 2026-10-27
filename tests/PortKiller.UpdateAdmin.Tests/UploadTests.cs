@@ -266,7 +266,53 @@ public sealed class UploadTests
             Assert.Equal("upload_quota_exceeded", (await denied.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
         }
         using (var cancel = await app.Client.DeleteAsync($"/api/v1/uploads/{id}")) Assert.Equal(HttpStatusCode.NoContent, cancel.StatusCode);
-        Assert.Equal(HttpStatusCode.Created, (await app.Client.PostAsJsonAsync("/api/v1/uploads/", new CreateUploadRequest(8, 16))).StatusCode);
+        var second = await app.Client.PostAsJsonAsync("/api/v1/uploads/", new CreateUploadRequest(8, 16));
+        Assert.Equal(HttpStatusCode.Created, second.StatusCode);
+        string secondId = (await second.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString()!;
+
+        // A validated upload releases its reservation only after staging cleanup has completed.
+        using (var scope = app.App.Services.CreateScope())
+        {
+            var services = scope.ServiceProvider;
+            string ownerId = (await services.GetRequiredService<UserManager<AdminUser>>().FindByNameAsync("operator"))!.Id;
+            var database = services.GetRequiredService<UpdateAdminDbContext>();
+            var upload = await database.UploadSessions.SingleAsync(x => x.Id == secondId);
+            upload.State = UploadState.Uploaded;
+            database.ReleaseDrafts.Add(new ReleaseDraft
+            {
+                OwnerId = ownerId, UploadId = upload.Id, ValidationState = ValidationState.ReadyForApproval
+            });
+            await database.SaveChangesAsync();
+            using var stillReserved = await app.Client.PostAsJsonAsync("/api/v1/uploads/", new CreateUploadRequest(8, 16));
+            Assert.Equal(HttpStatusCode.TooManyRequests, stillReserved.StatusCode);
+            upload.StorageCleanedUtcMs = app.Clock.GetUtcNow().ToUnixTimeMilliseconds();
+            await database.SaveChangesAsync();
+        }
+        var third = await app.Client.PostAsJsonAsync("/api/v1/uploads/", new CreateUploadRequest(8, 16));
+        Assert.Equal(HttpStatusCode.Created, third.StatusCode);
+        string thirdId = (await third.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString()!;
+
+        // Failed validation remains quota-active even after the temporary payload was cleaned.
+        using (var scope = app.App.Services.CreateScope())
+        {
+            var services = scope.ServiceProvider;
+            string ownerId = (await services.GetRequiredService<UserManager<AdminUser>>().FindByNameAsync("operator"))!.Id;
+            var database = services.GetRequiredService<UpdateAdminDbContext>();
+            var upload = await database.UploadSessions.SingleAsync(x => x.Id == thirdId);
+            upload.State = UploadState.Uploaded;
+            upload.StorageCleanedUtcMs = app.Clock.GetUtcNow().ToUnixTimeMilliseconds();
+            database.ReleaseDrafts.Add(new ReleaseDraft
+            {
+                OwnerId = ownerId, UploadId = upload.Id, ValidationState = ValidationState.Rejected,
+                ValidationErrorCode = "validation_failed"
+            });
+            await database.SaveChangesAsync();
+        }
+        using var failedReservation = await app.Client.PostAsJsonAsync("/api/v1/uploads/", new CreateUploadRequest(8, 16));
+        Assert.Equal(HttpStatusCode.TooManyRequests, failedReservation.StatusCode);
+        var failure = await failedReservation.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("upload_quota_exceeded", failure.GetProperty("code").GetString());
+        Assert.Contains("校验失败", failure.GetProperty("detail").GetString());
     }
 
     [Fact]

@@ -112,4 +112,12 @@ public sealed class SkeletonTests
             reference.Name!.Contains("EntityFramework", StringComparison.Ordinal)
             || reference.Name.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void AdminVersionComesFromAssemblyMetadata()
+    {
+        Version assemblyVersion = typeof(AdminApplication).Assembly.GetName().Version
+            ?? throw new InvalidOperationException("后台程序集没有版本元数据。");
+        Assert.Equal(assemblyVersion.ToString(3), AdminApplication.Version);
+    }
 }

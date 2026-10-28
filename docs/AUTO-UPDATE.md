@@ -48,13 +48,13 @@ API 请求体上限 4 KiB，按来源限制注册/上报频率；字段使用正
 
 管理员“客户端版本”页面使用 `release.read`，支持分页、版本、结果、机器名、最近上报时间和撤销状态筛选，与当前 stable 正式版本比较。页面仅显示最近一次上报，不推断在线状态。撤销使用 `accounts.manage`、近期强认证和 CSRF 验证，撤销后客户端可自动登记为新实例。
 
-部署顺序：先备份 SQLite 并用现有 `db migrate` 流程应用迁移，部署 API 和网页，再在 HTTPS 下载站启用 Nginx 两个精确 POST 路由，最后分发新 AOT 包。HTTP 模板对登记路由返回 426，不承载令牌；下载站不代理列表和撤销接口。`Publish-Update.ps1 -ClientReportUrl` 可指定独立 HTTPS 地址，默认从 HTTPS 更新源派生。旧外部 `update-settings.json` 会继续保留；如需让已升级的客户端开始登记，需由部署配置明确补入该字段，不能依赖更新包覆盖原配置。
+部署顺序：先备份 SQLite 并用现有 `db migrate` 流程应用迁移，部署 API 和网页，再在 HTTPS 下载站启用 Nginx 两个精确 POST 路由，最后分发新 AOT 包。HTTP 模板对登记路由返回 426，不承载令牌；下载站不代理列表和撤销接口。`Publish-Update.ps1 -ClientReportUrl` 可指定独立 HTTPS 地址，默认从 HTTPS 更新源派生。旧外部 `update-settings.json` 会继续保留；官方旧配置缺少 `ClientReportUrl` 时客户端使用内置官方地址，自定义更新源仍需在配置中明确填写。
 
 `PortKiller.UpdateProtocol` 供客户端、发布工具、通知服务共用。清单上限 64 KiB；RSA ≥ 2048，SHA-256；有效期最多 180 天，默认签名 90 天；包最多 256 MiB。schema 2 有序号、版本和有效期约束。schema 1 仅保留旧 HTTPS 客户端兼容；新服务端激活要求 schema 2。
 
 默认发布源定义在 `src/Modules/PortKiller.Updates/Configuration/production-feed.json`，以嵌入资源随更新模块分发，同时复制为桌面构建和 AOT 发布目录的 `update-settings.json`。默认启用 HTTPS 更新、SSE、30 秒轮询及直连；可信 RSA 公钥由既有部署公钥固定，不能从网络获取或替换。真实清单地址为 `https://xiaoxiongupdate.duckdns.org/stable/manifest.json`，公钥 SPKI SHA-256 为 `02066F8B6F5CFAFA51A4B34ECE9DDCEA19A10F014F6A0266B3210CB5CD104CE5`。AOT 脚本会复核产物中的默认配置与该资源一致。自动更新保留外部配置：原线上源的默认 300 秒配置在内存中迁为 30 秒，不写回文件，自定义更新源的间隔仍保留。
 
-运行目录存在外部 `update-settings.json` 时优先使用它，以兼容自定义源与显式禁用；配置无效会报错，不静默改用其他来源。外部配置缺失时加载内置线上配置。`RealtimeEnabled=true` 和可选同源 `EventsUrl` 控制事件连接，未填写时从清单目录派生 `events`。完整自定义样例在 `deploy/examples/update-settings.example.json`，占位公钥必须换成已有可信公钥。清单及包禁止凭据、查询、片段和重定向，必须同源。HTTP 需要显式允许且每次重新验签，不使用 ETag；HTTPS 在清单有效期内可复用 ETag。
+运行目录存在外部 `update-settings.json` 时优先使用它，以兼容自定义源与显式禁用；配置无效会报错，不静默改用其他来源。外部配置缺失时加载内置线上配置。旧官方配置缺少 `ClientReportUrl` 时，客户端仅在内存中补入内置官方上报地址，不改写用户文件；自定义更新源仍必须显式配置上报地址，避免把安装信息发往错误主机。显式填写空值继续表示关闭上报。`RealtimeEnabled=true` 和可选同源 `EventsUrl` 控制事件连接，未填写时从清单目录派生 `events`。完整自定义样例在 `deploy/examples/update-settings.example.json`，占位公钥必须换成已有可信公钥。清单及包禁止凭据、查询、片段和重定向，必须同源。HTTP 需要显式允许且每次重新验签，不使用 ETag；HTTPS 在清单有效期内可复用 ETag。
 
 清单返回 404 时仍以独立的 `NoRelease` 状态保留空源身份，界面统一显示“当前版本为最新”，不记录为网络失败；保留实时监听和轮询。此时清理内存中的旧清单、ETag 及就绪版本，磁盘缓存和防回放信任记录保留；后续发布重新验签后才显示新版本与更新说明。真实公网检查可显式执行 `dotnet run --project tests/PortKiller.UpdateRegression -c Release -- --production-check <desktop-directory>`，只读取清单和 SSE 首包，不上传、下载包或安装。
 
@@ -169,16 +169,24 @@ PrepareOnly 在独立 ReleaseId 目录生成已验签的 `manifest.json`、四�
 
 发布脚本生成的客户端配置也明确使用直连，避免首装包再次落回系统代理。需要系统代理的自定义部署可传 `-UseSystemProxy`；恢复已有发布记录继续使用该记录保留的配置。
 
-新发布默认要求干净 Git 工作区，CI 使用明确版本。本地隔离演练可以显式 `-AllowDirty`，记录会保留 Dirty 状态。版本未指定时基于项目和服务端已激活版本递增；不修改项目源文件版本。
+产品基线版本统一位于根目录 `Directory.Build.props` 的 `ProductVersion`；桌面和管理后台构建从该属性读取，后台运行时版本从程序集元数据读取，不能再在项目或 `AdminApplication` 中单独硬编码。新发布默认要求干净 Git 工作区，CI 使用明确版本。本地隔离演练可以显式 `-AllowDirty`，记录会保留 Dirty 状态。在线发布未指定版本时，脚本读取服务器已激活的正式清单，并在本地基线与服务器版本的较大值上递增补丁版本；离线 `PrepareOnly` 必须显式传入 `-Version`，因为不能猜测服务器基线。脚本构建后再次读取 EXE 文件版本，要求它与清单版本和 ZIP 文件名一致，不修改项目源文件版本。
 
 本地发布记录、锁和签名产物保存在 `.local/artifacts/releases/`，恢复和续签继续从此目录读取，不应作为可随意清空的缓存。本地兼容配置读取 `.local/config/publisher.local.json`；非敏感配置示例位于 `deploy/examples/`。签名私钥仍使用原有受保护位置，不因项目目录整理迁入仓库。
 
 ```powershell
-pwsh -File scripts/release/Publish-Update.ps1 -Version 0.2.0 `
+pwsh -File scripts/release/Publish-Update.ps1 `
   -SshUser updatepublisher -ServerIp updates.example.com `
   -PublicBaseUrl https://updates.example.com/stable/ `
   -SigningKeyPath C:/private/update-private.pem -PublicKeyPath C:/private/update-public.pem `
   -ReleaseNotesPath C:/release/notes.txt -VcVarsAllPath C:/path/to/vcvarsall.bat
+```
+
+在线发布不传 `-Version` 时，脚本从服务器正式清单和本地 `ProductVersion` 自动计算下一个补丁版本。离线制作必须显式指定版本：
+
+```powershell
+pwsh -File scripts/release/Publish-Update.ps1 -PrepareOnly -Version 0.2.0 `
+  -PublicBaseUrl https://updates.example.com/stable/ `
+  -SigningKeyPath C:/private/update-private.pem -PublicKeyPath C:/private/update-public.pem
 ```
 
 SSH 主机和公网源独立配置，可用 `-SshConfigPath C:/private/publisher-ssh.conf` 为 ssh/scp 选择专用客户端配置；主机密钥应提前核对并写入可信 known_hosts。旧 ServerIp/HttpPort 兼容模式继续生成显式 HTTP 配置。不要将示例域名直接用于发布。构建前校验公私钥配对。每次发布独立 ReleaseId 目录，包含原始签名清单、四文件更新 ZIP、五文件首装 ZIP（含 update-settings）、发布记录和回执；记录 Git 提交、脏状态、公钥指纹、版本、序号和摘要。预构建 CI 产物可用 `-PreparedPublishDirectory`，仍复核 EXE 版本、四文件结构、长度和摘要。
@@ -217,6 +225,19 @@ pwsh -File scripts/checks/Test-ReleaseP5.ps1 -PreparedPublishDirectory C:/build/
 该入口检查实际 Native AOT EXE、准备模式的交付隔离、制作记录、原 SSH/scp 和 LocalRoot 发布、Resume 与续签，以及新旧入口的版本竞争。随后使用真实 HTTPS 管理 API、测试签名密钥和生产 Worker/工具进程发布 AOT 包，由现有客户端更新模块发现并在显式下载后验包；同时检查篡改包和落后序号被拒绝。测试不覆盖安装用户当前程序，客户端安装和恢复沿用下面的完整更新验收入口。
 
 SSH 测试使用本机 OpenSSH 客户端连接回环 SSHv2/SFTP 服务，独立生成测试密钥并启用严格主机密钥校验，不安装系统服务或修改全局 SSH 配置。仅测试所需的 Python 依赖固定在 `tests/PortKiller.Release.Tests/ssh-requirements.txt`，自动安装到 `.local/cache/p5-ssh/`；可用 `-PythonExecutable` 指定解释器，不属于生产依赖。部署路径映射到隔离 Windows 目录，真实 Linux 权限、Nginx、生产证书和公网仍需部署验收。结果保存在 `.local/artifacts/admin-execution/P5-04/`，包含独立的后台、前端和旧更新回归证据。
+
+管理网页、后端与客户端实际安装/回滚的联动验收：
+
+```powershell
+pnpm --dir src/Web/PortKiller.UpdateAdmin.Web exec playwright install chromium
+pwsh -File scripts/checks/Test-UpdateClosedLoop.ps1 `
+  -PreparedPublishDirectory C:/build/portkiller-win-x64 `
+  -VcVarsAllPath C:/path/to/vcvarsall.bat
+```
+
+需要项目声明的 Node.js 和 pnpm 版本。此入口先构建两个隔离 Native AOT 测试客户端，再在 Chromium 中完成 MFA、上传真实桌面 AOT 包、Worker 发布及下载检查。分发服务读取实际激活目录；随后通过网页发布测试版本，让旧测试客户端调用同一套 `UpdateService`、`UpdateInstaller`、DPAPI 身份存储和 `ClientReportService`，实际完成下载、四文件替换、健康确认，以及另一实例的健康失败回滚。网页核对同一安装实例的新旧版本、`installed`/`rolled_back` 和与正式版本的比较；同时检查四文件摘要、配置保留和事务收尾。测试 HTTPS 仅在测试宿主内固定临时证书，不修改系统信任，也不向正式程序加入测试开关。
+
+日志、两个客户端构建、上报证据和截图保存在 `.local/artifacts/update-closed-loop/`。使用隔离数据库、签名密钥和安装目录，不覆盖正在使用的程序；安装宿主复用桌面更新模块，不覆盖 Avalonia 窗口点击和渲染，也不代表生产服务器、TLS/Nginx 已通过验收。
 
 原有完整桌面更新及安装恢复验收：
 

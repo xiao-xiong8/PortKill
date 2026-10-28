@@ -27,6 +27,15 @@ $publisherLock = [IO.FileStream]::new((Join-Path $releaseRoot '.publisher.lock')
 $sequenceLock = $null
 $explicitVersion = [bool]$Version
 function Normalized([version]$v) { return [version]::new($v.Major,$v.Minor,[Math]::Max(0,$v.Build),[Math]::Max(0,$v.Revision)) }
+function Get-EvaluatedProjectVersion {
+    $desktopProject = Join-Path $projectRoot 'src/PortKiller.Desktop/PortKiller.Desktop.csproj'
+    $output = & dotnet msbuild $desktopProject '-getProperty:Version' '-nologo' 2>&1
+    if ($LASTEXITCODE -ne 0) { throw '无法读取统一产品版本。' }
+    $value = [string](@($output | ForEach-Object { $_.ToString().Trim() } | Where-Object { $_ -match '^\d+\.\d+(\.\d+){0,3}$' } | Select-Object -Last 1))
+    if ([string]::IsNullOrWhiteSpace([string]$value)) { throw '统一产品版本为空。' }
+    try { return [version]$value }
+    catch { throw "统一产品版本格式无效：$value" }
+}
 function Save-Record {
     $temporary = $recordPath + '.tmp'
     [IO.File]::WriteAllText($temporary, ($record | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
@@ -85,8 +94,8 @@ try {
             $keyFingerprint=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($publicKey.ExportSubjectPublicKeyInfo()))
             if ($privateKey.KeySize -lt 2048 -or $privateFingerprint -ne $keyFingerprint) { throw 'SigningKeyMismatch: 签名私钥与分发公钥不匹配。' }
         } finally { $privateKey.Dispose(); $publicKey.Dispose() }
-        [xml]$project = [IO.File]::ReadAllText((Join-Path $projectRoot 'src/PortKiller.Desktop/PortKiller.Desktop.csproj'))
-        $current = [version]$project.SelectSingleNode('/Project/PropertyGroup/Version').InnerText
+        $current = Get-EvaluatedProjectVersion
+        if ($PrepareOnly -and -not $Version) { throw 'PrepareOnly 无法读取服务器正式版本，必须显式指定 -Version。' }
         if (-not $Version) { $Version = "$($current.Major).$($current.Minor).$([Math]::Max(0,$current.Build)+1)" }
         if ($Version -notmatch '^\d+\.\d+(\.\d+){0,2}$') { throw '版本格式错误。' }
         if (-not $ResignRelease -and (Normalized ([version]$Version)) -le (Normalized $current)) { throw "版本必须高于项目版本 $current。" }
@@ -115,6 +124,9 @@ try {
         $currentReceipt = $null
         if (-not $PrepareOnly) { $currentReceipt = (Invoke-Server @('inspect','--root',$serverRoot,'--config',$serverConfig)) | ConvertFrom-Json }
         if ($null -ne $currentReceipt) { $record.Expected=$currentReceipt.ManifestSha256 }
+        if ($currentReceipt -and $explicitVersion -and -not $ResignRelease -and (Normalized ([version]$Version)) -le (Normalized ([version]$currentReceipt.Version))) {
+            throw "显式版本 $Version 不高于服务器当前版本 $($currentReceipt.Version)。"
+        }
         if (-not $explicitVersion -and -not $ResignRelease -and $currentReceipt -and (Normalized ([version]$currentReceipt.Version)) -ge (Normalized ([version]$Version))) {
             $baseline=[version]$currentReceipt.Version
             $Version="$($baseline.Major).$($baseline.Minor).$([Math]::Max(0,$baseline.Build)+1)"
@@ -163,6 +175,9 @@ try {
         try {
             [IO.Compression.ZipFileExtensions]::ExtractToFile($aotZip.GetEntry('PortKiller.exe'), $aotTemporary, $false)
             $aotInfo = & (Join-Path $PSScriptRoot 'Get-AotArtifactInfo.ps1') -ExecutablePath $aotTemporary
+            if ((Normalized ([version]$aotInfo.FileVersion)) -ne (Normalized ([version]$record.Version))) {
+                throw "EXE 文件版本 $($aotInfo.FileVersion) 与发布版本 $($record.Version) 不一致。"
+            }
             $record.NativeAot=$aotInfo.NativeAot; $record.FileVersion=$aotInfo.FileVersion; $record.ExeSha256=$aotInfo.ExeSha256
         } finally { $aotZip.Dispose(); if (Test-Path -LiteralPath $aotTemporary) { Remove-Item -LiteralPath $aotTemporary } }
         $record.PackageBytes=(Get-Item -LiteralPath $package).Length; $record.ManifestBytes=(Get-Item -LiteralPath $manifest).Length

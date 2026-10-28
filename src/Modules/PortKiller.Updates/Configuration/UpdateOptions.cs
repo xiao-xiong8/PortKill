@@ -8,6 +8,8 @@ namespace PortKiller.Updates;
 // 配置随应用分发；服务器只能发布签名清单，不能更改信任公钥或安装路径。
 public sealed class UpdateOptions : ManifestVerificationOptions
 {
+    private const string ProductionManifestUrl = "https://xiaoxiongupdate.duckdns.org/stable/manifest.json";
+
     public bool Enabled { get; set; }
     public bool UseSystemProxy { get; set; } = true;
     public bool RealtimeEnabled { get; set; } = true;
@@ -46,15 +48,48 @@ public sealed class UpdateOptions : ManifestVerificationOptions
     public static UpdateOptions Load(string directory)
     {
         string path = Path.Combine(directory, "update-settings.json");
-        using var input = File.Exists(path) ? File.OpenRead(path)
-            : typeof(UpdateOptions).Assembly.GetManifestResourceStream("PortKiller.Updates.ProductionFeed.json")
-                ?? throw new InvalidDataException("内置更新配置缺失。");
-        var options = JsonSerializer.Deserialize(input, UpdateJsonContext.Default.UpdateOptions)
-            ?? throw new InvalidDataException("更新配置为空。");
+        UpdateOptions options;
+        if (File.Exists(path))
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            bool hasClientReportUrl = false;
+            try
+            {
+                using var document = JsonDocument.Parse(bytes);
+                hasClientReportUrl = document.RootElement.ValueKind == JsonValueKind.Object
+                    && document.RootElement.TryGetProperty(nameof(ClientReportUrl), out _);
+            }
+            catch (JsonException)
+            {
+                // Keep the existing deserialization error and message for malformed settings.
+            }
+
+            options = JsonSerializer.Deserialize(bytes, UpdateJsonContext.Default.UpdateOptions)
+                ?? throw new InvalidDataException("更新配置为空。");
+
+            // Older official packages did not contain ClientReportUrl. Use the embedded
+            // production endpoint in memory only; never overwrite a user's settings file.
+            // Custom feeds remain opt-in so reports cannot be sent to an unintended host.
+            if (!hasClientReportUrl && string.Equals(options.ManifestUrl, ProductionManifestUrl, StringComparison.OrdinalIgnoreCase))
+                options.ClientReportUrl = LoadEmbedded().ClientReportUrl;
+        }
+        else
+        {
+            options = LoadEmbedded();
+        }
+
         // Updates preserve the external settings file, including the original production cadence.
-        if (options.ManifestUrl == "https://xiaoxiongupdate.duckdns.org/stable/manifest.json" && options.PollSeconds == 300)
+        if (string.Equals(options.ManifestUrl, ProductionManifestUrl, StringComparison.OrdinalIgnoreCase) && options.PollSeconds == 300)
             options.PollSeconds = 30;
         return options;
+    }
+
+    private static UpdateOptions LoadEmbedded()
+    {
+        using var input = typeof(UpdateOptions).Assembly.GetManifestResourceStream("PortKiller.Updates.ProductionFeed.json")
+            ?? throw new InvalidDataException("内置更新配置缺失。");
+        return JsonSerializer.Deserialize(input, UpdateJsonContext.Default.UpdateOptions)
+            ?? throw new InvalidDataException("内置更新配置为空。");
     }
 
     // Reporting configuration is validated independently so it can never disable updates.

@@ -126,7 +126,8 @@ function Test-RequiredFiles {
         'deploy/ubuntu/monitor-update-server.sh',
         'deploy/examples/update-admin-api.env.example',
         'deploy/examples/update-admin-worker.env.example',
-        'deploy/examples/update-monitor.env.example'
+        'deploy/examples/update-monitor.env.example',
+        'scripts/checks/Test-VersionConsistency.ps1'
     )
     $missing = @($required | Where-Object { -not (Test-Path -LiteralPath (Join-Path $repository $_) -PathType Leaf) })
     Assert-Condition ($missing.Count -eq 0) ("缺少正式交付文件：$($missing -join ', ')")
@@ -208,6 +209,7 @@ try {
     $fileChecks = Test-RequiredFiles
     Invoke-Captured -File (Join-Path $repository 'scripts/checks/Test-Architecture.ps1') -CliArgs @() -LogPath (Join-Path $evidence 'architecture.log')
     Invoke-Captured -File (Join-Path $repository 'scripts/checks/Test-AdminContract.ps1') -CliArgs @() -LogPath (Join-Path $evidence 'contract.log')
+    Invoke-Captured -File (Join-Path $repository 'scripts/checks/Test-VersionConsistency.ps1') -CliArgs @() -LogPath (Join-Path $evidence 'version-consistency.log')
 
     $bundleDirectory = $null
     if (-not $SkipBundleBuild) {
@@ -243,7 +245,7 @@ try {
         runtime = [Runtime.InteropServices.RuntimeInformation]::FrameworkDescription
         baseCommit = (& git rev-parse HEAD).Trim()
         command = 'pwsh -NoProfile -File scripts/checks/Test-ReleaseReadiness.ps1'
-        evidence = [ordered]@{ prior = @($evidenceStatuses); source = $sourceChecks; requiredFiles = $fileChecks; bundle = $bundleChecks; git = $gitChecks; architecture = 'passed'; contract = 'passed' }
+        evidence = [ordered]@{ prior = @($evidenceStatuses); source = $sourceChecks; requiredFiles = $fileChecks; bundle = $bundleChecks; git = $gitChecks; architecture = 'passed'; contract = 'passed'; versionConsistency = 'passed' }
         gates = [ordered]@{
             p8_04 = [ordered]@{ status = [string]$p8_04.status; firstInstallAuthenticode = $firstInstallReady; oldClientKeyMigration = $oldKeyMigrationReady }
             linuxRuntime = [ordered]@{ ready = $linuxRuntimeReady; reason = $linuxReason; testEntryPoint = 'scripts/checks/test-admin-linux.sh' }

@@ -18,6 +18,15 @@ if (Test-Path -LiteralPath $OutputDirectory) {
 }
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 
+function Get-EvaluatedVersion([string]$ProjectPath) {
+    $output = & dotnet msbuild $ProjectPath '-getProperty:Version' '-nologo' 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "无法读取服务端统一版本：$ProjectPath" }
+    $value = [string](@($output | ForEach-Object { $_.ToString().Trim() } | Where-Object { $_ -match '^\d+\.\d+(\.\d+){0,3}$' } | Select-Object -Last 1))
+    if ([string]::IsNullOrWhiteSpace([string]$value)) { throw '服务端统一版本为空。' }
+    try { return ([version]$value).ToString(3) }
+    catch { throw "服务端统一版本格式无效：$value" }
+}
+
 function Publish-ServerComponent([hashtable]$Component) {
     $destination=Join-Path $OutputDirectory $Component.Name
     New-Item -ItemType Directory -Path $destination -Force | Out-Null
@@ -47,9 +56,7 @@ $privateFiles=@(Get-ChildItem -LiteralPath $OutputDirectory -Recurse -File | Whe
 })
 if ($privateFiles.Count -gt 0) { throw "交付包包含本地或私钥文件：$($privateFiles[0].FullName)" }
 
-$versionSource=Get-Content -Raw -LiteralPath (Join-Path $repository 'src/Modules/PortKiller.UpdateManagement/AdminApplication.cs')
-$version=[regex]::Match($versionSource,'Version\s*=\s*"(?<version>[^"]+)"').Groups['version'].Value
-if ([string]::IsNullOrWhiteSpace($version)) { throw '无法读取管理后台版本' }
+$version=Get-EvaluatedVersion (Join-Path $repository 'src/Services/PortKiller.UpdateAdmin.Api/PortKiller.UpdateAdmin.Api.csproj')
 $commit=(& git -C $repository rev-parse HEAD).Trim()
 $dirty=@(& git -C $repository status --porcelain)
 $files=@(Get-ChildItem -LiteralPath $OutputDirectory -Recurse -File | Where-Object { $_.Name -ne 'bundle.json' } | ForEach-Object {

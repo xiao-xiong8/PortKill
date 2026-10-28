@@ -53,14 +53,24 @@ public sealed class UpdateService
     public UpdateManifest? Ready => Prepared?.Manifest;
     public string? ReadyPackage => Prepared?.PackagePath;
     public static string CurrentVersion
+        => ReadCurrentVersion(Environment.ProcessPath, Assembly.GetEntryAssembly()?.GetName().Version);
+
+    internal static string ReadCurrentVersion(string? executable, Version? assemblyVersion)
     {
-        get
+        Version version = assemblyVersion ?? new Version(0, 1, 0);
+        if (OperatingSystem.IsWindows() && executable != null
+            && !Path.GetFileName(executable).Equals("dotnet.exe", StringComparison.OrdinalIgnoreCase))
         {
-            Version version = Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 1);
-            if (version.Build <= 0 && version.Revision <= 0) return version.ToString(2);
-            if (version.Revision <= 0) return version.ToString(3);
-            return version.ToString(4);
+            try
+            {
+                // The installed EXE is the local version authority, including in Native AOT.
+                string? fileVersion = FileVersionInfo.GetVersionInfo(executable).FileVersion;
+                if (!string.IsNullOrWhiteSpace(fileVersion)) version = UpdateManifest.ParseVersion(fileVersion);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
+            { /* Development/test hosts can fall back to their entry assembly metadata. */ }
         }
+        return UpdateManifest.ParseVersion(version.ToString()).ToString(version.Revision > 0 ? 4 : 3);
     }
     public string VersionLabel => "v" + CurrentVersion;
     public string VersionLabelAot => VersionLabel + " · Native AOT";

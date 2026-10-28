@@ -32,7 +32,9 @@ using var generated = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(
 using var certificate = X509CertificateLoader.LoadPkcs12(generated.Export(X509ContentType.Pfx), null, X509KeyStorageFlags.Exportable);
 await File.WriteAllTextAsync(Path.Combine(runtime, "certificate.pem"), generated.ExportCertificatePem());
 await File.WriteAllTextAsync(Path.Combine(runtime, "key.pem"), key.ExportPkcs8PrivateKeyPem());
-await using var app = AdminApiHost.Create(["--urls", "https://127.0.0.1:15081", "--Administration:DataRoot", root], builder =>
+// The serial browser workflow uploads a rejected package and two valid releases before cleanup runs.
+await using var app = AdminApiHost.Create(["--urls", "https://127.0.0.1:15081", "--Administration:DataRoot", root,
+    "--Administration:MaxActiveUploadsPerUser", "3"], builder =>
 {
     builder.WebHost.ConfigureKestrel(options => options.ConfigureHttpsDefaults(https => https.ServerCertificate = certificate));
     builder.Logging.ClearProviders();
@@ -62,12 +64,16 @@ File.Copy(package, Path.Combine(fixtures, $"PortKiller-{version}-win-x64.zip"), 
 byte[] payload = JsonSerializer.SerializeToUtf8Bytes(manifest, ProtocolJsonContext.Default.UpdateManifest);
 await File.WriteAllTextAsync(Path.Combine(fixtures, "manifest.json"), JsonSerializer.Serialize(new SignedUpdate { Payload = Convert.ToBase64String(payload), Signature = Convert.ToBase64String(signing.SignData(payload, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)) }, ProtocolJsonContext.Default.SignedUpdate));
 packageBytes[^1] ^= 1; await File.WriteAllBytesAsync(Path.Combine(fixtures, "tampered.zip"), packageBytes);
-await File.WriteAllTextAsync(Path.Combine(runtime, "fixture-info.json"), JsonSerializer.Serialize(new { version, genuineAot = prepared != null, packageSha256 = manifest.Sha256 }));
+var clientIntegration = ClientUpdateFixtures.Create(runtime, fixtures, signing, manifest);
+await File.WriteAllTextAsync(Path.Combine(runtime, "fixture-info.json"), JsonSerializer.Serialize(new { version, genuineAot = prepared != null, packageSha256 = manifest.Sha256, clientIntegration }));
 var publicBuilder = WebApplication.CreateBuilder(); publicBuilder.WebHost.UseUrls("http://127.0.0.1:15082"); publicBuilder.Logging.ClearProviders();
 await using var distribution = publicBuilder.Build();
 string distributionFailure = Path.Combine(runtime, "distribution-unavailable"); File.Delete(distributionFailure);
+// Serve the activation output, so publishing in the browser changes the source clients actually read.
 distribution.MapGet("/stable/{name}", (string name) => File.Exists(distributionFailure) ? Results.StatusCode(503)
-    : name == "manifest.json" || name == $"PortKiller-{version}-win-x64.zip" ? Results.File(Path.Combine(fixtures, name), enableRangeProcessing: true) : Results.NotFound());
+    : (name == "manifest.json" || name.StartsWith("PortKiller-", StringComparison.Ordinal) && name.EndsWith("-win-x64.zip", StringComparison.Ordinal))
+        && File.Exists(Path.Combine(tool.ReleaseRoot, name))
+        ? Results.File(Path.Combine(tool.ReleaseRoot, name), enableRangeProcessing: true) : Results.NotFound());
 await distribution.StartAsync();
 var start = new ProcessStartInfo(Path.Combine(repository, "src/Services/PortKiller.UpdatePublisher.Worker/bin/Release/net10.0/PortKiller.UpdatePublisher.Worker" + extension)) { UseShellExecute = false, CreateNoWindow = true };
 start.Environment.Clear();

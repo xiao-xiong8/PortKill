@@ -135,6 +135,15 @@ internal static class UpdateChecks
         var service = fixture.Service(http); await service.CheckAsync(CancellationToken.None);
         Program.Assert(service.Ready == null && requests == 1, "相同版本不应下载。");
         Program.Assert(UpdateManifest.ParseVersion("1.0.1") == UpdateManifest.ParseVersion("1.0.1.0"), "版本归一化错误。");
+        if (OperatingSystem.IsWindows())
+        {
+            string file = typeof(UpdateChecks).Assembly.Location;
+            string actual = System.Diagnostics.FileVersionInfo.GetVersionInfo(file).FileVersion!;
+            Program.Assert(UpdateManifest.ParseVersion(UpdateService.ReadCurrentVersion(file, new Version(9, 8, 7, 6)))
+                == UpdateManifest.ParseVersion(actual), "客户端版本未优先使用实际文件版本。");
+        }
+        Program.Assert(UpdateService.ReadCurrentVersion(null, new Version(1, 2)) == "1.2.0"
+            && UpdateService.ReadCurrentVersion(null, new Version(1, 2, 3, 4)) == "1.2.3.4", "开发宿主版本回退或版本显示不正确。");
     }
 
     internal static async Task NetworkAndRetry()

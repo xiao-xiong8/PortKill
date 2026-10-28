@@ -1,6 +1,9 @@
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { readFileSync, existsSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { expect, test, type Page, type BrowserContext } from '@playwright/test';
 
 function totp(key: string, offset = 0) {
@@ -17,7 +20,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
   let authenticatorKey = '';
   const fixtures = fileURLToPath(new URL('../../../../.local/artifacts/admin-browser/runtime/fixtures/', import.meta.url));
   test.beforeAll(async ({ browser }) => { context = await browser.newContext({ ignoreHTTPSErrors: true }); page = await context.newPage(); });
-  test.afterAll(async () => { await context.close(); });
+  test.afterAll(async () => { await context?.close(); });
   test('password, MFA binding, recovery acknowledgement, refresh, recovery login and strong authentication', async () => {
     await page.goto('/');
     await page.getByLabel('账号', { exact: true }).fill('browser-admin');
@@ -172,6 +175,76 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     expect(publishJobs).toHaveLength(1);
     await page.getByRole('button', { name: '重试下载检查' }).click();
     await expect(page.locator('.status-label').first()).toHaveText('发布完成', { timeout: 30000 });
+  });
+  test('published bytes install or roll back in Native AOT clients and real reports appear in the web', async () => {
+    test.setTimeout(120000);
+    const runtime = fileURLToPath(new URL('../../../../.local/artifacts/admin-browser/runtime/', import.meta.url));
+    const info = JSON.parse(readFileSync(join(runtime, 'fixture-info.json'), 'utf8')) as {
+      clientIntegration?: { OldVersion: string; NewVersion: string; SuccessSandbox: string; RollbackSandbox: string };
+    };
+    test.skip(!info.clientIntegration, 'Set both PORTKILL_BROWSER_*_PROBE_DIRECTORY values for real installation integration.');
+    const client = info.clientIntegration!;
+    await page.getByRole('link', { name: '上传版本', exact: true }).click();
+    await page.getByLabel('签名清单（manifest.json）', { exact: true }).setInputFiles(fixtures + 'client-manifest.json');
+    await page.getByLabel('四文件更新包（ZIP）', { exact: true }).setInputFiles(fixtures + 'client-package.zip');
+    await page.getByRole('button', { name: '上传并校验' }).click();
+    await expect(page).toHaveURL(/\/job\//);
+    await expect(page.locator('.status-label').first()).toHaveText('可确认发布', { timeout: 30000 });
+    await page.getByRole('button', { name: '生成发布确认' }).click();
+    await page.getByRole('button', { name: '确认并创建发布任务' }).click();
+    await expect(page.locator('.status-label').first()).toHaveText('发布完成', { timeout: 30000 });
+
+    type Report = { revocationId: string; installationId: string; clientVersion: string; lastReportResult: string };
+    async function reports(): Promise<Report[]> {
+      const response = await context.request.get('/api/v1/client-installations?pageSize=100');
+      expect(response.status()).toBe(200);
+      return ((await response.json()) as { items: Report[] }).items;
+    }
+    const hash = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex');
+    const evidence: object[] = [];
+    for (const [sandbox, result] of [[client.SuccessSandbox, 'installed'], [client.RollbackSandbox, 'rolled_back']]) {
+      const install = join(sandbox, 'install');
+      const binaries = ['PortKiller.exe', 'av_libglesv2.dll', 'libHarfBuzzSharp.dll', 'libSkiaSharp.dll'];
+      const before = binaries.map(name => hash(join(install, name)));
+      const settingsHash = hash(join(install, 'update-settings.json'));
+      const known = new Set((await reports()).map(item => item.revocationId));
+      async function run(...args: string[]) {
+        await promisify(execFile)(join(install, 'PortKiller.exe'), args, {
+          cwd: install, timeout: 90000, windowsHide: true,
+          env: { ...process.env, PORTKILLER_PROBE_ROOT: sandbox,
+            PORTKILLER_PROBE_REPORT_CERTIFICATE: join(runtime, 'certificate.pem') },
+        });
+      }
+      await run();
+      const initial = (await reports()).find(item => !known.has(item.revocationId));
+      expect(initial?.clientVersion).toBe(client.OldVersion);
+      expect(initial?.lastReportResult).toBe('started');
+      await run('--check-and-install');
+      const expectedVersion = result === 'installed' ? client.NewVersion : client.OldVersion;
+      await expect.poll(async () => (await reports()).find(item => item.revocationId === initial!.revocationId), { timeout: 60000 })
+        .toMatchObject({ clientVersion: expectedVersion, lastReportResult: result, installationId: initial!.installationId });
+      await expect.poll(() => readFileSync(join(sandbox, 'launched-version'), 'utf8').split('.').map(Number).concat([0, 0]).slice(0, 4).join('.')).toBe(expectedVersion);
+      expect(hash(join(install, 'update-settings.json'))).toBe(settingsHash);
+      expect(readFileSync(join(install, 'user-settings.txt'), 'utf8')).toBe('preserved-settings');
+      expect(existsSync(join(install, '.portkiller-update', 'transaction.json'))).toBe(false);
+      const after = binaries.map(name => hash(join(install, name)));
+      if (result === 'rolled_back') expect(after).toEqual(before);
+      else {
+        const published = process.env.PORTKILL_BROWSER_NEW_PROBE_DIRECTORY!;
+        expect(after).toEqual(binaries.map(name => hash(join(published, name === 'PortKiller.exe' ? 'PortKiller.UpdateProbe.exe' : name))));
+        expect(after[0]).not.toBe(before[0]);
+      }
+      await page.getByRole('link', { name: '客户端版本', exact: true }).click();
+      await page.getByRole('button', { name: '刷新', exact: true }).click();
+      const row = page.getByRole('table', { name: '客户端最近一次上报' }).getByRole('row').filter({ hasText: initial!.installationId });
+      await expect(row).toContainText(expectedVersion);
+      await expect(row).toContainText(result === 'installed' ? '安装成功' : '已回滚');
+      await expect(row).toContainText(result === 'installed' ? '与正式版本一致' : '低于正式版本');
+      evidence.push({ installationId: initial!.installationId, previousVersion: client.OldVersion,
+        reportedVersion: expectedVersion, result, settingsPreserved: true, binaryHashes: after });
+    }
+    await page.screenshot({ path: '../../../.local/artifacts/admin-browser/update-closed-loop.png', fullPage: true, animations: 'disabled' });
+    writeFileSync(join(runtime, 'client-integration-result.json'), JSON.stringify(evidence, null, 2));
   });
   test('security administration protects account actions and audit data by permission', async () => {
     test.setTimeout(60000);

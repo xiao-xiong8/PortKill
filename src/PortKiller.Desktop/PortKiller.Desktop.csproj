@@ -10,7 +10,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- 可执行文件外观与元数据（资源管理器图标 / 属性页版本信息） -->
     <ApplicationIcon>Assets\avalonia-logo.ico</ApplicationIcon>
-    <Version>0.1</Version>
     <ProductName>PortKiller</ProductName>
     <AssemblyTitle>PortKiller · 端口占用排查与释放</AssemblyTitle>
     <Description>Windows 端口占用监控与清理工具（Avalonia + Native AOT）</Description>

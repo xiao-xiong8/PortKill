@@ -2,5 +2,16 @@
   <PropertyGroup>
     <Nullable>enable</Nullable>
     <Deterministic>true</Deterministic>
+    <ProductVersion Condition="'$(ProductVersion)' == ''">0.1.0</ProductVersion>
+    <PortKillProductProject Condition="'$(MSBuildProjectName)' == 'PortKiller.Desktop' Or
+      '$(MSBuildProjectName)' == 'PortKiller.UpdateManagement' Or
+      '$(MSBuildProjectName)' == 'PortKiller.UpdateAdmin.Api' Or
+      '$(MSBuildProjectName)' == 'PortKiller.UpdatePublisher.Worker' Or
+      '$(MSBuildProjectName)' == 'PortKiller.UpdateNotifier' Or
+      '$(MSBuildProjectName)' == 'PortKiller.UpdateTool'">true</PortKillProductProject>
+    <Version Condition="'$(PortKillProductProject)' == 'true' and '$(Version)' == ''">$(ProductVersion)</Version>
+    <AssemblyVersion Condition="'$(PortKillProductProject)' == 'true' and '$(AssemblyVersion)' == ''">$(Version)</AssemblyVersion>
+    <FileVersion Condition="'$(PortKillProductProject)' == 'true' and '$(FileVersion)' == ''">$(Version)</FileVersion>
+    <InformationalVersion Condition="'$(PortKillProductProject)' == 'true' and '$(InformationalVersion)' == ''">$(Version)</InformationalVersion>
   </PropertyGroup>
 </Project>

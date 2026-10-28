@@ -33,8 +33,10 @@ internal sealed class PublishFixture : IAsyncDisposable
             AllowHttp = manifestUrl?.StartsWith("http:", StringComparison.Ordinal) == true,
             PublicKeyPem = fixture._key.ExportSubjectPublicKeyInfoPem()
         }, ProtocolJsonContext.Default.ManifestVerificationOptions));
-        fixture.Version = UpdateManifest.ParseVersion(System.Diagnostics.FileVersionInfo.GetVersionInfo(
-            preparedDirectory == null ? FindTool() : Path.Combine(preparedDirectory, "PortKiller.exe")).FileVersion!).ToString();
+        // Keep the artifact's spelling for package URLs; normalization is only for comparisons.
+        fixture.Version = System.Diagnostics.FileVersionInfo.GetVersionInfo(
+            preparedDirectory == null ? FindTool() : Path.Combine(preparedDirectory, "PortKiller.exe")).FileVersion!;
+        _ = UpdateManifest.ParseVersion(fixture.Version);
         using var output = new MemoryStream();
         using (var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
             foreach (string name in ReleasePackage.Files)

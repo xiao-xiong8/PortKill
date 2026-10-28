@@ -1,6 +1,7 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using PortKiller.Updates;
 using static PortKiller.UpdateRegression.AssertEx;
 
@@ -69,6 +70,55 @@ internal static class ClientReportChecks
             await service.ReportAsync("1.2.3", "started");
         That(calls == 0, "DPAPI failure did not skip reporting safely");
         That(new UpdateOptions().GetClientReportUri() == null, "Old configuration did not disable reporting");
+
+        string officialLegacyRoot = Path.Combine(fixture.Root, "official-legacy-settings");
+        Directory.CreateDirectory(officialLegacyRoot);
+        var officialLegacy = new UpdateOptions
+        {
+            Enabled = true,
+            UseSystemProxy = false,
+            AllowHttp = false,
+            ManifestUrl = "https://xiaoxiongupdate.duckdns.org/stable/manifest.json",
+            PublicKeyPem = fixture.Options.PublicKeyPem,
+            RealtimeEnabled = true,
+            PollSeconds = 300,
+            CheckTimeoutSeconds = 8,
+            DownloadTimeoutSeconds = 180
+        };
+        var officialJson = JsonNode.Parse(JsonSerializer.Serialize(officialLegacy, UpdateJsonContext.Default.UpdateOptions))!.AsObject();
+        officialJson.Remove(nameof(UpdateOptions.ClientReportUrl));
+        string officialLegacyPath = Path.Combine(officialLegacyRoot, "update-settings.json");
+        string officialLegacyText = officialJson.ToJsonString();
+        File.WriteAllText(officialLegacyPath, officialLegacyText);
+        var migrated = UpdateOptions.Load(officialLegacyRoot);
+        That(migrated.GetClientReportUri()?.AbsoluteUri == "https://xiaoxiongupdate.duckdns.org/api/v1/client-installations/",
+            "Legacy official settings did not receive the embedded client report endpoint");
+        That(migrated.PollSeconds == 30, "Legacy official settings did not preserve the production polling migration");
+        That(File.ReadAllText(officialLegacyPath) == officialLegacyText, "Automatic report migration rewrote the user's settings file");
+
+        string customLegacyRoot = Path.Combine(fixture.Root, "custom-legacy-settings");
+        Directory.CreateDirectory(customLegacyRoot);
+        var customLegacy = new UpdateOptions
+        {
+            Enabled = true,
+            AllowHttp = false,
+            ManifestUrl = "https://custom-updates.example/stable/manifest.json",
+            PublicKeyPem = fixture.Options.PublicKeyPem
+        };
+        var customJson = JsonNode.Parse(JsonSerializer.Serialize(customLegacy, UpdateJsonContext.Default.UpdateOptions))!.AsObject();
+        customJson.Remove(nameof(UpdateOptions.ClientReportUrl));
+        File.WriteAllText(Path.Combine(customLegacyRoot, "update-settings.json"), customJson.ToJsonString());
+        That(UpdateOptions.Load(customLegacyRoot).GetClientReportUri() == null,
+            "Custom legacy settings unexpectedly inherited the official report endpoint");
+
+        string optOutRoot = Path.Combine(fixture.Root, "official-opt-out-settings");
+        Directory.CreateDirectory(optOutRoot);
+        var optOutJson = JsonNode.Parse(JsonSerializer.Serialize(officialLegacy, UpdateJsonContext.Default.UpdateOptions))!.AsObject();
+        optOutJson[nameof(UpdateOptions.ClientReportUrl)] = "";
+        File.WriteAllText(Path.Combine(optOutRoot, "update-settings.json"), optOutJson.ToJsonString());
+        That(UpdateOptions.Load(optOutRoot).GetClientReportUri() == null,
+            "An explicit empty ClientReportUrl did not remain an opt-out");
+
         string install = Path.Combine(fixture.Root, "install"); Directory.CreateDirectory(install);
         var scoped = new ClientIdentityStore(Path.Combine(fixture.Root, "scoped-identity.json"), install);
         using (scoped.AcquireLease())

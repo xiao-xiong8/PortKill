@@ -8,7 +8,8 @@ const local = join(repository, '.local/cache/dotnet', process.platform === 'win3
 const executable = existsSync(local) ? local : 'dotnet';
 const assembly = join(repository, 'tests/PortKiller.UpdateAdmin.BrowserHost/bin/Release/net10.0/PortKiller.UpdateAdmin.BrowserHost.dll');
 const runtime = join(repository, '.local/artifacts/admin-browser/runtime');
-const build = spawn(executable, ['build', join(repository, 'tests/PortKiller.UpdateAdmin.BrowserHost'), '-c', 'Release', '--nologo'], {
+// vcvarsall sets Platform=x64; keep this build aligned with the assembly path launched below.
+const build = spawn(executable, ['build', join(repository, 'tests/PortKiller.UpdateAdmin.BrowserHost'), '-c', 'Release', '-p:Platform=AnyCPU', '--nologo'], {
   cwd: repository, stdio: 'inherit', windowsHide: true, env: { ...process.env, PORTKILL_ADMIN_CONFIG: '' },
 });
 await new Promise((resolve, reject) => {

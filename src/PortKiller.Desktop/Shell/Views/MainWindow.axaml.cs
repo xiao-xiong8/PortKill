@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        InitializeScreenFit();
         InitializeUpdateSignals();
         InitializeConfirmationDialogs();
         Closing += OnWindowClosing;
@@ -149,7 +150,11 @@ public partial class MainWindow : Window
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == WindowStateProperty) UpdateMaxButtonVisual();
+        if (change.Property == WindowStateProperty)
+        {
+            UpdateMaxButtonVisual();
+            if (WindowState == WindowState.Normal) QueueScreenFit();
+        }
     }
 
     /// <summary>最大化显示「还原」双框图标，其余状态显示「最大化」单框。</summary>
@@ -987,6 +992,7 @@ public partial class MainWindow : Window
         // 否则唤出会丢失最大化态，窗口退回最大化前尺寸，视觉上像「最大化但有缝」
         WindowState = _maximizedBeforeHide ? WindowState.Maximized : WindowState.Normal;
         _maximizedBeforeHide = false;
+        EnsureScreenFit();
         Activate();
     }
 
@@ -1003,6 +1009,7 @@ public partial class MainWindow : Window
     {
         if (_exitConfirmed) return;
         _exitConfirmed = true;
+        StopScreenFit();
         CancelThemeTransition();
         _memoryDiagnostics?.Stop();
         _listIdleTimer?.Stop();

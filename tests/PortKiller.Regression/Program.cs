@@ -49,6 +49,8 @@ internal static class Program
             }
             if (args.Contains("--ui-only")) { UiChecks.Run(); Console.WriteLine("窗口验证通过。"); return 0; }
             if (args.Contains("--update-ui-only")) { UiChecks.Run(updatesOnly: true); return 0; }
+            if (args.Contains("--screen-fit-ui-only")) { ScreenFitChecks.Placement(); UiChecks.Run(screenFitOnly: true); return 0; }
+            Run("小屏/DPI 窗口工作区边界", ScreenFitChecks.Placement);
             Run("应用名称列配置迁移、幂等与异常修复", ApplicationNameChecks.ColumnMigration);
             Run("应用名称搜索、独立排序、字段与进程实例", ApplicationNameChecks.SearchAndSorting);
             Run("同端口连接排序不受无关增删和采集顺序影响", ApplicationNameChecks.SortingRemainsStableAcrossSnapshots);

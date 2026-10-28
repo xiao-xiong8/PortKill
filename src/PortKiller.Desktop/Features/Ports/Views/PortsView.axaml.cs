@@ -9,6 +9,31 @@ namespace PortKiller.Features.Ports;
 public partial class PortsView : UserControl
 {
     public PortsView() => InitializeComponent();
+    private bool _compactToolbar;
+
+    private void OnToolbarSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (sender is not Grid toolbar || e.NewSize.Width <= 0) return;
+        bool compact = e.NewSize.Width < 920;
+        if (compact == _compactToolbar) return;
+        _compactToolbar = compact;
+        toolbar.ColumnDefinitions = new ColumnDefinitions(compact ? "Auto,Auto,*,Auto,Auto,Auto" : "Auto,Auto,Auto,*,Auto,Auto,Auto");
+        toolbar.RowDefinitions = new RowDefinitions(compact ? "Auto,Auto" : "Auto");
+        // 搜索独占第一行，筛选与操作按钮进入第二行，避免右侧按钮被挤出窗口。
+        SearchField.Width = compact ? double.NaN : 330;
+        Grid.SetColumnSpan(SearchField, compact ? 6 : 1);
+        Grid.SetRow(CategoryFilter, compact ? 1 : 0);
+        Grid.SetColumn(CategoryFilter, compact ? 0 : 1);
+        Grid.SetRow(StateFilter, compact ? 1 : 0);
+        Grid.SetColumn(StateFilter, compact ? 1 : 2);
+        Grid.SetRow(ToolbarRefreshButton, compact ? 1 : 0);
+        Grid.SetColumn(ToolbarRefreshButton, compact ? 3 : 4);
+        Grid.SetRow(ToolbarColumnsButton, compact ? 1 : 0);
+        Grid.SetColumn(ToolbarColumnsButton, compact ? 4 : 5);
+        Grid.SetRow(ToolbarReleaseButton, compact ? 1 : 0);
+        Grid.SetColumn(ToolbarReleaseButton, compact ? 5 : 6);
+    }
+
     private MainWindow? Host => TopLevel.GetTopLevel(this) as MainWindow;
     private void OnPortListScrollChanged(object? sender, ScrollChangedEventArgs e)
     {

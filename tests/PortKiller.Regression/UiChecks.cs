@@ -19,7 +19,7 @@ internal static class UiChecks
     private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(60);
 
     /// <summary>沿用正式程序渲染配置，在 STA 线程运行消息循环。</summary>
-    public static void Run(bool applicationNamesOnly = false, bool updatesOnly = false)
+    public static void Run(bool applicationNamesOnly = false, bool updatesOnly = false, bool screenFitOnly = false)
     {
         global::PortKiller.Program.BuildAvaloniaApp().SetupWithoutStarting();
         using var stop = new CancellationTokenSource(Deadline);
@@ -35,11 +35,13 @@ internal static class UiChecks
         {
             try
             {
+                if (screenFitOnly) { await ScreenFitChecks.WindowLayout(); completed = true; return; }
                 if (applicationNamesOnly)
                 { await ApplicationNameUiChecks.Run(); completed = true; return; }
                 if (updatesOnly)
                 { await UpdateUiChecks.StatesAndWindowLifetime(); await UpdateBadgeChecks.Run(); completed = true; return; }
                 ShellChecks.NavigationAndExtensionLifetime();
+                await ScreenFitChecks.WindowLayout();
                 CheckThemeTransitionPolicy();
                 FontChecks.EmbeddedFacesAndFallback();
                 await FontLicenseChecks.ViewerAndDocuments();

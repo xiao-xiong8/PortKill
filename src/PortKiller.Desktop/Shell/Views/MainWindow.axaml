@@ -17,7 +17,7 @@
         Icon="/Assets/avalonia-logo.ico"
         Title="PortKiller — 端口占用排查与释放"
         Width="1600" Height="900"
-        MinWidth="1180" MinHeight="700"
+        MinWidth="960" MinHeight="540"
         WindowStartupLocation="CenterScreen"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaTitleBarHeightHint="46"

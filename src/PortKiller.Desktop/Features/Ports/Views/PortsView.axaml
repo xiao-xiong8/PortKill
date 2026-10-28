@@ -13,8 +13,9 @@
                             <Grid Grid.Row="0" RowDefinitions="Auto,Auto" RowSpacing="14">
 
                                 <!-- ① 工具栏 -->
-                                <Grid Grid.Row="0" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto" ColumnSpacing="9">
-                                    <Border Grid.Column="0" Classes="search" Width="330">
+                                <Grid x:Name="PortToolbar" Grid.Row="0" ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto"
+                                      RowDefinitions="Auto" ColumnSpacing="9" RowSpacing="9" SizeChanged="OnToolbarSizeChanged">
+                                    <Border x:Name="SearchField" Grid.Column="0" Classes="search" Width="330">
                                         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
                                             <Viewbox Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center">
                                                 <Canvas Width="24" Height="24">
@@ -46,17 +47,17 @@
                                         </Grid>
                                     </Border>
 
-                                    <ComboBox Grid.Column="1" Width="134" Height="36" CornerRadius="6"
+                                    <ComboBox x:Name="CategoryFilter" Grid.Column="1" Width="134" Height="36" CornerRadius="6"
                                               FontSize="{DynamicResource TypeBody}"
                                               ItemsSource="{Binding CategoryOptions}"
                                               SelectedItem="{Binding SelectedCategory, Mode=TwoWay}" />
 
-                                    <ComboBox Grid.Column="2" Width="126" Height="36" CornerRadius="6"
+                                    <ComboBox x:Name="StateFilter" Grid.Column="2" Width="126" Height="36" CornerRadius="6"
                                               FontSize="{DynamicResource TypeBody}"
                                               ItemsSource="{Binding StateOptions}"
                                               SelectedItem="{Binding SelectedState, Mode=TwoWay}" />
 
-                                    <Button Grid.Column="4" Classes="tool" Width="80" Height="36"
+                                    <Button x:Name="ToolbarRefreshButton" Grid.Column="4" Classes="tool" Width="80" Height="36"
                                             Command="{Binding RefreshCommand}">
                                         <StackPanel Orientation="Horizontal" Spacing="7">
                                             <Viewbox Width="13" Height="13" VerticalAlignment="Center">
@@ -71,7 +72,7 @@
                                         </StackPanel>
                                     </Button>
 
-                                    <Button Grid.Column="5" Classes="tool" Width="40" Height="36"
+                                    <Button x:Name="ToolbarColumnsButton" Grid.Column="5" Classes="tool" Width="40" Height="36"
                                             Click="OnColumnSettingsClick" ToolTip.Tip="列设置">
                                         <Viewbox Width="14" Height="14">
                                             <Canvas Width="24" Height="24">
@@ -84,7 +85,7 @@
                                     </Button>
 
 
-                                    <Button Grid.Column="6" Classes="primary" Height="36" Padding="14,0"
+                                    <Button x:Name="ToolbarReleaseButton" Grid.Column="6" Classes="primary" Height="36" Padding="14,0"
                                             Command="{Binding ReleaseAllTimeWaitCommand}"
                                             ToolTip.Tip="清理 IPv4 TCP TIME_WAIT；监听端口请使用终止或诊断">
                                         <StackPanel Orientation="Horizontal" Spacing="7">

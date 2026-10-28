@@ -197,7 +197,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await expect(page.locator('tr').filter({ hasText: 'browser-viewer' })).toBeVisible();
 
     await page.getByRole('link', { name: '审计记录', exact: true }).click();
-    await expect(page.getByRole('heading', { name: '审计记录', level: 2 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '安全操作记录', level: 2 })).toBeVisible();
     await page.getByLabel('操作筛选').fill('account.created');
     await page.getByRole('button', { name: '筛选', exact: true }).click();
     await expect(page.locator('table')).toContainText('account.created');

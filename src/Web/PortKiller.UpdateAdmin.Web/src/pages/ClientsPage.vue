@@ -53,7 +53,7 @@ onBeforeUnmount(() => controller?.abort());
 
 <template>
   <section class="surface" :aria-busy="busy">
-    <div class="section-heading"><div><h2>客户端版本</h2><p class="muted">显示每个安装实例最近一次上报的版本。客户端在启动和更新完成后上报。</p><p class="muted">当前正式版本：{{ currentVersion ?? '尚未发布' }}</p></div><button :disabled="busy" @click="load">刷新</button></div>
+    <div class="section-heading"><div><h2>最近上报记录</h2><p class="muted">显示每个安装实例最近一次上报的版本。客户端在启动和更新完成后上报。</p><p class="muted">当前正式版本：{{ currentVersion ?? '尚未发布' }}</p></div><button :disabled="busy" @click="load">刷新</button></div>
     <form class="inline-fields" @submit.prevent="applyFilter">
       <label>机器名<input v-model="machineName" maxlength="128" placeholder="包含机器名"></label>
       <label>客户端版本<input v-model="version" maxlength="32" pattern="[0-9]+\.[0-9]+(\.[0-9]+){0,2}" placeholder="例如 1.2.3"></label>

@@ -36,8 +36,7 @@ migrateLegacyHash();
 const routes: RouteRecordRaw[] = [
   { path: '/login', name: 'login', component: LoginPage, meta: { requiresAuth: false } satisfies RouteMeta },
   { path: '/overview', name: 'overview', component: OverviewPage, meta: { requiresAuth: true, requiresFullSession: true, permission: 'release.read' } satisfies RouteMeta },
-  { path: '/upload', name: 'upload', component: UploadPage, meta: { requiresAuth: true, requiresFullSession: true, permission: 'release.upload' } satisfies RouteMeta },
-  { path: '/upload/:id', name: 'upload-resume', component: UploadPage, props: true, meta: { requiresAuth: true, requiresFullSession: true, permission: 'release.upload' } satisfies RouteMeta },
+  { path: '/upload/:id?', name: 'upload', component: UploadPage, props: true, meta: { requiresAuth: true, requiresFullSession: true, permission: 'release.upload' } satisfies RouteMeta },
   { path: '/history', name: 'history', component: HistoryPage, meta: { requiresAuth: true, requiresFullSession: true, permission: 'release.read' } satisfies RouteMeta },
   { path: '/job/:id', name: 'job', component: JobPage, props: true, meta: { requiresAuth: true, requiresFullSession: true, permission: 'release.read' } satisfies RouteMeta },
   { path: '/clients', name: 'clients', component: ClientsPage, meta: { requiresAuth: true, requiresFullSession: true, permission: 'release.read' } satisfies RouteMeta },
@@ -56,7 +55,8 @@ router.beforeEach(async (to) => {
   if (to.path === '/login') return full ? (internalPath(to.query.returnTo) ?? '/overview') : true;
   if (meta.requiresAuth && !session) return { path: '/login', query: { returnTo: internalPath(to.fullPath) ?? '/overview' } };
   if (meta.requiresFullSession && !full) return { path: '/login', query: { returnTo: internalPath(to.fullPath) ?? '/overview' } };
-  if (meta.permission && !auth.can(meta.permission)) return auth.full.value ? '/security' : '/login';
+  if (meta.permission && !auth.can(meta.permission))
+    return auth.full.value ? { path: '/security', query: { denied: to.path } } : '/login';
   return true;
 });
 export { router, internalPath };

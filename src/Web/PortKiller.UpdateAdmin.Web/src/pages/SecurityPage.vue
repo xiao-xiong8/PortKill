@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRoute } from 'vue-router';
 import type { components } from '../api/contracts.generated';
 import { api, errorText } from '../api/http';
 import { time } from '../api/display';
@@ -12,6 +13,7 @@ type AccountPage = components['schemas']['PageResponseOfAccountView'];
 type SessionPage = components['schemas']['PageResponseOfSessionView'];
 
 const auth = useAuth();
+const route = useRoute();
 const notice = ref('');
 const mutation = ref('');
 
@@ -154,6 +156,10 @@ onBeforeUnmount(() => { accountController?.abort(); sessionController?.abort(); 
 </script>
 
 <template>
+  <section v-if="route.query.denied" class="empty-workspace" role="alert">
+    <h2>无权访问此页面</h2>
+    <p class="muted">当前账号没有访问该管理页面所需的权限。</p>
+  </section>
   <p v-if="notice" class="notice danger" role="alert">{{ notice }}</p>
 
   <section v-if="auth.can('accounts.manage')" class="surface" :aria-busy="accountBusy">

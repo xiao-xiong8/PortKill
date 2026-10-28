@@ -34,7 +34,7 @@ onBeforeUnmount(() => controller?.abort());
 
 <template>
   <section class="surface" :aria-busy="busy">
-    <div class="section-heading"><div><h2>审计记录</h2><p class="muted">只展示安全操作的必要元数据；请求正文、查询参数、密码、动态码和恢复码不会进入审计记录。</p></div><button :disabled="busy" @click="load">刷新</button></div>
+    <div class="section-heading"><div><h2>安全操作记录</h2><p class="muted">只展示安全操作的必要元数据；请求正文、查询参数、密码、动态码和恢复码不会进入审计记录。</p></div><button :disabled="busy" @click="load">刷新</button></div>
     <form class="inline-fields audit-filter" @submit.prevent="applyFilter"><label>操作筛选<span class="muted">可填写 action 标识，例如 account.roles_changed</span><input v-model="action" maxlength="80" pattern="[A-Za-z0-9._-]{1,80}" placeholder="全部操作"></label><button class="primary" :disabled="busy">筛选</button><button type="button" :disabled="busy && !data" @click="action = ''; applyFilter()">清空</button></form>
     <p v-if="error" class="notice danger" role="alert">{{ error }}</p><p v-else-if="busy" class="muted" role="status">正在加载审计记录…</p>
     <div v-else-if="data?.items.length" class="table-scroll"><table aria-label="审计记录列表"><thead><tr><th scope="col">时间</th><th scope="col">操作</th><th scope="col">结果</th><th scope="col">操作者</th><th scope="col">资源</th><th scope="col">关联 ID</th></tr></thead><tbody><tr v-for="event in data.items" :key="String(event.id)"><td>{{ time(event.createdUtcMs) }}</td><td class="mono">{{ event.action ?? '—' }}</td><td>{{ event.result ?? '—' }}</td><td class="mono">{{ redact(event.actorUserId) }}</td><td class="mono">{{ redact(event.resourceId) }}</td><td class="mono">{{ redact(event.correlationId) }}</td></tr></tbody></table></div>

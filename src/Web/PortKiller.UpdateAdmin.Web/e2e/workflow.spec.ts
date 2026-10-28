@@ -57,7 +57,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
   });
   test('overview and paginated history use actual empty server responses', async () => {
     await expect(page.getByRole('heading', { name: '尚未发布正式版本' })).toBeVisible();
-    await page.getByRole('button', { name: '发布历史', exact: true }).click();
+    await page.getByRole('link', { name: '发布历史', exact: true }).click();
     await expect(page.getByRole('heading', { name: '暂无任务记录' })).toBeVisible();
     await page.getByLabel('任务类型').selectOption('publish');
     await expect(page.getByRole('button', { name: '下一页' })).toBeDisabled();
@@ -73,7 +73,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
       headers: { Authorization: `Bearer ${credential.clientToken}` },
       data: { version: '1.2.4', machineName: 'BROWSER-TEST-PC', result: 'installed' },
     })).status()).toBe(204);
-    await page.getByRole('button', { name: '客户端版本', exact: true }).click();
+    await page.getByRole('link', { name: '客户端版本', exact: true }).click();
     const table = page.getByRole('table', { name: '客户端最近一次上报' });
     await expect(table.getByRole('cell', { name: 'BROWSER-TEST-PC', exact: true })).toBeVisible();
     await expect(table.getByRole('cell', { name: '1.2.4.0', exact: true })).toBeVisible();
@@ -95,16 +95,16 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     })).status()).toBe(401);
   });
   test('tampered signed package is rejected by the production validation worker', async () => {
-    await page.getByRole('button', { name: '上传版本', exact: true }).click();
+    await page.getByRole('link', { name: '上传版本', exact: true }).click();
     await page.getByLabel('签名清单（manifest.json）', { exact: true }).setInputFiles(fixtures + 'manifest.json');
     await page.getByLabel('四文件更新包（ZIP）', { exact: true }).setInputFiles(fixtures + 'tampered.zip');
     await page.getByRole('button', { name: '上传并校验' }).click();
-    await expect(page).toHaveURL(/#job\//);
+    await expect(page).toHaveURL(/\/job\//);
     await expect(async () => { await page.getByRole('button', { name: '刷新任务' }).click(); await expect(page.locator('.status-label').first()).toHaveText('校验拒绝'); }).toPass({ timeout: 20000, intervals: [500, 1000] });
   });
   test('actual byte transfer can stop, reload, resume an unconfirmed file and validate literal signed notes', async () => {
     test.setTimeout(60000);
-    await page.getByRole('button', { name: '上传版本', exact: true }).click();
+    await page.getByRole('link', { name: '上传版本', exact: true }).click();
     const network = await page.context().newCDPSession(page);
     await network.send('Network.enable');
     // Budget the real transfer for eight seconds at either fixture size, so cancellation happens mid-file.
@@ -112,7 +112,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await page.getByLabel('签名清单（manifest.json）', { exact: true }).setInputFiles(fixtures + 'manifest.json');
     await page.getByLabel('四文件更新包（ZIP）', { exact: true }).setInputFiles(fixtures + 'package.zip');
     await page.getByRole('button', { name: '上传并校验' }).click();
-    await expect(page).toHaveURL(/#upload\//);
+    await expect(page).toHaveURL(/\/upload\//);
     await expect.poll(() => page.getByRole('progressbar', { name: '更新包传输进度' }).getAttribute('value')).not.toBe('0');
     await page.getByRole('button', { name: '停止传输' }).click();
     await expect(page.getByRole('button', { name: '上传并校验' })).toBeEnabled();
@@ -121,7 +121,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await page.getByLabel('签名清单（manifest.json）', { exact: true }).setInputFiles(fixtures + 'manifest.json');
     await page.getByLabel('四文件更新包（ZIP）', { exact: true }).setInputFiles(fixtures + 'package.zip');
     await page.getByRole('button', { name: '上传并校验' }).click();
-    await expect(page).toHaveURL(/#job\//, { timeout: 30000 });
+    await expect(page).toHaveURL(/\/job\//, { timeout: 30000 });
     await expect(async () => { await page.getByRole('button', { name: '刷新任务' }).click(); await expect(page.locator('.status-label').first()).toHaveText('可确认发布'); }).toPass({ timeout: 20000, intervals: [500, 1000] });
     await expect(page.locator('.log-lines')).toContainText('<img src=x onerror=window.__releaseXss=1>');
     expect(await page.locator('.log-lines img').count()).toBe(0);
@@ -154,13 +154,13 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
       await page.reload();
       await expect(page.getByRole('button', { name: '查询确认结果' })).toBeVisible();
       await page.getByRole('button', { name: '重试同一确认请求' }).click();
-      await expect(page).toHaveURL(new RegExp(`#job/${acceptedJobId}`));
+      await expect(page).toHaveURL(new RegExp(`/job/${acceptedJobId}`));
       const recovered = await page.evaluate(async key => {
         const response = await fetch(`/api/v1/publish-requests/${encodeURIComponent(key)}`, { credentials: 'same-origin' });
         return response.json();
       }, idempotencyKey);
       expect(recovered.id).toBe(acceptedJobId);
-      expect(decodeURIComponent(new URL(page.url()).hash.slice('#job/'.length))).toBe(recovered.id);
+      expect(decodeURIComponent(new URL(page.url()).pathname.slice('/job/'.length))).toBe(recovered.id);
       await expect(page.locator('.status-label').first()).toHaveText('已生效，下载检查未通过', { timeout: 30000 });
     } finally {
       try { unlinkSync(distributionFailure); } catch { /* The fixture process may already have cleaned it. */ }
@@ -185,7 +185,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
       }
     }
 
-    await page.getByRole('button', { name: '安全管理', exact: true }).click();
+    await page.getByRole('link', { name: '安全管理', exact: true }).click();
     await expect(page.getByRole('heading', { name: '管理员账号' })).toBeVisible();
     await expect(page.getByText('browser-admin', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '新建账号' }).click();
@@ -196,7 +196,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await completeStrongIfShown();
     await expect(page.locator('tr').filter({ hasText: 'browser-viewer' })).toBeVisible();
 
-    await page.getByRole('button', { name: '审计记录', exact: true }).click();
+    await page.getByRole('link', { name: '审计记录', exact: true }).click();
     await expect(page.getByRole('heading', { name: '审计记录', level: 2 })).toBeVisible();
     await page.getByLabel('操作筛选').fill('account.created');
     await page.getByRole('button', { name: '筛选', exact: true }).click();
@@ -220,8 +220,8 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
       await viewerPage.getByLabel('我已安全保存恢复码').check();
       await viewerPage.getByRole('button', { name: '已保存，进入工作空间' }).click();
       await expect(viewerPage.getByRole('heading', { name: '当前正式版本' })).toBeVisible();
-      await expect(viewerPage.getByRole('button', { name: '上传版本', exact: true })).toHaveCount(0);
-      await expect(viewerPage.getByRole('button', { name: '审计记录', exact: true })).toHaveCount(0);
+      await expect(viewerPage.getByRole('link', { name: '上传版本', exact: true })).toHaveCount(0);
+      await expect(viewerPage.getByRole('link', { name: '审计记录', exact: true })).toHaveCount(0);
       const denied = await viewerPage.evaluate(async () => (await fetch('/api/v1/accounts?page=1&pageSize=20', { credentials: 'same-origin' })).status);
       expect(denied).toBe(403);
       await viewerPage.goto('/#audit');
@@ -230,7 +230,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
       await viewerContext.close();
     }
 
-    await page.getByRole('button', { name: '安全管理', exact: true }).click();
+    await page.getByRole('link', { name: '安全管理', exact: true }).click();
     await expect(page.locator('tr').filter({ hasText: 'browser-viewer' })).toBeVisible();
     page.once('dialog', dialog => dialog.accept());
     await page.locator('tr').filter({ hasText: 'browser-viewer' }).getByRole('button', { name: '停用' }).click();

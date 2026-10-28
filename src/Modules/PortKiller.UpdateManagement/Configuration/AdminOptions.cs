@@ -48,10 +48,16 @@ public sealed class AdminOptions
     public string DatabasePath => Path.Combine(DataRoot, "admin.sqlite");
     public string DataProtectionPath => Path.Combine(DataRoot, "auth-keys");
     public string RuntimeLockPath => Path.Combine(DataRoot, "runtime.lock");
-    public int IdleMinutes { get; set; } = 30;
-    public int AbsoluteHours { get; set; } = 8;
+    public int PersistentCookieDays { get; set; } = 14;
+    public int IdleMinutes { get; set; } = 10_080;
+    public int AbsoluteHours { get; set; } = 720;
     public int PendingMinutes { get; set; } = 10;
     public int StrongAuthenticationMinutes { get; set; } = 5;
+    public int LoginIpPerMinute { get; set; } = 10;
+    public int MfaPerMinute { get; set; } = 10;
+    public int ApiPerIpPerMinute { get; set; } = 240;
+    public int LoginAccountIpFailureLimit { get; set; } = 5;
+    public int LoginAccountIpLockoutMinutes { get; set; } = 15;
     public int AuditRetentionDays { get; set; } = 90;
     public int AuditMaximumRows { get; set; } = 100_000;
     public int JobEventRetentionDays { get; set; } = 30;
@@ -79,9 +85,15 @@ public sealed class AdminOptions
         if (string.IsNullOrWhiteSpace(DataRoot) || !Path.IsPathFullyQualified(DataRoot))
             throw new InvalidOperationException("Administration:DataRoot must be an absolute path.");
         DataRoot = Path.GetFullPath(DataRoot);
-        if (Path.GetPathRoot(DataRoot) == DataRoot || IdleMinutes is < 1 or > 120
-            || AbsoluteHours is < 1 or > 24 || PendingMinutes is < 1 or > 15
+        if (Path.GetPathRoot(DataRoot) == DataRoot || PersistentCookieDays is < 1 or > 30
+            || IdleMinutes is < 1 or > 43_200
+            || AbsoluteHours is < 1 or > 720 || IdleMinutes > AbsoluteHours * 60
+            || PendingMinutes is < 1 or > 15
             || StrongAuthenticationMinutes is < 1 or > 10 || AuditRetentionDays is < 1 or > 3650
+            || LoginIpPerMinute is < 1 or > 120 || MfaPerMinute is < 1 or > 120
+            || ApiPerIpPerMinute is < 1 or > 10_000
+            || LoginAccountIpFailureLimit is < 1 or > 20
+            || LoginAccountIpLockoutMinutes is < 1 or > 1440
             || AuditMaximumRows is < 100 or > 10_000_000 || MaxUploadPackageBytes is < 1 or > 268_435_456
             || MaxActiveUploadsPerUser is < 1 or > 20 || MaxActiveUploadsTotal is < 1 or > 1000
             || MaxReservedUploadBytesPerUser < MaxUploadPackageBytes || MaxReservedUploadBytesPerUser > 10_737_418_240

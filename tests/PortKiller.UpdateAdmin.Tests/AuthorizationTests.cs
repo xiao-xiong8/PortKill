@@ -118,7 +118,7 @@ public sealed class AuthorizationTests
     public async Task ForgedForwardedAddressesFromUntrustedPeerCannotBypassLoginRateLimit()
     {
         await using var app = await TestApplication.StartAsync();
-        for (int attempt = 0; attempt < 21; attempt++)
+        for (int attempt = 0; attempt < 11; attempt++)
         {
             var context = await app.App.GetTestServer().SendAsync(context =>
             {
@@ -126,8 +126,28 @@ public sealed class AuthorizationTests
                 context.Request.Method = "POST"; context.Request.Scheme = "https"; context.Request.Host = new("localhost");
                 context.Request.Path = "/api/v1/auth/login"; context.Request.Headers["X-Forwarded-For"] = $"203.0.113.{attempt + 1}";
             });
-            Assert.Equal(attempt < 20 ? 400 : 429, context.Response.StatusCode);
-            if (attempt == 20) Assert.Equal("60", context.Response.Headers.RetryAfter);
+            Assert.Equal(attempt < 10 ? 400 : 429, context.Response.StatusCode);
+            if (attempt == 10) Assert.True(context.Response.Headers.RetryAfter.Count > 0);
+        }
+    }
+
+    [Fact]
+    public async Task RepeatedFailuresForTheSameAccountAndIpAreTemporarilyLimited()
+    {
+        await using var app = await TestApplication.StartAsync();
+        await app.SeedAdminAsync();
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            var response = await app.Client.PostAsJsonAsync("/api/v1/auth/login",
+                new { userName = "operator", password = "wrong-password" });
+            Assert.Equal(attempt == 4 ? HttpStatusCode.TooManyRequests : HttpStatusCode.Unauthorized, response.StatusCode);
+            if (attempt == 4)
+            {
+                Assert.True(response.Headers.TryGetValues("Retry-After", out var retryAfter));
+                Assert.True(int.TryParse(retryAfter.Single(), out var seconds) && seconds > 0);
+                var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal("请求过于频繁，请稍后重试。", problem.GetProperty("detail").GetString());
+            }
         }
     }
 }

@@ -3,6 +3,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
+using PortKiller.UpdateManagement.Configuration;
 using PortKiller.UpdateManagement.Security;
 
 namespace PortKiller.UpdateAdmin.Api.Authentication;
@@ -42,18 +43,24 @@ public static class RequestSecurity
         {
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
                 context.Request.Path.StartsWithSegments("/api/v1")
-                    ? Window(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", 240)
+                    ? Window(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        context.RequestServices.GetRequiredService<AdminOptions>().ApiPerIpPerMinute)
                     : RateLimitPartition.GetNoLimiter<string>("health"));
-            options.AddPolicy("login", context => Window(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", 20));
+            options.AddPolicy("login", context => Window(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                context.RequestServices.GetRequiredService<AdminOptions>().LoginIpPerMinute));
             // IP remains part of the key even when an attacker keeps obtaining new pending sessions.
-            options.AddPolicy("mfa", context => Window(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", 20));
+            options.AddPolicy("mfa", context => Window(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                context.RequestServices.GetRequiredService<AdminOptions>().MfaPerMinute));
             options.AddPolicy("security-change", context => Window(context.User.FindFirst(AdminIdentity.SessionClaim)?.Value ?? "anonymous", 10));
             options.AddPolicy("publish-confirmation", context => Window(context.User.FindFirst(AdminIdentity.SessionClaim)?.Value ?? "anonymous", 20));
             options.AddPolicy("client-register", context => Window(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", 20));
             options.AddPolicy("client-report", context => Window(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", 120));
             options.OnRejected = async (rejection, _) =>
             {
-                rejection.HttpContext.Response.Headers.RetryAfter = "60";
+                int retryAfter = 60;
+                if (rejection.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan retry))
+                    retryAfter = Math.Max(1, (int)Math.Ceiling(retry.TotalSeconds));
+                rejection.HttpContext.Response.Headers.RetryAfter = retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 await ApiProblems.WriteAsync(rejection.HttpContext, 429, "rate_limited", "请求过于频繁，请稍后重试。");
             };
         });

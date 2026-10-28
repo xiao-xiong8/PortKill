@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authentication;
+using System.Net;
 using System.Security.Claims;
 using PortKiller.UpdateManagement.Security;
 using PortKiller.UpdateManagement.Persistence.Entities;
 using Microsoft.AspNetCore.RateLimiting;
+using PortKiller.UpdateManagement.Configuration;
 
 namespace PortKiller.UpdateAdmin.Api.Authentication;
 
@@ -19,9 +21,32 @@ public static class AuthenticationEndpoints
     public static void MapAdminAuthentication(this WebApplication app)
     {
         app.MapPost("/api/v1/auth/login", async (LoginRequest request, PasswordAuthenticationService authentication,
-            AdminSessionService sessions, HttpContext context) =>
+            AdminSessionService sessions, LoginProtectionService protection, HttpContext context) =>
         {
-            var ticket = await authentication.LoginAsync(request.UserName, request.Password, context.RequestAborted);
+            IPAddress? address = context.Connection.RemoteIpAddress;
+            if (protection.IsBlocked(request.UserName, address, out int blockedSeconds))
+            {
+                context.Response.Headers.RetryAfter = blockedSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                throw new AdminFailure("rate_limited", 429, "请求过于频繁，请稍后重试。", blockedSeconds);
+            }
+
+            SessionTicket ticket;
+            try
+            {
+                ticket = await authentication.LoginAsync(request.UserName, request.Password, context.RequestAborted);
+                protection.RecordSuccess(request.UserName, address);
+            }
+            catch (AdminFailure failure) when (failure.Status == 401)
+            {
+                int retryAfter = protection.RecordFailure(request.UserName, address);
+                if (retryAfter > 0)
+                {
+                    context.Response.Headers.RetryAfter = retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    throw new AdminFailure("rate_limited", 429, "请求过于频繁，请稍后重试。", retryAfter);
+                }
+                throw new AdminFailure("invalid_credentials", 401, "账号或密码错误");
+            }
+
             await SignInAsync(context, sessions, ticket);
             return new AuthenticationResponse(ticket.Session.Phase switch
             { SessionPhase.EnrollmentRequired => "enrollMfa", SessionPhase.RecoveryAcknowledgementRequired => "acknowledgeRecovery", _ => "verifyMfa" }, ticket.Session.Phase);
@@ -90,11 +115,15 @@ public static class AuthenticationEndpoints
     internal static async Task SignInAsync(HttpContext context, AdminSessionService sessions, SessionTicket ticket)
     {
         var principal = await sessions.PrincipalAsync(ticket);
+        var options = context.RequestServices.GetRequiredService<AdminOptions>();
+        DateTimeOffset issued = DateTimeOffset.FromUnixTimeMilliseconds(ticket.Session.CreatedUtcMs);
+        DateTimeOffset absolute = DateTimeOffset.FromUnixTimeMilliseconds(ticket.Session.AbsoluteExpiresUtcMs);
+        DateTimeOffset cookieExpiry = issued.AddDays(options.PersistentCookieDays);
         await context.SignInAsync(AdminIdentity.Scheme, principal, new AuthenticationProperties
         {
-            IsPersistent = false, AllowRefresh = false,
-            IssuedUtc = DateTimeOffset.FromUnixTimeMilliseconds(ticket.Session.CreatedUtcMs),
-            ExpiresUtc = DateTimeOffset.FromUnixTimeMilliseconds(ticket.Session.AbsoluteExpiresUtcMs)
+            IsPersistent = true, AllowRefresh = true,
+            IssuedUtc = issued,
+            ExpiresUtc = cookieExpiry < absolute ? cookieExpiry : absolute
         });
         context.User = principal;
     }

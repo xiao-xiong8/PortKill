@@ -35,6 +35,7 @@ public sealed class PasswordAuthenticationTests
         Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("samesite=strict", cookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("expires=", cookie, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -48,7 +49,7 @@ public sealed class PasswordAuthenticationTests
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
             var json = await response.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal("invalid_credentials", json.GetProperty("code").GetString());
-            Assert.Equal("账号或凭据无效。", json.GetProperty("detail").GetString());
+            Assert.Equal("账号或密码错误", json.GetProperty("detail").GetString());
         }
     }
 

@@ -141,7 +141,7 @@ onBeforeUnmount(() => clearInterval(expiryTimer));
   <section class="surface" :aria-busy="busy || publishBusy || retryBusy">
     <div class="section-heading">
       <h2>{{ snapshot?.kind === 'publish' ? '发布任务' : '校验任务' }}</h2>
-      <div class="actions"><a href="#history">返回历史</a><button :disabled="busy" @click="load">刷新任务</button></div>
+      <div class="actions"><RouterLink to="/history">返回历史</RouterLink><button :disabled="busy" @click="load">刷新任务</button></div>
     </div>
     <p v-if="error" class="notice danger" role="alert">{{ error }}</p>
     <p v-else-if="busy" class="muted" role="status">正在获取任务…</p>

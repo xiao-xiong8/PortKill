@@ -28,7 +28,7 @@ public sealed class SessionTests
         Assert.Equal(HttpStatusCode.OK, (await app.Client.GetAsync("/api/v1/auth/me")).StatusCode);
         app.Clock.Advance(TimeSpan.FromMinutes(20));
         Assert.Equal(HttpStatusCode.OK, (await app.Client.GetAsync("/api/v1/auth/me")).StatusCode);
-        app.Clock.Advance(TimeSpan.FromMinutes(31));
+        app.Clock.Advance(TimeSpan.FromDays(7).Add(TimeSpan.FromMinutes(1)));
         Assert.Equal(HttpStatusCode.Unauthorized, (await app.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
@@ -36,12 +36,15 @@ public sealed class SessionTests
     public async Task AbsoluteDeadlineCannotBeExtendedByTraffic()
     {
         await using var app = await TestApplication.StartAsync(); await MfaTests.EnrollAsync(app);
-        for (int step = 0; step < 24; step++)
+        for (int day = 0; day < 4; day++)
         {
-            app.Clock.Advance(TimeSpan.FromMinutes(20));
-            var response = await app.Client.GetAsync("/api/v1/auth/me");
-            Assert.Equal(step == 23 ? HttpStatusCode.Unauthorized : HttpStatusCode.OK, response.StatusCode);
+            app.Clock.Advance(TimeSpan.FromDays(6));
+            Assert.Equal(HttpStatusCode.OK, (await app.Client.GetAsync("/api/v1/auth/me")).StatusCode);
         }
+        app.Clock.Advance(TimeSpan.FromDays(5));
+        Assert.Equal(HttpStatusCode.OK, (await app.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+        app.Clock.Advance(TimeSpan.FromDays(2));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await app.Client.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 
     [Fact]
@@ -98,7 +101,7 @@ public sealed class SessionTests
     public async Task ExpiredAuthenticationRecordsCanBeCleanedWithoutDeletingUsers()
     {
         await using var app = await TestApplication.StartAsync(); await MfaTests.EnrollAsync(app);
-        app.Clock.Advance(TimeSpan.FromDays(8));
+        app.Clock.Advance(TimeSpan.FromDays(38));
         using var scope = app.App.Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<AdminSessionService>().CleanupAsync(default);
         var database = scope.ServiceProvider.GetRequiredService<UpdateAdminDbContext>();

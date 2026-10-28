@@ -107,7 +107,7 @@ public sealed class JobEventStreamTests
                 case "disable": user.Disabled = true; Assert.True((await users.UpdateAsync(user)).Succeeded); break;
                 case "stamp": Assert.True((await users.UpdateSecurityStampAsync(user)).Succeeded); break;
                 case "phase": await db.AdminSessions.ExecuteUpdateAsync(update => update.SetProperty(session => session.Phase, SessionPhase.MfaRequired)); break;
-                case "idle": app.Clock.Advance(TimeSpan.FromMinutes(31)); break;
+                case "idle": app.Clock.Advance(TimeSpan.FromDays(7).Add(TimeSpan.FromMinutes(1))); break;
                 case "absolute": await db.AdminSessions.ExecuteUpdateAsync(update => update.SetProperty(session => session.AbsoluteExpiresUtcMs, 1L)); break;
                 case "roles": Assert.True((await users.RemoveFromRolesAsync(user, await users.GetRolesAsync(user))).Succeeded); break;
             }
@@ -145,13 +145,13 @@ public sealed class JobEventStreamTests
         app.App.Services.GetRequiredService<AdminOptions>().JobStreamHeartbeatSeconds = 1;
         await using (var stream = await EventConnection.OpenAsync(app, id))
         {
-            await stream.NextAsync(); app.Clock.Advance(TimeSpan.FromMinutes(29));
+            await stream.NextAsync(); app.Clock.Advance(TimeSpan.FromDays(6));
             Assert.Equal("snapshot", (await stream.NextAsync()).Kind);
             Assert.Equal("heartbeat", (await stream.NextAsync(includeComments: true)).Kind);
             await using var scope = app.App.Services.CreateAsyncScope();
             var session = await scope.ServiceProvider.GetRequiredService<UpdateAdminDbContext>().AdminSessions.SingleAsync(item => item.Phase == SessionPhase.Full);
             Assert.True(app.Clock.GetUtcNow().ToUnixTimeMilliseconds() - session.LastSeenUtcMs >= TimeSpan.FromMinutes(29).TotalMilliseconds);
-            app.Clock.Advance(TimeSpan.FromMinutes(2));
+            app.Clock.Advance(TimeSpan.FromDays(2));
             Assert.Equal("closed", (await stream.NextAsync()).Kind);
         }
         await ReleasedAsync(app);

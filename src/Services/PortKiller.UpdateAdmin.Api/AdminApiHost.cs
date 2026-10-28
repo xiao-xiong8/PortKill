@@ -58,8 +58,10 @@ public static class AdminApiHost
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
                 options.Cookie.SameSite = SameSiteMode.Strict;
+                options.Cookie.Path = "/";
                 options.EventsType = typeof(AdminCookieEvents);
-                options.SlidingExpiration = false;
+                options.ExpireTimeSpan = TimeSpan.FromDays(administration.PersistentCookieDays);
+                options.SlidingExpiration = true;
             });
         var fullSessionPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser()
             .RequireClaim(AdminIdentity.PhaseClaim, SessionPhase.Full.ToString()).Build();

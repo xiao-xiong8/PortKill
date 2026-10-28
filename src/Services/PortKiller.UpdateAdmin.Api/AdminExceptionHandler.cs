@@ -10,7 +10,11 @@ public sealed class AdminExceptionHandler(ILogger<AdminExceptionHandler> logger)
     public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken token)
     {
         if (exception is AdminFailure error)
+        {
+            if (error.RetryAfterSeconds is { } retryAfter)
+                context.Response.Headers.RetryAfter = retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture);
             await ApiProblems.WriteAsync(context, error.Status, error.Code, error.Message);
+        }
         else if (exception is BadHttpRequestException bad)
             await ApiProblems.WriteAsync(context, bad.StatusCode, "invalid_request", "请求格式或大小无效。");
         else if (exception is DbUpdateConcurrencyException)

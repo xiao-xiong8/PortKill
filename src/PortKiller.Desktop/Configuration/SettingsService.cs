@@ -88,8 +88,6 @@ public static class SettingsService
 
     private static readonly string ConfigFilePath = Path.Combine(ConfigDir, "config.json");
 
-    public static string ConfigFilePathForDisplay => ConfigFilePath;
-
     public static AppSettings Load()
     {
         try

@@ -792,20 +792,11 @@
                             </Grid>
                         </ScrollViewer>
 
-                        <!-- ═══ 页脚：配置路径 + 自动保存状态 + 全局复位 ═══ -->
+                        <!-- ═══ 页脚：自动保存状态 + 全局复位 ═══ -->
                         <StackPanel Grid.Row="3" Spacing="16" Margin="0,16,0,0">
                             <Border Height="1" Background="{DynamicResource BorderSoft}" />
 
                             <Grid ColumnDefinitions="*,Auto">
-                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                    <TextBlock Text="配置文件（零反射 · Native AOT 兼容）"
-                                               FontSize="{DynamicResource TypeCaption}"
-                                               Foreground="{DynamicResource TextMuted}" />
-                                    <TextBlock Text="%LocalAppData%\PortKiller\config.json"
-                                               FontSize="{DynamicResource TypeMonoCaption}"
-                                               FontFamily="{DynamicResource AppFontMono}"
-                                               Foreground="{DynamicResource TextTertiary}" />
-                                </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"
                                             VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
@@ -817,9 +808,6 @@
                                     <Button Classes="tool" Height="30" Padding="12,0" Content="恢复默认设置"
                                             Command="{Binding RestoreDefaultsCommand}"
                                             ToolTip.Tip="主题跟随系统 · 字号 12 · 探测间隔 2 秒" />
-                                    <Button Classes="tool" Height="30" Padding="12,0" Content="打开配置文件"
-                                            Command="{Binding OpenConfigFolderCommand}"
-                                            ToolTip.Tip="在资源管理器中定位 config.json" />
                                 </StackPanel>
                             </Grid>
                         </StackPanel>

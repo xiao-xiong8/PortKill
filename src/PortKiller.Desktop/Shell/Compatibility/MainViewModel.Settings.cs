@@ -281,30 +281,6 @@ public partial class MainViewModel
 
     public string LastScanSummary => $"{LastScanAtText} · {TotalCount} 端口 · {ScanDurationText}";
 
-    // ── 配置文件 ────────────────────────────────────────────────────────
-
-    /// <summary>在资源管理器中定位 config.json（文件不存在时退化为打开所在目录）。</summary>
-    [RelayCommand]
-    public void OpenConfigFolder()
-    {
-        try
-        {
-            string path = SettingsService.ConfigFilePathForDisplay;
-            string arg = System.IO.File.Exists(path)
-                ? $"/select,\"{path}\""
-                : $"\"{System.IO.Path.GetDirectoryName(path)}\"";
-
-            System.Diagnostics.Process.Start(
-                new System.Diagnostics.ProcessStartInfo("explorer.exe", arg) { UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
-            ShowToast("无法打开配置文件", "资源管理器调用失败，可手动前往 %LocalAppData%\\PortKiller\\",
-                isError: true);
-            App.WriteLog("OpenConfigFolder", ex);
-        }
-    }
-
     // ══════════════════════════════════════════════════════════════════
     //  排版：应用 / 节流 / 实测耗时
     // ══════════════════════════════════════════════════════════════════

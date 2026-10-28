@@ -156,3 +156,17 @@ public sealed class IdempotencyRequest
     public long CreatedUtcMs { get; set; }
     public long ExpiresUtcMs { get; set; }
 }
+
+public sealed class ClientInstallation : IVersionedEntity
+{
+    public string InstallationId { get; set; } = "";
+    public string TokenHash { get; set; } = "";
+    public string MachineName { get; set; } = "";
+    public string ClientVersion { get; set; } = "";
+    public string LastReportResult { get; set; } = "started";
+    public string? LastErrorCode { get; set; }
+    public long RegisteredUtcMs { get; set; }
+    public long LastReportedUtcMs { get; set; }
+    public long? RevokedUtcMs { get; set; }
+    public long Revision { get; set; }
+}

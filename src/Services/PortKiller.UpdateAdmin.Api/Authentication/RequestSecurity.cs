@@ -49,6 +49,8 @@ public static class RequestSecurity
             options.AddPolicy("mfa", context => Window(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", 20));
             options.AddPolicy("security-change", context => Window(context.User.FindFirst(AdminIdentity.SessionClaim)?.Value ?? "anonymous", 10));
             options.AddPolicy("publish-confirmation", context => Window(context.User.FindFirst(AdminIdentity.SessionClaim)?.Value ?? "anonymous", 20));
+            options.AddPolicy("client-register", context => Window(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", 20));
+            options.AddPolicy("client-report", context => Window(context.Connection.RemoteIpAddress?.ToString() ?? "unknown", 120));
             options.OnRejected = async (rejection, _) =>
             {
                 rejection.HttpContext.Response.Headers.RetryAfter = "60";
@@ -65,6 +67,7 @@ public static class RequestSecurity
         app.Use(async (context, next) =>
         {
             if (context.Request.Path.StartsWithSegments("/api/v1")
+                && !IsPublicClientRequest(context)
                 && context.Request.Method is "POST" or "PUT" or "PATCH" or "DELETE")
             {
                 var csrf = context.RequestServices.GetRequiredService<IAntiforgery>();
@@ -76,4 +79,8 @@ public static class RequestSecurity
         app.MapGet("/api/v1/auth/csrf", (IAntiforgery csrf, HttpContext context) =>
             new CsrfResponse(csrf.GetAndStoreTokens(context).RequestToken!)).AllowAnonymous().WithName("GetCsrfToken");
     }
+
+    internal static bool IsPublicClientRequest(HttpContext context) => context.Request.Method == "POST"
+        && (context.Request.Path == "/api/v1/client-installations/register"
+            || context.Request.Path == "/api/v1/client-installations/report");
 }

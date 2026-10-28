@@ -9,6 +9,13 @@ public sealed class AuditMiddleware(RequestDelegate next, ILogger<AuditMiddlewar
     public async Task InvokeAsync(HttpContext context, IServiceScopeFactory scopes)
     {
         if (!context.Request.Path.StartsWithSegments("/api/v1")) { await next(context); return; }
+        if (RequestSecurity.IsPublicClientRequest(context))
+        {
+            await next(context);
+            if (context.Response.StatusCode >= 400)
+                logger.LogWarning("Client registration/report rejected; status {Status}", context.Response.StatusCode);
+            return;
+        }
         string operation = context.GetEndpoint()?.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName ?? "UnknownRoute";
         // Record before headers leave the server, including responses produced by the exception handler.
         context.Response.OnStarting(async () =>

@@ -577,34 +577,29 @@
         <!-- 标题栏更新徽章：状态来自同一个 UpdateViewModel，按钮只负责入口。 -->
         <Style Selector="Button.updateBadge">
             <Setter Property="Height" Value="24" />
-            <Setter Property="MinWidth" Value="68" />
-            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="Width" Value="28" />
+            <Setter Property="MinWidth" Value="28" />
+            <Setter Property="Padding" Value="0" />
             <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="Background" Value="{DynamicResource AccentSurface}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentBorder}" />
+            <Setter Property="Background" Value="#1A339CFF" />
+            <Setter Property="BorderBrush" Value="#339CFF" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Foreground" Value="{DynamicResource AccentFg}" />
+            <Setter Property="Foreground" Value="#339CFF" />
             <Setter Property="Cursor" Value="Hand" />
         </Style>
         <Style Selector="Button.updateBadge:pointerover">
             <Setter Property="Background" Value="{DynamicResource BgHover}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentFill}" />
+            <Setter Property="BorderBrush" Value="#339CFF" />
         </Style>
         <Style Selector="Button.updateBadge:pressed">
-            <Setter Property="Background" Value="{DynamicResource AccentSurface}" />
+            <Setter Property="Background" Value="#26339CFF" />
         </Style>
         <Style Selector="Button.updateBadge.failed">
             <Setter Property="Background" Value="{DynamicResource BgBadge}" />
             <Setter Property="BorderBrush" Value="{DynamicResource WarnFg}" />
         </Style>
-        <Style Selector="Button.updateBadge /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="TextElement.Foreground" Value="{DynamicResource AccentFg}" />
-        </Style>
-        <Style Selector="Button.updateBadge.failed /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="TextElement.Foreground" Value="{DynamicResource WarnFg}" />
-        </Style>
         <Style Selector="Path.updateBadgeIcon">
-            <Setter Property="Stroke" Value="{DynamicResource AccentFg}" />
+            <Setter Property="Stroke" Value="#339CFF" />
             <Setter Property="StrokeThickness" Value="1.8" />
             <Setter Property="StrokeLineCap" Value="Round" />
             <Setter Property="StrokeJoin" Value="Round" />
@@ -810,27 +805,21 @@
                                 Command="{Binding OpenUpdateEntryCommand}"
                                 ToolTip.Tip="{Binding UpdateBadgeTooltip}"
                                 AutomationProperties.Name="{Binding UpdateBadgeTooltip}">
-                            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                                <Viewbox Width="13" Height="13">
-                                    <Canvas Width="24" Height="24">
-                                        <Path Classes="updateBadgeIcon" Data="M12 5v14m-5-5 5 5 5-5"
-                                              IsVisible="{Binding IsUpdateBadgeAvailable}" />
-                                        <Path Classes="updateBadgeIcon" Data="M12 4v10m-4-4 4 4 4-4"
-                                              IsVisible="{Binding IsUpdateBadgeDownloading}" />
-                                        <Path Classes="updateBadgeIcon" Data="M5 12a7 7 0 1 0 2-5m-2 0v5h5"
-                                              IsVisible="{Binding IsUpdateBadgePaused}" />
-                                        <Path Classes="updateBadgeIcon" Data="M4 12a8 8 0 1 0 3-6m-3 0v5h5"
-                                              IsVisible="{Binding IsUpdateBadgeReady}" />
-                                        <Path Classes="updateBadgeIcon" Data="M12 3.5a8.5 8.5 0 1 0 8.5 8.5M12 3.5v5h5"
-                                              Stroke="{DynamicResource WarnFg}"
-                                              IsVisible="{Binding IsUpdateBadgeFailed}" />
-                                    </Canvas>
-                                </Viewbox>
-                                <TextBlock Text="{Binding UpdateBadgeText}"
-                                           FontSize="{DynamicResource TypeMicro}"
-                                           FontWeight="Medium"
-                                           VerticalAlignment="Center" />
-                            </StackPanel>
+                            <Viewbox Width="14" Height="14" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Canvas Width="24" Height="24">
+                                    <Path Classes="updateBadgeIcon" Data="M12 5v14m-5-5 5 5 5-5"
+                                          IsVisible="{Binding IsUpdateBadgeAvailable}" />
+                                    <Path Classes="updateBadgeIcon" Data="M12 4v10m-4-4 4 4 4-4"
+                                          IsVisible="{Binding IsUpdateBadgeDownloading}" />
+                                    <Path Classes="updateBadgeIcon" Data="M5 12a7 7 0 1 0 2-5m-2 0v5h5"
+                                          IsVisible="{Binding IsUpdateBadgePaused}" />
+                                    <Path Classes="updateBadgeIcon" Data="M4 12a8 8 0 1 0 3-6m-3 0v5h5"
+                                          IsVisible="{Binding IsUpdateBadgeReady}" />
+                                    <Path Classes="updateBadgeIcon" Data="M12 3.5a8.5 8.5 0 1 0 8.5 8.5M12 3.5v5h5"
+                                          Stroke="{DynamicResource WarnFg}"
+                                          IsVisible="{Binding IsUpdateBadgeFailed}" />
+                                </Canvas>
+                            </Viewbox>
                         </Button>
 
                         <!-- 权限徽章 -->

@@ -17,6 +17,7 @@ public sealed class UpdateAdminDbContext(DbContextOptions<UpdateAdminDbContext> 
     public DbSet<JobEvent> JobEvents => Set<JobEvent>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<IdempotencyRequest> IdempotencyRequests => Set<IdempotencyRequest>();
+    public DbSet<ClientInstallation> ClientInstallations => Set<ClientInstallation>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -80,6 +81,19 @@ public sealed class UpdateAdminDbContext(DbContextOptions<UpdateAdminDbContext> 
         {
             entity.HasKey(x => new { x.UserId, x.Operation, x.Key }); entity.HasIndex(x => x.ExpiresUtcMs);
             entity.HasOne<AdminUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+        });
+        builder.Entity<ClientInstallation>(entity =>
+        {
+            entity.HasKey(x => x.InstallationId);
+            entity.HasIndex(x => x.TokenHash).IsUnique();
+            entity.HasIndex(x => new { x.LastReportedUtcMs, x.InstallationId });
+            entity.HasIndex(x => new { x.ClientVersion, x.InstallationId });
+            entity.Property(x => x.InstallationId).HasMaxLength(64);
+            entity.Property(x => x.TokenHash).HasMaxLength(64);
+            entity.Property(x => x.MachineName).HasMaxLength(128);
+            entity.Property(x => x.ClientVersion).HasMaxLength(32);
+            entity.Property(x => x.LastReportResult).HasMaxLength(32);
+            entity.Property(x => x.LastErrorCode).HasMaxLength(80);
         });
         foreach (var type in builder.Model.GetEntityTypes().Where(x => typeof(IVersionedEntity).IsAssignableFrom(x.ClrType)))
             builder.Entity(type.ClrType).Property(nameof(IVersionedEntity.Revision)).IsConcurrencyToken();

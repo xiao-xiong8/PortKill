@@ -302,6 +302,61 @@ namespace PortKiller.UpdateManagement.Persistence.Migrations
                     b.ToTable("AuditEvents");
                 });
 
+            modelBuilder.Entity("PortKiller.UpdateManagement.Persistence.Entities.ClientInstallation", b =>
+                {
+                    b.Property<string>("InstallationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClientVersion")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastReportResult")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("LastReportedUtcMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("MachineName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RegisteredUtcMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("RevokedUtcMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("InstallationId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("ClientVersion", "InstallationId");
+
+                    b.HasIndex("LastReportedUtcMs", "InstallationId");
+
+                    b.ToTable("ClientInstallations");
+                });
+
             modelBuilder.Entity("PortKiller.UpdateManagement.Persistence.Entities.IdempotencyRequest", b =>
                 {
                     b.Property<string>("UserId")

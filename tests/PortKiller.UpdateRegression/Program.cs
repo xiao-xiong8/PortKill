@@ -11,7 +11,9 @@ try
     if (args.Contains("--manual-only")) { await ServerChecks.ManualLatency(); return 0; }
     if (args.Contains("--desktop-update-only")) { await ClientChecks.StorageAndReadyDuringOutage(); Console.WriteLine("PASS 桌面空间预检查与就绪更新断网保留"); return 0; }
     if (args.Contains("--cleanup-only")) { await CleanupCompatibilityChecks.Run(); Console.WriteLine("PASS 历史回执清理、文件占用重试与连续版本升级"); return 0; }
+    if (args.Contains("--client-report-only")) { await ClientReportChecks.Run(); Console.WriteLine("PASS DPAPI 客户端身份、结果上报及有界重试"); return 0; }
     var checks = new (string Name, Func<Task> Run)[] {
+        ("DPAPI 客户端身份、结果上报及有界重试", ClientReportChecks.Run),
         ("线上默认源、公钥加载与显式配置覆盖", ProductionFeedChecks.DefaultsAndOverrides),
         ("手动无本地冷却与 30 秒静默后台检查", ClientChecks.ManualChecksAndSilentPolling),
         ("空间不足下载前拒绝、同盘预算与后台断网保留就绪目标", ClientChecks.StorageAndReadyDuringOutage),

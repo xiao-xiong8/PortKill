@@ -6,6 +6,7 @@ param(
     [ValidateRange(1,65535)][int]$SshPort = 22,
     [ValidateRange(1,65535)][int]$HttpPort = 8080,
     [uri]$PublicBaseUrl, [switch]$AllowHttp, [switch]$UseSystemProxy,
+    [uri]$ClientReportUrl,
     [string]$SigningKeyPath, [string]$PublicKeyPath, [string]$ReleaseNotesPath,
     [string]$VcVarsAllPath, [string]$PreparedPublishDirectory,
     [string]$LocalRoot, [switch]$AllowDirty, [string]$ResignRelease,
@@ -95,7 +96,9 @@ try {
         $recordPath = Join-Path $releaseDirectory 'release-record.json'
         $record = [pscustomobject]@{Schema=2; ReleaseId=$releaseId; Mode=$(if ($PrepareOnly) { 'PrepareOnly' } else { 'Publish' }); Version=$Version; Phase='Created'; PublicBaseUrl=$PublicBaseUrl.AbsoluteUri; AllowHttp=[bool]$AllowHttp; Commit=(& git -C $projectRoot rev-parse HEAD); Dirty=($dirty.Count -gt 0); KeyFingerprint=$keyFingerprint; BaselineKnown=(-not [bool]$PrepareOnly); Expected=$(if ($PrepareOnly) { $null } else { 'none' }); Sequence=0L; ManifestSha256=''; PackageSha256=''; Runtime='win-x64'; NativeAot=$false; FileVersion=''; ExeSha256=''; PackageBytes=0L; ManifestBytes=0L; ExpiresUtc=''; PreparedUtc=''; SourceRelease=$ResignRelease}
         Save-Record
-        $settings = [ordered]@{Enabled=$true; UseSystemProxy=[bool]$UseSystemProxy; AllowHttp=[bool]$AllowHttp; ManifestUrl=$PublicBaseUrl.AbsoluteUri.TrimEnd('/')+'/manifest.json'; PublicKeyPem=[IO.File]::ReadAllText([IO.Path]::GetFullPath($PublicKeyPath)); RealtimeEnabled=$true; PollSeconds=30; CheckTimeoutSeconds=8; DownloadTimeoutSeconds=180}
+        if ($ClientReportUrl -and ($ClientReportUrl.Scheme -ne 'https' -or $ClientReportUrl.UserInfo -or $ClientReportUrl.Query -or $ClientReportUrl.Fragment)) { throw 'ClientReportUrl 必须是不含凭据、查询或片段的 HTTPS 地址。' }
+        if (-not $ClientReportUrl -and $PublicBaseUrl.Scheme -eq 'https') { $ClientReportUrl = [uri]::new($PublicBaseUrl, '/api/v1/client-installations/') }
+        $settings = [ordered]@{Enabled=$true; UseSystemProxy=[bool]$UseSystemProxy; AllowHttp=[bool]$AllowHttp; ManifestUrl=$PublicBaseUrl.AbsoluteUri.TrimEnd('/')+'/manifest.json'; ClientReportUrl=$(if ($ClientReportUrl) { $ClientReportUrl.AbsoluteUri } else { '' }); PublicKeyPem=[IO.File]::ReadAllText([IO.Path]::GetFullPath($PublicKeyPath)); RealtimeEnabled=$true; PollSeconds=30; CheckTimeoutSeconds=8; DownloadTimeoutSeconds=180}
         [IO.File]::WriteAllText((Join-Path $releaseDirectory 'verification.json'), ($settings | ConvertTo-Json -Depth 4))
     }
     $config = Join-Path $releaseDirectory 'verification.json'

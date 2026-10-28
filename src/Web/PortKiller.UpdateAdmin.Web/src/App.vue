@@ -9,6 +9,7 @@ import JobPage from './pages/JobPage.vue';
 import UploadPage from './pages/UploadPage.vue';
 import SecurityPage from './pages/SecurityPage.vue';
 import AuditPage from './pages/AuditPage.vue';
+import ClientsPage from './pages/ClientsPage.vue';
 import { useAuth } from './state/auth';
 import { errorText } from './api/http';
 
@@ -19,6 +20,7 @@ const entries = computed(() => [
   { id: 'overview', title: '发布概览', permission: 'release.read', path: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z' },
   { id: 'upload', title: '上传版本', permission: 'release.upload', path: 'M12 16V3 M7 8l5-5 5 5 M4 16v5h16v-5' },
   { id: 'history', title: '发布历史', permission: 'release.read', path: 'M3 12a9 9 0 1 0 3-6 M3 3v6h6 M12 7v5l3 2' },
+  { id: 'clients', title: '客户端版本', permission: 'release.read', path: 'M3 4h18v13H3z M8 21h8 M12 17v4' },
   { id: 'security', title: '安全管理', permission: '', path: 'M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6z M9 12l2 2 4-4' },
   { id: 'audit', title: '审计记录', permission: 'audit.read', path: 'M6 3h12v18H6z M9 8h6 M9 12h6 M9 16h4' },
 ].filter(entry => !full.value || !entry.permission || auth.can(entry.permission)));
@@ -57,6 +59,7 @@ onBeforeUnmount(() => { window.removeEventListener('hashchange', onHash); window
             <div class="page-heading"><div><p class="eyebrow">PORTKILL / STABLE</p><h1>{{ title }}</h1><p class="muted">客户端由用户确认下载与安装。</p></div><button @click="refresh">刷新会话</button></div>
             <OverviewPage v-if="selected === 'overview'" />
             <HistoryPage v-else-if="selected === 'history'" />
+            <ClientsPage v-else-if="selected === 'clients' && auth.can('release.read')" />
             <UploadPage v-else-if="selected === 'upload' && auth.can('release.upload')" :id="location.slice(7)" :key="location" />
             <JobPage v-else-if="selected === 'job'" :id="location.slice(4)" :key="location" />
             <SecurityPage v-else-if="selected === 'security'" />

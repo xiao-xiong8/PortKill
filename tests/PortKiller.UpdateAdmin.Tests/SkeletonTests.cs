@@ -70,7 +70,8 @@ public sealed class SkeletonTests
             .OrderBy(route => route, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(new[] { "/api/v1/auth/csrf", "/api/v1/auth/login" }, anonymous);
+        Assert.Equal(new[] { "/api/v1/auth/csrf", "/api/v1/auth/login",
+            "/api/v1/client-installations/register", "/api/v1/client-installations/report" }, anonymous);
         Assert.All(routes.Where(endpoint => endpoint.Metadata.GetMetadata<IAllowAnonymous>() is null), endpoint =>
             Assert.DoesNotContain(endpoint.Metadata, metadata => metadata is IAllowAnonymous));
     }

@@ -34,6 +34,22 @@
 
 ## 共享验证与配置
 
+### 客户端版本登记（2026-10-28）
+
+可选 `ClientReportUrl` 是 HTTPS 接口目录，例如 `https://updates.example.com/api/v1/client-installations/`。缺少或留空时只跳过登记；地址无效、DPAPI 或网络失败不影响现有更新流程。测试仅允许显式 `AllowHttp` 下的本机 HTTP 地址。更新源的 SSE/轮询继续只负责发现新版本，不用于客户端在线状态。
+
+程序完成初始化及本地安装回执维护后，独立后台任务先上报 `started`，有回执时再上报 `installed`、`rolled_back` 或 `failed`；安装器未能启动时上报 `failed`。版本为当前运行的实际版本，回滚上报旧版本。每次请求超时 5 秒，临时网络错误最多短重试 2 次，不进行周期性上报，也不等待上报后退出。请求正文仅含 `version`、`machineName`、`result`。
+
+安装 ID 和 256 位随机令牌自动生成，以当前 Windows 用户的 DPAPI 加密，原子保存到 `%LocalAppData%/PortKiller/client-identity.json`。文件内可分别保存多个安装目录的身份。安装目录只新增一个不含凭据的 `.portkiller-client-instance` 标记，四文件更新保留它；删除整个安装目录后重新安装会生成新身份，未来卸载器也应删除该标记。只读目录使用目录创建时间区分重新创建的安装。不要把当前用户的身份文件打入安装包。DPAPI 无法读取时本次跳过上报，不用未受保护的令牌继续请求。
+
+首次注册为 `POST register`，包含安装 ID、当前版本、机器名、协议版本和本地随机令牌；服务器仅保存 SHA-256 摘要，返回接受的令牌。重复提交相同 ID 和相同凭据仅重发注册结果，解决响应丢失；不同凭据无法覆盖已有实例。后续 `POST report` 使用 Bearer 令牌，仅能修改对应实例。令牌是可撤销的长期随机凭据，不采用 JWT 有效期，也不参与更新授权。遇到 401 时同一进程最多自动新建一个安装身份并注册一次，原撤销记录继续保留。
+
+API 请求体上限 4 KiB，按来源限制注册/上报频率；字段使用正式数字版本、128 字符机器名和固定结果枚举。不保存 MAC、硬件序列号、用户名或文件内容。正常注册和上报不逐条写审计表；拒绝请求记录无凭据的状态日志，管理员撤销保留审计。服务器数据库仅保存每个安装实例的最新状态。
+
+管理员“客户端版本”页面使用 `release.read`，支持分页、版本、结果、机器名、最近上报时间和撤销状态筛选，与当前 stable 正式版本比较。页面仅显示最近一次上报，不推断在线状态。撤销使用 `accounts.manage`、近期强认证和 CSRF 验证，撤销后客户端可自动登记为新实例。
+
+部署顺序：先备份 SQLite 并用现有 `db migrate` 流程应用迁移，部署 API 和网页，再在 HTTPS 下载站启用 Nginx 两个精确 POST 路由，最后分发新 AOT 包。HTTP 模板对登记路由返回 426，不承载令牌；下载站不代理列表和撤销接口。`Publish-Update.ps1 -ClientReportUrl` 可指定独立 HTTPS 地址，默认从 HTTPS 更新源派生。旧外部 `update-settings.json` 会继续保留；如需让已升级的客户端开始登记，需由部署配置明确补入该字段，不能依赖更新包覆盖原配置。
+
 `PortKiller.UpdateProtocol` 供客户端、发布工具、通知服务共用。清单上限 64 KiB；RSA ≥ 2048，SHA-256；有效期最多 180 天，默认签名 90 天；包最多 256 MiB。schema 2 有序号、版本和有效期约束。schema 1 仅保留旧 HTTPS 客户端兼容；新服务端激活要求 schema 2。
 
 默认发布源定义在 `src/Modules/PortKiller.Updates/Configuration/production-feed.json`，以嵌入资源随更新模块分发，同时复制为桌面构建和 AOT 发布目录的 `update-settings.json`。默认启用 HTTPS 更新、SSE、30 秒轮询及直连；可信 RSA 公钥由既有部署公钥固定，不能从网络获取或替换。真实清单地址为 `https://xiaoxiongupdate.duckdns.org/stable/manifest.json`，公钥 SPKI SHA-256 为 `02066F8B6F5CFAFA51A4B34ECE9DDCEA19A10F014F6A0266B3210CB5CD104CE5`。AOT 脚本会复核产物中的默认配置与该资源一致。自动更新保留外部配置：原线上源的默认 300 秒配置在内存中迁为 30 秒，不写回文件，自定义更新源的间隔仍保留。

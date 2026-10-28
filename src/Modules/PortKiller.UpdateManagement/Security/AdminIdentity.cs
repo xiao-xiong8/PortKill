@@ -51,6 +51,7 @@ public static class AdminIdentity
         services.AddScoped<UploadManagementService>();
         services.AddScoped<PublishManagementService>();
         services.AddScoped<CurrentReleaseService>();
+        services.AddScoped<ClientInstallationService>();
         services.AddScoped<JobEventQuery>();
         services.AddAdminWorkerServices();
         return services;

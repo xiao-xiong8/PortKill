@@ -4,6 +4,7 @@ using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -50,9 +51,19 @@ internal static class UpdateBadgeChecks
                         $"{theme}/{stage} 徽章状态未立即同步。");
                     if (visible)
                     {
-                        Program.Assert(badge.Bounds.Width >= 68 && badge.Bounds.Height == 24
+                        Program.Assert(badge.Bounds.Width == 28 && badge.Bounds.Height == 24
                             && ToolTip.GetTip(badge)?.ToString() == main.UpdateBadgeTooltip,
                             $"{theme}/{stage} 徽章布局或提示缺失：{badge.Bounds}，tip={ToolTip.GetTip(badge)}，expected={main.UpdateBadgeTooltip}。");
+                        Program.Assert(!badge.GetVisualDescendants().OfType<TextBlock>().Any(block => block.IsVisible && !string.IsNullOrWhiteSpace(block.Text)),
+                            $"{theme}/{stage} 主界面更新徽章不应显示状态文字。");
+                        if (stage != UpdateStage.Failed)
+                        {
+                            var icon = badge.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single(path => path.IsVisible);
+                            static bool IsUpdateBlue(IBrush? brush)
+                                => brush is ISolidColorBrush solid && solid.Color == Color.FromRgb(0x33, 0x9C, 0xFF);
+                            Program.Assert(IsUpdateBlue(badge.BorderBrush) && IsUpdateBlue(icon.Stroke),
+                                $"{theme}/{stage} 更新徽章颜色不符合 #339CFF：border={badge.BorderBrush}, stroke={icon.Stroke}。");
+                        }
                         Program.Assert(main.UpdateBadgeMenuText.Length > 0 && main.UpdateBadgeText.Length > 0,
                             "徽章/托盘文案缺失。");
                         var point = badge.TranslatePoint(new Point(badge.Bounds.Width / 2, 12), window)!.Value;

@@ -12,6 +12,7 @@ public sealed class UpdateOptions : ManifestVerificationOptions
     public bool UseSystemProxy { get; set; } = true;
     public bool RealtimeEnabled { get; set; } = true;
     public string EventsUrl { get; set; } = "";
+    public string ClientReportUrl { get; set; } = "";
     public int PollSeconds { get; set; } = 30;
     public int CheckTimeoutSeconds { get; set; } = 8;
     public int DownloadTimeoutSeconds { get; set; } = 180;
@@ -54,5 +55,16 @@ public sealed class UpdateOptions : ManifestVerificationOptions
         if (options.ManifestUrl == "https://xiaoxiongupdate.duckdns.org/stable/manifest.json" && options.PollSeconds == 300)
             options.PollSeconds = 30;
         return options;
+    }
+
+    // Reporting configuration is validated independently so it can never disable updates.
+    public Uri? GetClientReportUri()
+    {
+        if (string.IsNullOrWhiteSpace(ClientReportUrl)) return null;
+        if (!Uri.TryCreate(ClientReportUrl, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttps && !(AllowHttp && uri.IsLoopback && uri.Scheme == Uri.UriSchemeHttp))
+            || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+            throw new InvalidDataException("客户端上报地址必须是无凭据、查询参数和片段的 HTTPS 地址。");
+        return new Uri(uri.AbsoluteUri.TrimEnd('/') + "/");
     }
 }

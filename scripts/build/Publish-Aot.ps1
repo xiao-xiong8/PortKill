@@ -28,6 +28,11 @@ foreach ($name in @('PortKiller.exe', 'av_libglesv2.dll', 'libHarfBuzzSharp.dll'
     if (-not (Test-Path -LiteralPath (Join-Path $OutputDirectory $name))) { throw "发布缺少文件：$name" }
 }
 $productionFeed = Join-Path $projectRoot 'src/Modules/PortKiller.Updates/Configuration/production-feed.json'
+$reportUrl = (Get-Content -LiteralPath (Join-Path $OutputDirectory 'update-settings.json') -Raw | ConvertFrom-Json).ClientReportUrl
+$reportUri = $null
+if (-not [uri]::TryCreate($reportUrl, [UriKind]::Absolute, [ref]$reportUri) -or $reportUri.Scheme -ne 'https' -or $reportUri.UserInfo -or $reportUri.Query -or $reportUri.Fragment) {
+    throw 'AOT 包缺少有效的 HTTPS ClientReportUrl。'
+}
 if ((Get-FileHash -LiteralPath (Join-Path $OutputDirectory 'update-settings.json')).Hash -ne (Get-FileHash -LiteralPath $productionFeed).Hash) {
     throw 'AOT 包中的默认更新配置不是当前可信的线上发布源。'
 }

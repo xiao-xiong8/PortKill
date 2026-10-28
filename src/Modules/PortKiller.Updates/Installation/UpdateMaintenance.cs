@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace PortKiller.Updates;
 
-public sealed record UpdateCompletionNotice(string Message, bool IsError, string OperationId);
+public sealed record UpdateCompletionNotice(string Message, bool IsError, string OperationId, string? Outcome = null);
 
 /// <summary>安装进程放开锁后读取回执。已读标记放在当前用户缓存中，兼容只读安装目录。</summary>
 public static class UpdateMaintenance
@@ -110,7 +110,9 @@ public static class UpdateMaintenance
                     OperatingSystem.IsWindows() ? root.ToUpperInvariant() : root)));
                 string consumed = Path.Combine(cache, "result-read-" + installation + ".txt");
                 if (File.Exists(consumed) && File.ReadAllText(consumed) == operation) return (false, pending, null);
-                return (false, pending, new(message, error, operation));
+                return (false, pending, new(message, error, operation,
+                    result?.Outcome == "installed" || legacy is { IsError: false } ? "installed"
+                    : result?.Outcome == "rolled_back" || legacy is { Completed: true, IsError: true } ? "rolled_back" : "failed"));
             }
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or FormatException or ArgumentException)

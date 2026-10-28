@@ -39,6 +39,18 @@ public sealed record CurrentReleaseDetails(string Version, long Sequence, string
     ActivationReceiptResponse? ActivationReceipt, PublicCheckResponse? DownloadCheck);
 public sealed record CurrentReleaseResponse(string Application, string Channel, long ObservedUtcMs, CurrentReleaseDetails? Release);
 
+[System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
+public sealed record ClientInstallationRegisterRequest(string InstallationId, string Version, string MachineName, int ProtocolVersion = 1, string? ClientToken = null);
+public sealed record ClientInstallationRegisterResponse(string InstallationId, string ClientToken);
+[System.Text.Json.Serialization.JsonUnmappedMemberHandling(System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow)]
+public sealed record ClientInstallationReportRequest(string Version, string MachineName, string Result);
+public sealed record ClientInstallationQuery(int Page = 1, int PageSize = 20, string? Version = null, string? Result = null,
+    string? MachineName = null, long? ReportedBeforeUtcMs = null, bool IncludeRevoked = false,
+    long? ReportedAfterUtcMs = null, bool? Revoked = null);
+public sealed record ClientInstallationResponse(string InstallationId, string RevocationId, string MachineName, string ClientVersion,
+    string LastReportResult, string? LastErrorCode, long RegisteredUtcMs, long LastReportedUtcMs, long? RevokedUtcMs,
+    long Revision, bool IsRevoked);
+
 public static class AdminContract
 {
     public const int Version = 1;

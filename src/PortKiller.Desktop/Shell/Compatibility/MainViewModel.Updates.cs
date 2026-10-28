@@ -17,6 +17,7 @@ public partial class MainViewModel
     private UpdateService? _updates;
     private Task? _updateTask;
     private Task? _updateMaintenanceTask;
+    private ClientReportService? _clientReports;
     private UpdateService.InstallationLease? _installationLease;
     public UpdateViewModel UpdateUi { get; private set; } = null!;
     public event Action? RequestShowUpdates;
@@ -150,6 +151,14 @@ public partial class MainViewModel
         {
             string install = AppContext.BaseDirectory;
             var options = UpdateOptions.Load(install);
+            try
+            {
+                if (options.GetClientReportUri() is { } reportUri)
+                    _clientReports = new ClientReportService(reportUri, options.UseSystemProxy,
+                        store: new ClientIdentityStore(installDirectory: install),
+                        log: code => App.WriteLog("ClientReport", new InvalidOperationException(code)));
+            }
+            catch { /* Optional reporting configuration never disables the updater. */ }
             _updates = new UpdateService(options, Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PortKiller", "updates"),
                 installDirectory: install);
@@ -169,12 +178,14 @@ public partial class MainViewModel
 
     private async Task CompleteUpdateStartupAsync(string install)
     {
+        UpdateCompletionNotice? completion = null;
         try
         {
             string cache = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PortKiller", "updates");
             bool healthLaunch = Array.IndexOf(Environment.GetCommandLineArgs(), "--update-health") >= 0;
             var notice = await UpdateMaintenance.RunAsync(install, cache, UpdateService.CurrentVersion, _lifetime.Token, healthLaunch)
                 .ConfigureAwait(false);
+            completion = notice;
             if (notice != null)
                 Dispatcher.UIThread.Post(() =>
                 {
@@ -188,6 +199,20 @@ public partial class MainViewModel
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
         catch (Exception ex) { App.WriteLog("UpdateStartupMaintenance", ex); }
+        finally
+        {
+            // Network work is neither awaited by startup maintenance nor by shutdown.
+            if (_clientReports is { } reports)
+            {
+                var reportToken = _lifetime.Token;
+                _ = Task.Run(async () =>
+                {
+                    await reports.ReportAsync(UpdateService.CurrentVersion, "started", reportToken);
+                    if (completion?.Outcome is { } outcome)
+                        await reports.ReportAsync(UpdateService.CurrentVersion, outcome, reportToken);
+                });
+            }
+        }
     }
 
     private void OnUpdateNetworkChanged(object? sender, NetworkAvailabilityEventArgs args)
@@ -213,6 +238,7 @@ public partial class MainViewModel
             catch (OperationCanceledException) { }
         }
         _updateMaintenanceTask?.GetAwaiter().GetResult();
+        _clientReports?.Dispose();
     }
 
     private int _updateStatusPosted;
@@ -313,7 +339,15 @@ public partial class MainViewModel
             RequestShutdown?.Invoke();
             return null;
         }
-        catch (Exception ex) { ReleaseInstallation(); ReportFailure("更新安装未启动", ex); return "更新安装未启动：" + ex.Message; }
+        catch (Exception ex)
+        {
+            if (_clientReports is { } reports)
+            {
+                var reportToken = _lifetime.Token;
+                _ = Task.Run(() => reports.ReportAsync(UpdateService.CurrentVersion, "failed", reportToken));
+            }
+            ReleaseInstallation(); ReportFailure("更新安装未启动", ex); return "更新安装未启动：" + ex.Message;
+        }
         finally { IsInstallingUpdate = false; }
     }
 }

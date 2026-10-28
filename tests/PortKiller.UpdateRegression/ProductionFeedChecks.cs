@@ -19,6 +19,8 @@ internal static class ProductionFeedChecks
         That(defaults.Enabled && defaults.RealtimeEnabled && !defaults.AllowHttp && !defaults.UseSystemProxy,
             "Production updates must be enabled, use verified HTTPS and direct transport");
         That(defaults.PollSeconds == 30, "Production polling is not 30 seconds");
+        That(defaults.GetClientReportUri()?.AbsoluteUri == "https://xiaoxiongupdate.duckdns.org/api/v1/client-installations/",
+            "Production package did not include the client reporting endpoint");
         That(uri.Host == "xiaoxiongupdate.duckdns.org" && uri.AbsolutePath == "/stable/manifest.json"
             && defaults.GetEventsUri().AbsoluteUri == "https://xiaoxiongupdate.duckdns.org/stable/events",
             "Production defaults point at a placeholder or test feed");

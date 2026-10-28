@@ -775,6 +775,294 @@
         }
       }
     },
+    "/api/v1/client-installations/register": {
+      "post": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "RegisterClientInstallation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientInstallationRegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientInstallationRegisterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/client-installations/report": {
+      "post": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "ReportClientInstallation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClientInstallationReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/client-installations": {
+      "get": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "ListClientInstallations",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "format": "int32",
+              "default": 20
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "result",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "machineName",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reportedBeforeUtcMs",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "includeRevoked",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "reportedAfterUtcMs",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "revoked",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageResponseOfClientInstallationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/client-installations/{id}/revoke": {
+      "post": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "RevokeClientInstallation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/validation-tasks/{id}": {
       "get": {
         "tags": [
@@ -2333,6 +2621,127 @@
           }
         }
       },
+      "ClientInstallationRegisterRequest": {
+        "required": [
+          "installationId",
+          "version",
+          "machineName"
+        ],
+        "type": "object",
+        "properties": {
+          "installationId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "machineName": {
+            "type": "string"
+          },
+          "protocolVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int32",
+            "default": 1
+          },
+          "clientToken": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ClientInstallationRegisterResponse": {
+        "required": [
+          "installationId",
+          "clientToken"
+        ],
+        "type": "object",
+        "properties": {
+          "installationId": {
+            "type": "string"
+          },
+          "clientToken": {
+            "type": "string"
+          }
+        }
+      },
+      "ClientInstallationReportRequest": {
+        "required": [
+          "version",
+          "machineName",
+          "result"
+        ],
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "machineName": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ClientInstallationResponse": {
+        "required": [
+          "installationId",
+          "revocationId",
+          "machineName",
+          "clientVersion",
+          "lastReportResult",
+          "lastErrorCode",
+          "registeredUtcMs",
+          "lastReportedUtcMs",
+          "revokedUtcMs",
+          "revision",
+          "isRevoked"
+        ],
+        "type": "object",
+        "properties": {
+          "installationId": {
+            "type": "string"
+          },
+          "revocationId": {
+            "type": "string"
+          },
+          "machineName": {
+            "type": "string"
+          },
+          "clientVersion": {
+            "type": "string"
+          },
+          "lastReportResult": {
+            "type": "string"
+          },
+          "lastErrorCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "registeredUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "lastReportedUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "revokedUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64",
+            "nullable": true
+          },
+          "revision": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "isRevoked": {
+            "type": "boolean"
+          }
+        }
+      },
       "CreateAccountRequest": {
         "required": [
           "userName",
@@ -2771,6 +3180,35 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AuditEvent"
+            }
+          },
+          "page": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int32"
+          },
+          "pageSize": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int32"
+          },
+          "total": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          }
+        }
+      },
+      "PageResponseOfClientInstallationResponse": {
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ],
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClientInstallationResponse"
             }
           },
           "page": {

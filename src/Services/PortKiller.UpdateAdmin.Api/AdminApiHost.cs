@@ -11,6 +11,7 @@ using PortKiller.UpdateManagement.Persistence.Entities;
 using PortKiller.UpdateManagement.Persistence;
 using PortKiller.UpdateAdmin.Api.Uploads;
 using PortKiller.UpdateAdmin.Api.Releases;
+using PortKiller.UpdateAdmin.Api.ClientInstallations;
 
 namespace PortKiller.UpdateAdmin.Api;
 
@@ -76,6 +77,33 @@ public static class AdminApiHost
         app.UseExceptionHandler();
         app.Use(async (context, next) =>
         {
+            if (RequestSecurity.IsPublicClientRequest(context))
+            {
+                const int limit = 4096;
+                if (context.Request.ContentLength > limit)
+                { context.Response.StatusCode = 413; return; }
+                var feature = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+                if (feature is { IsReadOnly: false }) feature.MaxRequestBodySize = limit;
+                // Bound chunked requests too, including hosts without Kestrel's size feature.
+                if (context.Request.ContentLength == null)
+                {
+                    byte[] buffer = new byte[limit + 1];
+                    int length = 0, read;
+                    while (length < buffer.Length && (read = await context.Request.Body.ReadAsync(
+                        buffer.AsMemory(length), context.RequestAborted)) > 0) length += read;
+                    if (length > limit) { context.Response.StatusCode = 413; return; }
+                    using var body = new MemoryStream(buffer, 0, length, writable: false);
+                    var original = context.Request.Body;
+                    context.Request.Body = body;
+                    try { await next(context); }
+                    finally { context.Request.Body = original; }
+                    return;
+                }
+            }
+            await next(context);
+        });
+        app.Use(async (context, next) =>
+        {
             if (context.Request.Path.StartsWithSegments("/api/v1")) context.Response.Headers.CacheControl = "no-store";
             await next(context);
         });
@@ -97,6 +125,7 @@ public static class AdminApiHost
         app.MapUploadEndpoints();
         app.MapPublishEndpoints();
         app.MapJobEventEndpoints();
+        app.MapClientInstallationEndpoints();
         app.MapGet("/api/v1/validation-tasks/{id}", async (string id, ValidationTaskQueue queue, HttpContext context)
             => await queue.GetAsync(context.User, id, context.RequestAborted))
             .RequireAuthorization(AdminPermissions.Read).WithName("GetValidationTask").ProducesProblem(404);

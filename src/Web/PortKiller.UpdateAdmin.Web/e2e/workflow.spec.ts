@@ -63,6 +63,37 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await expect(page.getByRole('button', { name: '下一页' })).toBeDisabled();
     await expect(page.locator('.pagination')).toContainText('共 0 条');
   });
+  test('client versions show latest reports, filter and revoke without online status', async () => {
+    const registration = await context.request.post('/api/v1/client-installations/register', {
+      data: { installationId: 'browser-client-installation-001', version: '1.2.3', machineName: 'BROWSER-TEST-PC' },
+    });
+    expect(registration.status()).toBe(201);
+    const credential = await registration.json() as { clientToken: string };
+    expect((await context.request.post('/api/v1/client-installations/report', {
+      headers: { Authorization: `Bearer ${credential.clientToken}` },
+      data: { version: '1.2.4', machineName: 'BROWSER-TEST-PC', result: 'installed' },
+    })).status()).toBe(204);
+    await page.getByRole('button', { name: '客户端版本', exact: true }).click();
+    const table = page.getByRole('table', { name: '客户端最近一次上报' });
+    await expect(table.getByRole('cell', { name: 'BROWSER-TEST-PC', exact: true })).toBeVisible();
+    await expect(table.getByRole('cell', { name: '1.2.4.0', exact: true })).toBeVisible();
+    await expect(table).toContainText('安装成功');
+    await expect(table).toContainText('brow…-001');
+    await expect(page.locator('#main-content')).not.toContainText('在线');
+    await page.getByLabel('客户端版本', { exact: true }).fill('9.9');
+    await page.getByRole('button', { name: '筛选', exact: true }).click();
+    await expect(page.getByText('暂无符合条件的最近上报记录。')).toBeVisible();
+    await page.getByRole('button', { name: '清空', exact: true }).click();
+    await expect(table).toBeVisible();
+    await page.screenshot({ path: '../../../.local/artifacts/admin-browser/client-versions.png', fullPage: true, animations: 'disabled' });
+    await table.getByRole('button', { name: '撤销凭据', exact: true }).click();
+    await page.getByRole('button', { name: '确认撤销', exact: true }).click();
+    await expect(table.getByRole('cell', { name: '已撤销', exact: true })).toBeVisible();
+    expect((await context.request.post('/api/v1/client-installations/report', {
+      headers: { Authorization: `Bearer ${credential.clientToken}` },
+      data: { version: '1.2.4', machineName: 'BROWSER-TEST-PC', result: 'started' },
+    })).status()).toBe(401);
+  });
   test('tampered signed package is rejected by the production validation worker', async () => {
     await page.getByRole('button', { name: '上传版本', exact: true }).click();
     await page.getByLabel('签名清单（manifest.json）', { exact: true }).setInputFiles(fixtures + 'manifest.json');

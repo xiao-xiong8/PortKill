@@ -69,6 +69,7 @@ internal static class CleanupCompatibilityChecks
         using (var lease = new FileStream(old.Package, FileMode.Open, FileAccess.Read, FileShare.Read))
         {
             notice = await Maintain();
+            That(notice?.Outcome == "installed", "Legacy successful upgrade reported a failure");
             That(notice is { IsError: false } && Directory.Exists(old.Worker)
                 && File.Exists(Path.Combine(old.Worker, "manifest.json")), "Legacy cache lock lost cleanup metadata");
             That(UpdateMaintenance.MarkConsumed(install, cache, notice!, "0.1.2"), "Legacy result could not be acknowledged");

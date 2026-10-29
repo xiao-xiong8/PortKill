@@ -38,8 +38,8 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await page.getByLabel('我已安全保存恢复码').check();
     await page.getByRole('button', { name: '已保存，进入工作空间' }).click();
     await expect(page.getByRole('heading', { name: '当前正式版本' })).toBeVisible();
-    await page.reload(); await expect(page.locator('.identity')).toHaveText('browser-admin');
-    await page.getByRole('button', { name: '退出', exact: true }).click();
+    await page.reload(); await page.getByRole('button', { name: '账户菜单' }).click(); await expect(page.locator('.identity')).toHaveText('browser-admin');
+    await page.getByRole('menuitem', { name: '退出', exact: true }).click();
     await expect(page.getByRole('heading', { name: '登录发布管理' })).toBeVisible();
     await page.getByLabel('账号', { exact: true }).fill('browser-admin');
     await page.getByLabel('密码', { exact: true }).fill('Browser-Test-Only!492');
@@ -49,7 +49,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await page.getByLabel('恢复码', { exact: true }).fill(recovery[0]);
     await page.getByRole('button', { name: '验证并继续' }).click();
     await expect(page.getByRole('heading', { name: '当前正式版本' })).toBeVisible();
-    await page.getByRole('button', { name: '再次认证', exact: true }).click();
+    await page.getByRole('button', { name: '账户菜单' }).click(); await page.getByRole('menuitem', { name: '再次认证', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('当前密码').fill('Browser-Test-Only!492');
     await dialog.getByLabel('验证器动态码').fill(totp(authenticatorKey, 1));
@@ -59,7 +59,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     expect(await page.evaluate(() => Object.keys(sessionStorage))).toEqual([]);
   });
   test('overview and paginated history use actual empty server responses', async () => {
-    await expect(page.getByRole('heading', { name: '尚未发布正式版本' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '未检测到正式版本' })).toBeVisible();
     await page.getByRole('link', { name: '发布历史', exact: true }).click();
     await expect(page.getByRole('heading', { name: '暂无任务记录' })).toBeVisible();
     await page.getByLabel('任务类型').selectOption('publish');
@@ -260,7 +260,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
 
     await page.getByRole('link', { name: '安全管理', exact: true }).click();
     await expect(page.getByRole('heading', { name: '管理员账号' })).toBeVisible();
-    await expect(page.getByText('browser-admin', { exact: true })).toBeVisible();
+    await expect(page.getByRole('table', { name: '管理员账号列表' }).getByRole('row').filter({ hasText: 'browser-admin' })).toBeVisible();
     await page.getByRole('button', { name: '新建账号' }).click();
     await page.getByLabel('账号', { exact: true }).fill('browser-viewer');
     await page.getByLabel('密码', { exact: true }).fill('Browser-Viewer-Only!492');

@@ -1,7 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { api, ApiError, parseJson, readResponse } from './http';
+import { api, ApiError, parseJson, readResponse, retryAfterSeconds } from './http';
 afterEach(() => vi.unstubAllGlobals());
 describe('authenticated management transport', () => {
+  it('retains HTTP failures even if the JSON error body is damaged', async () => {
+    const listener = vi.fn(); vi.stubGlobal('window', { dispatchEvent: listener });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{broken', { status: 401, headers: { 'content-type': 'application/json' } })));
+    await expect(api('/api/v1/system/monitoring')).rejects.toMatchObject({ status: 401 });
+    expect(listener).toHaveBeenCalledOnce();
+    await expect(readResponse(new Response('{broken', { status: 429, headers: { 'content-type': 'application/json', 'retry-after': '3600' } })))
+      .rejects.toMatchObject({ status: 429, retryAfter: 3600 });
+  });
+  it('reads Retry-After seconds and HTTP dates without shortening the server delay', () => {
+    expect(retryAfterSeconds('3600')).toBe(3600);
+    expect(retryAfterSeconds('Thu, 29 Oct 2026 01:01:00 GMT', Date.parse('2026-10-29T01:00:00Z'))).toBe(60);
+    expect(retryAfterSeconds('not a date')).toBe(0);
+  });
   it('reads a new CSRF token before every mutation and never retries a mutation', async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ requestToken: 'before-login' }))
       .mockResolvedValueOnce(Response.json({ next: 'verifyMfa' }))

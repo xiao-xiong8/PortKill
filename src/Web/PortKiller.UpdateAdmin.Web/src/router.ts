@@ -27,7 +27,8 @@ function internalPath(value: unknown): string | undefined {
     const parsed = new URL(value, window.location.origin);
     if (parsed.origin !== window.location.origin) return undefined;
     const path = parsed.pathname + parsed.search + parsed.hash;
-    if (/^\/(?:overview|upload|history|clients|security|audit)(?:\/|$)/.test(path) || /^\/job\/[^/]+(?:[?#].*)?$/.test(path)) return path;
+    if (/^\/(?:overview|history|clients|security|audit)$/.test(parsed.pathname)
+      || /^\/upload(?:\/[^/]+)?$/.test(parsed.pathname) || /^\/job\/[^/]+$/.test(parsed.pathname)) return path;
   } catch { /* Invalid return targets are ignored. */ }
   return undefined;
 }
@@ -48,7 +49,7 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({ history: createWebHistory(), routes, scrollBehavior: () => ({ top: 0 }) });
 router.beforeEach(async (to) => {
   const auth = useAuth();
-  try { await auth.restore(); } catch { /* Unavailable sessions are handled by the route below. */ }
+  try { await auth.ensure(); } catch { /* Initial unavailable sessions are handled by the route below. */ }
   const full = auth.session.value?.phase === 'full';
   const session = auth.session.value != null;
   const meta = to.meta as RouteMeta;

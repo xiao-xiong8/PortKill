@@ -43,6 +43,7 @@ public sealed class UpdateToolOptions
 
 public sealed class AdminOptions
 {
+    public string MonitoringSnapshotDirectory { get; set; } = "";
     public string DataRoot { get; set; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PortKill.UpdateAdmin");
     public string DatabasePath => Path.Combine(DataRoot, "admin.sqlite");
@@ -82,6 +83,8 @@ public sealed class AdminOptions
 
     public void Validate()
     {
+        if (!string.IsNullOrWhiteSpace(MonitoringSnapshotDirectory) && !Path.IsPathFullyQualified(MonitoringSnapshotDirectory))
+            throw new InvalidOperationException("Administration:MonitoringSnapshotDirectory must be an absolute path.");
         if (string.IsNullOrWhiteSpace(DataRoot) || !Path.IsPathFullyQualified(DataRoot))
             throw new InvalidOperationException("Administration:DataRoot must be an absolute path.");
         DataRoot = Path.GetFullPath(DataRoot);

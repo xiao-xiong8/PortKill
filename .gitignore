@@ -94,6 +94,7 @@ id_ed25519*
 # Public documentation and non-secret deployment examples only.
 !/README.md
 !deploy/examples/update-settings.example.json
+!deploy/docker/monitor/README.md
 !/docs/
 /docs/*
 !/docs/AUTO-UPDATE.md

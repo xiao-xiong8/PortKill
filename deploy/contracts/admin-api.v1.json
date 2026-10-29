@@ -425,6 +425,56 @@
         }
       }
     },
+    "/api/v1/system/monitoring": {
+      "get": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "GetMonitoring",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitoringResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/password": {
       "post": {
         "tags": [
@@ -3137,6 +3187,464 @@
           "critical",
           "expired"
         ]
+      },
+      "MonitoringAlert": {
+        "required": [
+          "code",
+          "source",
+          "severity",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "MonitoringContainer": {
+        "required": [
+          "service",
+          "containerId",
+          "state",
+          "health",
+          "restartCount"
+        ],
+        "type": "object",
+        "properties": {
+          "service": {
+            "type": "string"
+          },
+          "containerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string"
+          },
+          "health": {
+            "type": "string"
+          },
+          "restartCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "MonitoringCpu": {
+        "required": [
+          "observedAtUtcMs",
+          "error",
+          "percent"
+        ],
+        "type": "object",
+        "properties": {
+          "observedAtUtcMs": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "percent": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        }
+      },
+      "MonitoringDisk": {
+        "required": [
+          "label",
+          "observedAtUtcMs",
+          "error",
+          "totalBytes",
+          "freeBytes"
+        ],
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "observedAtUtcMs": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "freeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "MonitoringDocker": {
+        "required": [
+          "observedAtUtcMs",
+          "error",
+          "services"
+        ],
+        "type": "object",
+        "properties": {
+          "observedAtUtcMs": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonitoringContainer"
+            }
+          }
+        }
+      },
+      "MonitoringFreshness": {
+        "required": [
+          "resourceTtlMs",
+          "collectorTtlMs",
+          "dockerTtlMs",
+          "diskTtlMs",
+          "probeTtlMs"
+        ],
+        "type": "object",
+        "properties": {
+          "resourceTtlMs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "collectorTtlMs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "dockerTtlMs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "diskTtlMs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "probeTtlMs": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "MonitoringManifest": {
+        "required": [
+          "status",
+          "version",
+          "daysRemaining"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "daysRemaining": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        }
+      },
+      "MonitoringMemory": {
+        "required": [
+          "observedAtUtcMs",
+          "error",
+          "totalBytes",
+          "usedBytes"
+        ],
+        "type": "object",
+        "properties": {
+          "observedAtUtcMs": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "usedBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "MonitoringNetwork": {
+        "required": [
+          "observedAtUtcMs",
+          "error",
+          "interface",
+          "rxBytesPerSec",
+          "txBytesPerSec"
+        ],
+        "type": "object",
+        "properties": {
+          "observedAtUtcMs": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "interface": {
+            "type": "string",
+            "nullable": true
+          },
+          "rxBytesPerSec": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "txBytesPerSec": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        }
+      },
+      "MonitoringPoint": {
+        "required": [
+          "timestampUtcMs",
+          "cpuPercent",
+          "memoryPercent",
+          "rxBytesPerSec",
+          "txBytesPerSec",
+          "networkInterface"
+        ],
+        "type": "object",
+        "properties": {
+          "timestampUtcMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cpuPercent": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "memoryPercent": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "rxBytesPerSec": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "txBytesPerSec": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "networkInterface": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "MonitoringProbe": {
+        "required": [
+          "name",
+          "observedAtUtcMs",
+          "error",
+          "status",
+          "httpStatus",
+          "database",
+          "manifestStatus",
+          "manifestValid"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "observedAtUtcMs": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "httpStatus": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "database": {
+            "type": "string",
+            "nullable": true
+          },
+          "manifestStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "manifestValid": {
+            "type": "boolean",
+            "nullable": true
+          }
+        }
+      },
+      "MonitoringResources": {
+        "required": [
+          "cpu",
+          "memory",
+          "network",
+          "disks"
+        ],
+        "type": "object",
+        "properties": {
+          "cpu": {
+            "$ref": "#/components/schemas/MonitoringCpu"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/MonitoringMemory"
+          },
+          "network": {
+            "$ref": "#/components/schemas/MonitoringNetwork"
+          },
+          "disks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonitoringDisk"
+            }
+          }
+        }
+      },
+      "MonitoringResponse": {
+        "required": [
+          "status",
+          "servedAtUtcMs",
+          "snapshot",
+          "manifest",
+          "alerts"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "servedAtUtcMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "snapshot": {
+            "type": "object",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MonitoringSnapshot"
+              }
+            ],
+            "nullable": true
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/MonitoringManifest"
+          },
+          "alerts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonitoringAlert"
+            }
+          },
+          "freshness": {
+            "type": "object",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MonitoringFreshness"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "MonitoringSnapshot": {
+        "required": [
+          "schemaVersion",
+          "collectorStartedAtUtcMs",
+          "generatedAtUtcMs",
+          "resources",
+          "series",
+          "docker",
+          "appChecks"
+        ],
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "collectorStartedAtUtcMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "generatedAtUtcMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "resources": {
+            "$ref": "#/components/schemas/MonitoringResources"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonitoringPoint"
+            }
+          },
+          "docker": {
+            "$ref": "#/components/schemas/MonitoringDocker"
+          },
+          "appChecks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonitoringProbe"
+            }
+          }
+        }
       },
       "PageResponseOfAccountView": {
         "required": [

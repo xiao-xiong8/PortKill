@@ -1,0 +1,44 @@
+# Merge these additions into the existing main docker-compose.yml.
+# Context paths are relative to the kit root, not this example file.
+services:
+  api:
+    environment:
+      Administration__MonitoringSnapshotDirectory: /run/portkill-monitor
+    volumes:
+      - monitor_snapshot:/run/portkill-monitor:ro
+  monitor:
+    build:
+      context: ./docker/monitor
+    image: portkill-monitor:1
+    environment:
+      MONITOR_COMPOSE_PROJECT: ${MONITOR_COMPOSE_PROJECT:?Set the existing Compose project name}
+      MONITOR_API_URL: http://api:5081/health/ready
+      MONITOR_API_HOST: ${ADMIN_DOMAIN:?ADMIN_DOMAIN is required}
+      MONITOR_NOTIFIER_URL: http://notifier:8091/health
+      MONITOR_DOWNLOAD_URL: https://${UPDATES_DOMAIN:?UPDATES_DOMAIN is required}/stable/manifest.json
+      MONITOR_INTERFACE: ${MONITOR_INTERFACE:-}
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./data/admin:/host/data:ro
+      - ./data/public:/host/public:ro
+      - monitor_snapshot:/snapshot
+    networks:
+      - api_proxy
+      - portkill
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: '2'
+volumes:
+  monitor_snapshot:

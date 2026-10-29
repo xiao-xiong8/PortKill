@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue';
 import { api, errorText } from '../api/http';
 import { finishStrong, useAuth } from '../state/auth';
 const auth = useAuth(), dialog = ref<HTMLDialogElement>();
 const password = ref(''), code = ref(''), error = ref(''), busy = ref(false);
 const previous = document.activeElement as HTMLElement | null;
 onMounted(async () => { dialog.value?.showModal(); await nextTick(); dialog.value?.querySelector('input')?.focus(); });
-onBeforeUnmount(() => { password.value = ''; code.value = ''; previous?.focus(); });
+onBeforeUnmount(() => { password.value = ''; code.value = ''; dialog.value?.close(); });
+onUnmounted(() => { if (previous?.isConnected) previous.focus(); });
 async function submit() {
   if (busy.value) return; busy.value = true; error.value = '';
   try { await api('/api/v1/auth/reauthenticate', 'POST', { password: password.value, code: code.value }); await auth.restore(); finishStrong(true); }

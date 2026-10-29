@@ -12,6 +12,8 @@ using PortKiller.UpdateManagement.Persistence;
 using PortKiller.UpdateAdmin.Api.Uploads;
 using PortKiller.UpdateAdmin.Api.Releases;
 using PortKiller.UpdateAdmin.Api.ClientInstallations;
+using PortKiller.UpdateAdmin.Api.Monitoring;
+using PortKiller.UpdateManagement.Monitoring;
 
 namespace PortKiller.UpdateAdmin.Api;
 
@@ -35,6 +37,7 @@ public static class AdminApiHost
         builder.Services.AddSingleton<UpdateToolClient>();
         builder.Services.TryAddSingleton<IPublishedReleaseReader, PublishedReleaseReader>();
         builder.Services.AddScoped<AdminHealthService>();
+        builder.Services.AddScoped<MonitoringService>();
         builder.Services.AddAdminIdentity(administration);
         builder.AddRequestSecurity();
         builder.Services.AddScoped<AdminCookieEvents>();
@@ -72,7 +75,24 @@ public static class AdminApiHost
         builder.Services.AddExceptionHandler<AdminExceptionHandler>();
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
-        builder.Services.AddOpenApi("v1");
+        builder.Services.AddOpenApi("v1", options => options.AddSchemaTransformer((schema, context, _) =>
+        {
+            // OpenAPI 3.0 cannot represent the nullable numeric/string union produced by the web JSON defaults.
+            // Monitoring intentionally uses strict numeric fields, with values bounded to JavaScript's safe range.
+            if (context.JsonTypeInfo.Type.Namespace == typeof(MonitoringResponse).Namespace
+                && context.JsonTypeInfo.Type.Name.StartsWith("Monitoring", StringComparison.Ordinal))
+                foreach (var property in context.JsonTypeInfo.Properties)
+                {
+                    var underlying = Nullable.GetUnderlyingType(property.PropertyType);
+                    var type = underlying ?? property.PropertyType;
+                    if (schema.Properties?.TryGetValue(property.Name, out var item) != true || item is not Microsoft.OpenApi.OpenApiSchema numeric) continue;
+                    if (type != typeof(long) && type != typeof(int) && type != typeof(double)) continue;
+                    numeric.Type = (type == typeof(double) ? Microsoft.OpenApi.JsonSchemaType.Number : Microsoft.OpenApi.JsonSchemaType.Integer)
+                        | (underlying == null ? 0 : Microsoft.OpenApi.JsonSchemaType.Null);
+                    numeric.Pattern = null;
+                }
+            return Task.CompletedTask;
+        }));
         var app = builder.Build();
         app.UseForwardedHeaders();
         app.UseRouting();
@@ -123,6 +143,7 @@ public static class AdminApiHost
         app.MapGet("/api/v1/system/capabilities", () => AdminContract.Capabilities)
             .RequireAuthorization(AdminPermissions.Read).WithName("GetCapabilities").ProducesProblem(401).ProducesProblem(403);
         app.MapAdminAuthentication();
+        app.MapMonitoring();
         app.MapAdminAccounts();
         app.MapUploadEndpoints();
         app.MapPublishEndpoints();

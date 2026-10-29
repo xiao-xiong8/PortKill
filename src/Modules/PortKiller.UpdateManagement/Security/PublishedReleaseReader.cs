@@ -30,7 +30,8 @@ public sealed class PublishedReleaseReader(UpdateToolOptions options) : IPublish
             verification.Validate();
             string path = Path.Combine(options.ReleaseRoot, "manifest.json");
             AdminRuntimeLease.RequireLocalPath(path);
-            if (!File.Exists(path)) return null;
+            try { _ = File.GetAttributes(path); }
+            catch (FileNotFoundException) { return null; }
             await using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete,
                 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
             if (input.Length > 65_536) throw new InvalidDataException();

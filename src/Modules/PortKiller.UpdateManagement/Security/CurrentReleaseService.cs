@@ -23,8 +23,8 @@ public sealed class CurrentReleaseService(IPublishedReleaseReader source, Update
             .FirstOrDefaultAsync(token);
         ReleaseJob? job = rows?.job;
         double days = (release.ExpiresUtcMs - now) / TimeSpan.FromDays(1).TotalMilliseconds;
-        var expiry = days <= 0 ? ManifestExpiryStatus.Expired : days < 7 ? ManifestExpiryStatus.Critical
-            : days < 14 ? ManifestExpiryStatus.Expiring : ManifestExpiryStatus.Healthy;
+        var expiry = days <= 0 ? ManifestExpiryStatus.Expired : days <= 7 ? ManifestExpiryStatus.Critical
+            : days <= 14 ? ManifestExpiryStatus.Expiring : ManifestExpiryStatus.Healthy;
         var receipt = job?.ReceiptSha256 is { Length: 64 } sha && job.ActivatedUtcMs is { } at
             ? new ActivationReceiptResponse(job.Id, sha, at) : null;
         return new("PortKill", "stable", now, new(release.Version, release.Sequence, release.ManifestSha256,

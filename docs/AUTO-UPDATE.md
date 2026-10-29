@@ -252,3 +252,13 @@ pwsh -File scripts/build/Test-UpdatePipeline.ps1 -VcVarsAllPath C:/path/to/vcvar
 每条链路都检查结果格式、全部四文件摘要、配置保留、缓存/备份/工作副本清理及每次完成只提示一次。修改安装协议或回执格式时保留旧基线，并在上述 JSON 中增加新的已发布源码提交、隔离版本和回执格式，不能用新基线覆盖旧基线；不支持的未来格式应保留恢复材料，不能回退解析成旧成功记录。
 
 这是可复用 CI 入口，未绑定外部 CI 平台，也未创建生产自动发布任务。上线顺序：先部署服务端工具和只读通知服务，再经旧轮询链发布新客户端，最后依据公网与普通/管理员安装演练结果启用运维监测。
+
+## Docker 运行总览监控
+
+运行总览通过一个额外的 Python 采集容器观察宿主机资源和当前项目的 `api`、`worker`、`notifier`、`caddy`；API 只读共享快照，经完整会话及 `release.read` 返回 `GET /api/v1/system/monitoring`。未配置、采集失败、快照损坏或过期均显示明确状态，不把未知数据填为正常。Worker 首版没有业务心跳，容器运行不证明任务处理正常。
+
+首次配置与镜像准备完成后沿用 `docker compose up -d`，不另安装宿主机 Python/systemd 监控服务。部署参考 `deploy/docker/monitor/README.md` 和增量 Compose 示例；`scripts/release/New-DockerMonitoringUpdate.py` 根据已核实的原部署包和新 Linux 服务端产物生成独立增量包，保留原部署目录。增量包不包含 `.env`、验证配置或业务数据。示例须合入原主 Compose，并保留项目名、代理网络和业务挂载；不能用示例替换整套部署。
+
+监控每五秒采集资源，保留十五分钟/最多181点；Docker十五秒、磁盘和应用检查三十秒。总览在前台约每五秒刷新监控、六十秒刷新正式版本及最近五任务；离开或隐藏页面时暂停请求，返回时保留当前会话内的最近结果并按真实年龄判断有效性。`/overview?display=screen` 提供沿用认证与主题的大屏。接口连接中断与采集器停止更新分别提示，资源、Docker、磁盘和探针按各自有效期过期，限流遵循 Retry-After。
+
+Docker socket仅提供给采集器，API/Web没有Docker权限；socket只读挂载不等于管理API只读授权。首版不执行自动修复或业务重启。Linux实机还需验证宿主机取值、权限、重启和回退；本机单测、模拟Docker及浏览器结果不能替代这些验收。

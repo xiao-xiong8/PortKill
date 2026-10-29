@@ -543,6 +543,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/monitoring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetMonitoring"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/status": {
         parameters: {
             query?: never;
@@ -914,6 +930,132 @@ export interface components {
         };
         /** @enum {unknown} */
         ManifestExpiryStatus: "healthy" | "expiring" | "critical" | "expired";
+        MonitoringAlert: {
+            code: string;
+            message: string;
+            severity: string;
+            source: string;
+        };
+        MonitoringContainer: {
+            containerId: string | null;
+            health: string;
+            /** Format: int32 */
+            restartCount: number;
+            service: string;
+            state: string;
+        };
+        MonitoringCpu: {
+            error: string | null;
+            /** Format: int64 */
+            observedAtUtcMs: number | null;
+            /** Format: double */
+            percent: number | null;
+        };
+        MonitoringDisk: {
+            error: string | null;
+            /** Format: int64 */
+            freeBytes: number | null;
+            label: string;
+            /** Format: int64 */
+            observedAtUtcMs: number | null;
+            /** Format: int64 */
+            totalBytes: number | null;
+        };
+        MonitoringDocker: {
+            error: string | null;
+            /** Format: int64 */
+            observedAtUtcMs: number | null;
+            services: components["schemas"]["MonitoringContainer"][];
+        };
+        MonitoringFreshness: {
+            /** Format: int32 */
+            collectorTtlMs: number;
+            /** Format: int32 */
+            diskTtlMs: number;
+            /** Format: int32 */
+            dockerTtlMs: number;
+            /** Format: int32 */
+            probeTtlMs: number;
+            /** Format: int32 */
+            resourceTtlMs: number;
+        };
+        MonitoringManifest: {
+            /** Format: double */
+            daysRemaining: number | null;
+            status: string;
+            version: string | null;
+        };
+        MonitoringMemory: {
+            error: string | null;
+            /** Format: int64 */
+            observedAtUtcMs: number | null;
+            /** Format: int64 */
+            totalBytes: number | null;
+            /** Format: int64 */
+            usedBytes: number | null;
+        };
+        MonitoringNetwork: {
+            error: string | null;
+            interface: string | null;
+            /** Format: int64 */
+            observedAtUtcMs: number | null;
+            /** Format: double */
+            rxBytesPerSec: number | null;
+            /** Format: double */
+            txBytesPerSec: number | null;
+        };
+        MonitoringPoint: {
+            /** Format: double */
+            cpuPercent: number | null;
+            /** Format: double */
+            memoryPercent: number | null;
+            networkInterface: string | null;
+            /** Format: double */
+            rxBytesPerSec: number | null;
+            /** Format: int64 */
+            timestampUtcMs: number;
+            /** Format: double */
+            txBytesPerSec: number | null;
+        };
+        MonitoringProbe: {
+            database: string | null;
+            error: string | null;
+            /** Format: int32 */
+            httpStatus: number | null;
+            manifestStatus: string | null;
+            manifestValid: boolean | null;
+            name: string;
+            /** Format: int64 */
+            observedAtUtcMs: number | null;
+            status: string;
+        };
+        MonitoringResources: {
+            cpu: components["schemas"]["MonitoringCpu"];
+            disks: components["schemas"]["MonitoringDisk"][];
+            memory: components["schemas"]["MonitoringMemory"];
+            network: components["schemas"]["MonitoringNetwork"];
+        };
+        MonitoringResponse: {
+            alerts: components["schemas"]["MonitoringAlert"][];
+            freshness?: components["schemas"]["MonitoringFreshness"] | null;
+            manifest: components["schemas"]["MonitoringManifest"];
+            /** Format: int64 */
+            servedAtUtcMs: number;
+            snapshot: components["schemas"]["MonitoringSnapshot"] | null;
+            status: string;
+        };
+        MonitoringSnapshot: {
+            appChecks: components["schemas"]["MonitoringProbe"][];
+            /** Format: int64 */
+            collectorStartedAtUtcMs: number;
+            docker: components["schemas"]["MonitoringDocker"];
+            /** Format: int64 */
+            generatedAtUtcMs: number;
+            resources: components["schemas"]["MonitoringResources"];
+            /** Format: int32 */
+            schemaVersion: number;
+            series: components["schemas"]["MonitoringPoint"][];
+        };
         PageResponseOfAccountView: {
             items: components["schemas"]["AccountView"][];
             /** Format: int32 */
@@ -2605,6 +2747,53 @@ export interface operations {
             };
             /** @description Forbidden */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetMonitoring: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonitoringResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

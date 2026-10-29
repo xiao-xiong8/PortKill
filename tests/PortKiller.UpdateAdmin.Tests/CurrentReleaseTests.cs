@@ -28,6 +28,8 @@ public sealed class CurrentReleaseTests
 
     [Theory]
     [InlineData(30, "healthy")]
+    [InlineData(14, "expiring")]
+    [InlineData(7, "critical")]
     [InlineData(10, "expiring")]
     [InlineData(3, "critical")]
     [InlineData(-1, "expired")]

@@ -225,7 +225,7 @@ public partial class MainViewModel : ViewModelBase
     [ObservableProperty] private string _selectedTheme = "跟随系统";
     [ObservableProperty] private bool _isAutoRefresh = true;
     [ObservableProperty] private string _selectedInterval = "2 秒";
-    [ObservableProperty] private bool _isAutoStart;
+    [ObservableProperty] private bool _isAutoStart = true;
     [ObservableProperty] private bool _alwaysRunAsAdmin;
 
     public bool IsThemeSystem => SelectedTheme == "跟随系统";
@@ -372,6 +372,7 @@ public partial class MainViewModel : ViewModelBase
         AutoCheckForUpdates = settings.AutoCheckForUpdates;
         UpdateUi.SetAutomaticCheck(AutoCheckForUpdates);
         AlwaysRunAsAdmin = settings.AlwaysRunAsAdmin;
+        _autoStartPreference.Load(settings.IsAutoStart);
         IsAutoRefresh = settings.IsAutoRefresh;
         SelectedInterval = settings.SelectedInterval;
         UiFontSize = settings.GlobalFontSize;

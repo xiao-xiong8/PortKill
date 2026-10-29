@@ -55,6 +55,10 @@ sealed class Program
                 && SecurityHelper.RestartAsAdministrator()) return;
 
             if (!SingleInstanceGuard.IsOwned && !SingleInstanceGuard.TryAcquire(elevationHandoff)) return;
+            // 设置是持久偏好；每次正常启动同步当前 EXE 路径，移动安装目录后也能修复旧启动项。
+            // 仅生产入口写真实 Run 键，独立回归宿主不会执行此处。
+            if (!AutoStartHelper.SetAutoStart(settings.IsAutoStart))
+                App.WriteLog("AutoStartSync", new InvalidOperationException("无法同步开机自动启动设置。"));
             PrivilegeHelper.EnableSeDebugPrivilege();
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }

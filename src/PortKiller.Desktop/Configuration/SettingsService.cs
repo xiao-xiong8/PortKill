@@ -15,8 +15,8 @@ public class AppSettings
     // 是否始终以管理员身份运行
     public bool AlwaysRunAsAdmin { get; set; } = false;
 
-    // 是否开机自动启动
-    public bool IsAutoStart { get; set; } = false;
+    // 首次运行默认开启；旧配置中显式保存的 false 继续生效。
+    public bool IsAutoStart { get; set; } = true;
 
     /// <summary>
     /// 界面字号基准（设计稿字号阶梯中的「正文与控件 12px」）。

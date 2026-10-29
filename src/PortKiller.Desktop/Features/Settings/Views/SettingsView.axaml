@@ -97,7 +97,7 @@
                             <StackPanel Orientation="Horizontal" Spacing="4" Height="34">
                                 <Button Classes="tab" Classes.active="{Binding IsSettingsTabStartup}"
                                         Command="{Binding SetSettingsTabCommand}" CommandParameter="startup"
-                                        ToolTip.Tip="开机静默驻留与系统级权限">
+                                        ToolTip.Tip="开机启动与运行权限">
                                     <StackPanel Orientation="Horizontal" Spacing="7">
                                         <Viewbox Width="14" Height="14" VerticalAlignment="Center">
                                             <Canvas Width="24" Height="24">
@@ -186,7 +186,7 @@
                                         <StackPanel Margin="18,14,18,12" Spacing="3">
                                             <TextBlock Text="启动与特权" FontSize="{DynamicResource TypeCard}"
                                                        FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
-                                            <TextBlock Text="开机静默驻留与系统级权限控制 · 两项均写入注册表与启动参数"
+                                            <TextBlock Text="管理登录 Windows 后的自动启动与应用运行权限"
                                                        FontSize="{DynamicResource TypeCaption}"
                                                        Foreground="{DynamicResource TextMuted}" />
                                         </StackPanel>
@@ -196,14 +196,15 @@
                                             <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
                                                 <TextBlock Text="开机自动启动" FontSize="{DynamicResource TypeBody}"
                                                            FontWeight="Medium" Foreground="{DynamicResource TextSecondary}" />
-                                                <TextBlock Text="写入注册表 Run 键 · 登录后静默启动到托盘"
+                                                <TextBlock Text="默认开启 · 登录 Windows 后自动运行，可随时关闭"
                                                            FontSize="{DynamicResource TypeCaption}"
                                                            Foreground="{DynamicResource TextMuted}" />
                                             </StackPanel>
-                                            <ToggleButton Grid.Column="1" Theme="{StaticResource AppSwitch}"
+                                            <ToggleButton x:Name="AutoStartSwitch" Grid.Column="1" Theme="{StaticResource AppSwitch}"
                                                           VerticalAlignment="Center"
                                                           IsChecked="{Binding IsAutoStart, Mode=TwoWay}"
-                                                          ToolTip.Tip="开机自动启动（写入 HKCU Run 键）" />
+                                                          ToolTip.Tip="登录 Windows 后自动运行 PortKiller"
+                                                          AutomationProperties.Name="开机自动启动" />
                                         </Grid>
 
                                         <Border Height="1" Background="{DynamicResource BorderSoft}" />

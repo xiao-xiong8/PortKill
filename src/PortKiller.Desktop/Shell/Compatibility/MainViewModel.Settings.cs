@@ -21,6 +21,9 @@ namespace PortKiller.ViewModels;
 /// <summary>MainViewModel 分部类：设置与排版（主题 / 自启动 / 字号字体 / 设置页）。</summary>
 public partial class MainViewModel
 {
+    private readonly AutoStartPreference _autoStartPreference = new(
+        AutoStartHelper.IsAutoStartEnabled, AutoStartHelper.SetAutoStart);
+
     /// <summary>在主题选择切换前通知视图，以便在旧主题仍可见时捕获过渡帧。</summary>
     internal event Action<string, string>? ThemeChangeRequested;
 
@@ -48,7 +51,7 @@ public partial class MainViewModel
             Theme = SelectedTheme,
             AutoCheckForUpdates = AutoCheckForUpdates,
             AlwaysRunAsAdmin = AlwaysRunAsAdmin,
-            IsAutoStart = IsAutoStart,
+            IsAutoStart = _autoStartPreference.Requested,
             GlobalFontSize = UiFontSize,
             MonoFontSize = MonoFontSize,
             ScaleHeadings = ScaleHeadings,
@@ -150,12 +153,18 @@ public partial class MainViewModel
 
     partial void OnIsAutoStartChanged(bool value)
     {
-        if (_suppressSettingsSave) return;
-        bool ok = AutoStartHelper.SetAutoStart(value);
-        SaveSettings();
+        if (_suppressSettingsSave || !_started) return;
+        bool ok = _autoStartPreference.Change(value, SaveSettings);
+        if (!ok)
+        {
+            _suppressSettingsSave = true;
+            try { IsAutoStart = _autoStartPreference.Enabled; }
+            finally { _suppressSettingsSave = false; }
+        }
         ShowToast(
             ok ? (value ? "已开启开机自动启动" : "已关闭开机自动启动") : "开机自启动配置失败",
-            ok ? "注册表 HKCU\\...\\Run 键已同步更新" : "可能受系统组策略限制，请手动配置",
+            ok ? (value ? "下次登录 Windows 时自动运行 PortKiller。" : "下次登录 Windows 时不会自动运行。")
+                : "未能保存开机启动设置，请检查目录权限或系统限制后重试。",
             isError: !ok);
     }
 

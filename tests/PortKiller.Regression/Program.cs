@@ -65,6 +65,8 @@ internal static class Program
             Run("家族收集排除无关同名进程", Family_UnrelatedSameName_Excluded);
             Run("异常进程树可以结束", Family_CyclicSnapshot_Terminates);
             Run("配置原子保存与非有限值", Settings_RoundTrip_PreservesPreference);
+            Run("开机启动默认开启、关闭持久化与失败回退", AutoStartChecks.DefaultsAndPreferences);
+            Run("开机启动隔离注册表、带空格路径与目录迁移", AutoStartChecks.IsolatedRegistry);
             Run("第二实例被单实例锁拒绝", SingleInstance_SecondAcquire_IsRejected);
             Run("提权接管等待互斥体释放", SingleInstance_Handoff_WaitsForOwner);
             Run("关键进程在执行边界被保护", KillFamily_ProtectedPid_IsRejected);

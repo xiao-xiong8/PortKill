@@ -549,6 +549,14 @@ internal static class UiChecks
         }
         var copy = window.GetLogicalDescendants().OfType<Button>().First(x => Equals(x.Content, "复制报告"));
         Program.Assert(ReferenceEquals(copy.Command, vm.CopyOperationReportCommand), "复制报告仍绑定到当前行。");
+        vm.SettingsTab = "startup";
+        var autoStart = window.GetLogicalDescendants().OfType<ToggleButton>().Single(x => x.Name == "AutoStartSwitch");
+        Program.Assert(vm.IsAutoStart && autoStart.IsChecked == true, "开机启动开关未默认开启。");
+        // 未 StartAsync 的模型只验证绑定，不写真实注册表或用户配置。
+        vm.IsAutoStart = false;
+        Program.Assert(autoStart.IsChecked == false, "开机启动关闭状态未同步到设置开关。");
+        vm.IsAutoStart = true;
+        Program.Assert(autoStart.IsChecked == true, "开机启动开启状态未同步到设置开关。");
         vm.SettingsTab = "engine";
         vm.IsUpdateReady = true;
         vm.RequestInstallUpdateCommand.Execute(null);

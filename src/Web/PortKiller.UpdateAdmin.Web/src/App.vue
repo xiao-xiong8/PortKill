@@ -6,8 +6,10 @@ import StrongAuthentication from './components/StrongAuthentication.vue';
 import { useAuth } from './state/auth';
 import { errorText } from './api/http';
 import { appearanceKey, type ThemePreference } from './state/appearance';
+import { useUpload } from './state/upload';
 
 const auth = useAuth();
+const uploadTask = useUpload();
 const route = useRoute();
 const router = useRouter();
 const themePreference = ref<ThemePreference>('system');
@@ -225,6 +227,9 @@ onBeforeUnmount(() => {
           </div>
         </header>
         <main id="main-content" tabindex="-1">
+          <p v-if="auth.can('release.upload') && uploadTask.hasTask.value && route.name !== 'upload'" class="notice" role="status">
+            {{ uploadTask.stage.value }} <RouterLink :to="uploadTask.completedJob.value ? '/job/' + uploadTask.completedJob.value : uploadTask.upload.value ? '/upload/' + uploadTask.upload.value.id : '/upload'">{{ uploadTask.completedJob.value ? '查看校验任务' : '返回上传任务' }}</RouterLink>
+          </p>
           <p v-if="error" role="alert" class="notice danger">{{ error }} <button @click="refresh">重试连接</button></p>
           <p v-else-if="auth.connectionError.value" role="status" class="notice">会话状态暂时无法刷新，正在重试。</p>
           <div v-if="auth.loading.value" class="empty-workspace" role="status">正在恢复会话…</div>

@@ -1,0 +1,25 @@
+客户端版本上报入口修复
+
+完整部署包已补齐下载域名的两个 POST 接口：
+  /api/v1/client-installations/register
+  /api/v1/client-installations/report
+其余管理 API 不向下载域名开放。代理将 Host 设置为原 ADMIN_DOMAIN，
+沿用 API 的主机校验、限流、4 KiB 请求上限和上报令牌校验。
+
+已有监控部署的增量修复：
+1. 将 docker-client-reports-update.sh 和 enable-client-reports.py 放在同一目录。
+   保留服务器原 .env、docker-compose.yml、数据目录和 Caddyfile。
+2. Ubuntu 需安装 Python 3，并保持原 Caddy、API 容器运行。
+3. 执行（使用原部署目录和原 Compose 项目名）：
+   sudo bash ./docker-client-reports-update.sh /home/ubuntu/PortKill-Docker-Kit-20261026 portkill-docker-kit-20261026
+4. 脚本核对 Caddy 挂载、生成候选配置、在当前 Caddy 中校验，再备份原配置并平滑加载。
+   配置已经包含入口时也会重新加载，适用于文件已直接覆盖但运行配置尚未更新的情况。
+   不重建应用镜像、不删除容器、数据卷或证书；加载失败会尝试恢复原配置。
+5. 使用包含上报功能的客户端启动并检查 Web 的客户端版本页面。
+   旧客户端此前失败的报告需重启重新触发；带失败补报逻辑的新版会自动恢复。
+
+回退时，将脚本输出的 Caddyfile.before-client-reports-* 备份内容写回原 Caddyfile，
+并在原 Compose 项目执行 caddy validate / caddy reload。不要删除数据卷。
+
+本次 Web 修复还需要整套替换 Web 构建资源；失败补报逻辑需要新版桌面程序。
+单独修复路由不能让不包含上报功能的旧客户端产生报告。

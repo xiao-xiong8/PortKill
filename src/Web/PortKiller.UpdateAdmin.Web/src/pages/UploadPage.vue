@@ -1,137 +1,35 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
-import type { components } from '../api/contracts.generated';
-import { api, errorText } from '../api/http';
-import { uploadPart } from '../api/upload';
+import { computed, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { openJob, time } from '../api/display';
+import { useUpload } from '../state/upload';
 
 const props = defineProps<{ id?: string }>();
-const router = useRouter();
-const manifest = ref<File>(), packageFile = ref<File>(), upload = ref<components['schemas']['UploadSessionResponse']>();
-const manifestSent = ref(0), packageSent = ref(0), busy = ref(false), error = ref(''), stage = ref('选择两份签名产物');
+const route = useRoute(), router = useRouter(), task = useUpload();
+const { manifest, packageFile, upload, manifestSent, packageSent, busy, error, stage, completedJob, canStart } = task;
+// The navigation entry starts a new upload after the previous transfer was submitted.
+// Active/paused uploads retain their files and session when returning through that entry.
+if (!props.id && completedJob.value) task.reset();
 const manifestInput = ref<HTMLInputElement>(), packageInput = ref<HTMLInputElement>();
-let controller: AbortController | undefined;
-
+const conflict = computed(() => props.id && upload.value && props.id !== upload.value.id);
 function pick(event: Event, part: 'manifest' | 'package') {
-  const file = (event.target as HTMLInputElement).files?.[0];
-  if (part === 'manifest') manifest.value = file;
-  else packageFile.value = file;
+  task.pick((event.target as HTMLInputElement).files?.[0], part);
 }
-
 function formatSize(bytes: number): string {
   if (!bytes || bytes <= 0) return '0 B';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KiB`;
   return `${(bytes / 1048576).toFixed(2)} MiB`;
 }
-
-async function readSession(id: string, signal?: AbortSignal) {
-  upload.value = await api(`/api/v1/uploads/${encodeURIComponent(id)}`, 'GET', undefined, signal);
-  manifestSent.value = Number(upload.value?.manifestReceivedBytes);
-  packageSent.value = Number(upload.value?.packageReceivedBytes);
-}
-
-function clearSelectedFiles() {
-  manifest.value = undefined;
-  packageFile.value = undefined;
-  manifestSent.value = 0;
-  packageSent.value = 0;
-}
-
-async function restoreUpload(id: string) {
-  controller?.abort();
-  const own = controller = new AbortController();
-  busy.value = true;
-  error.value = '';
-  clearSelectedFiles();
-  stage.value = '正在读取上传记录…';
-  try {
-    await readSession(id, own.signal);
-    if (!own.signal.aborted) stage.value = '已恢复上传记录，请重新选择原文件';
-  } catch (cause) {
-    if (!own.signal.aborted) error.value = errorText(cause);
-  } finally {
-    if (!own.signal.aborted) busy.value = false;
-  }
-}
-
-async function start() {
-  if (busy.value) return;
-  busy.value = true;
-  error.value = '';
-  const own = controller = new AbortController();
-  try {
-    if (upload.value) await readSession(upload.value.id, own.signal);
-    if (upload.value?.state !== 'uploaded') {
-      if (!manifest.value || !packageFile.value) throw new Error('Select files');
-      if (manifest.value.size < 1 || manifest.value.size > 65536 || packageFile.value.size < 1 || packageFile.value.size > 268435456) {
-        error.value = '清单须为 1–64 KiB，更新包须为 1 byte–256 MiB。';
-        return;
-      }
-      if (!upload.value) {
-        upload.value = await api('/api/v1/uploads/', 'POST', { manifestBytes: manifest.value.size, packageBytes: packageFile.value.size }, own.signal);
-        await router.replace({ name: 'upload', params: { id: upload.value!.id } });
-      }
-      if (Number(upload.value!.manifestExpectedBytes) !== manifest.value.size || Number(upload.value!.packageExpectedBytes) !== packageFile.value.size) {
-        error.value = '重新选择的文件大小与原上传不符，请选择原文件或取消后新建上传。';
-        return;
-      }
-      if (Number(upload.value!.manifestReceivedBytes) === 0) {
-        stage.value = '正在传输签名清单';
-        upload.value = await uploadPart(upload.value!.id, 'manifest', manifest.value, own.signal, bytes => { manifestSent.value = bytes; });
-      }
-      if (Number(upload.value!.packageReceivedBytes) === 0) {
-        stage.value = '正在传输更新包';
-        upload.value = await uploadPart(upload.value!.id, 'package', packageFile.value, own.signal, bytes => { packageSent.value = bytes; });
-      }
-    }
-    stage.value = '提交服务器校验';
-    const result = await api<components['schemas']['UploadCompletionResponse']>(`/api/v1/uploads/${upload.value!.id}/complete`, 'POST', {}, own.signal);
-    openJob(result.jobId);
-  } catch (cause) {
-    error.value = errorText(cause);
-    stage.value = '传输未完成，可整文件重传未确认的文件';
-  } finally {
-    busy.value = false;
-  }
-}
-
-async function cancel() {
-  if (!upload.value || busy.value) return;
-  error.value = '';
-  try {
-    await api(`/api/v1/uploads/${upload.value.id}`, 'DELETE');
-    upload.value = undefined;
-    stage.value = '本次上传已取消';
-    manifestSent.value = 0;
-    packageSent.value = 0;
-    await router.replace('/upload');
-  } catch (cause) {
-    error.value = errorText(cause);
-  }
-}
-
-onMounted(async () => {
-  if (props.id) await restoreUpload(props.id);
+async function cancel() { await task.cancel(); if (!upload.value) await router.replace('/upload'); }
+async function newUpload() { task.reset(); await router.replace('/upload'); }
+watch(() => props.id, id => { if (id) void task.restore(id); }, { immediate: true });
+watch(() => upload.value?.id, id => {
+  if (id && !props.id) void router.replace({ name: 'upload', params: { id } });
+}, { immediate: true });
+watch(completedJob, id => {
+  if (id && route.name === 'upload' && !conflict.value) openJob(id);
 });
-watch(() => props.id, id => {
-  // The upload route keeps one component instance for /upload and /upload/:id.
-  // Do not reload the session created by this page; reload only when navigating
-  // to a different existing upload session.
-  if (id && upload.value?.id !== id) {
-    void restoreUpload(id);
-    return;
-  }
-  if (!id && upload.value) {
-    controller?.abort();
-    upload.value = undefined;
-    clearSelectedFiles();
-    error.value = '';
-    stage.value = '选择两份签名产物';
-  }
-});
-onBeforeUnmount(() => controller?.abort());
 </script>
 
 <template>
@@ -141,8 +39,11 @@ onBeforeUnmount(() => controller?.abort());
       <span class="muted">PortKill · stable · win-x64</span>
     </div>
 
+    <p v-if="conflict" class="notice" role="status">当前保留了另一项上传，以下展示该任务。<RouterLink :to="'/upload/' + upload!.id">返回当前上传</RouterLink></p>
+    <p v-if="completedJob" class="notice" role="status">上传完成，已提交校验。<RouterLink :to="'/job/' + completedJob">查看校验任务</RouterLink> <button type="button" @click="newUpload">新建上传</button></p>
+    <p v-else-if="upload?.state === 'expired' || upload?.state === 'cancelled'" class="notice" role="status">本次上传已关闭。<button type="button" @click="newUpload">新建上传</button></p>
     <div class="split-workspace upload-workspace">
-      <form class="form-stack upload-form" @submit.prevent="start">
+      <form class="form-stack upload-form" @submit.prevent="task.start">
         <p v-if="error" class="notice danger" role="alert">{{ error }}</p>
 
         <!-- 顶部传输阶段与会话状态条 -->
@@ -172,13 +73,13 @@ onBeforeUnmount(() => controller?.abort());
               type="file"
               accept=".json"
               class="sr-only-file-input"
-              :disabled="busy"
+              :disabled="busy || Boolean(completedJob)"
               @change="pick($event, 'manifest')"
             >
             <button
               type="button"
               class="file-trigger-btn"
-              :disabled="busy"
+              :disabled="busy || Boolean(completedJob)"
               @click="manifestInput?.click()"
             >
               {{ manifest ? '重新选择' : '选择文件' }}
@@ -225,13 +126,13 @@ onBeforeUnmount(() => controller?.abort());
               type="file"
               accept=".zip"
               class="sr-only-file-input"
-              :disabled="busy"
+              :disabled="busy || Boolean(completedJob)"
               @change="pick($event, 'package')"
             >
             <button
               type="button"
               class="file-trigger-btn"
-              :disabled="busy"
+              :disabled="busy || Boolean(completedJob)"
               @click="packageInput?.click()"
             >
               {{ packageFile ? '重新选择' : '选择文件' }}
@@ -263,11 +164,11 @@ onBeforeUnmount(() => controller?.abort());
         <div class="actions upload-actions-bar">
           <button
             class="primary"
-            :disabled="busy || (upload?.state !== 'uploaded' && (!manifest || !packageFile))"
+            :disabled="!canStart"
           >
             {{ upload?.state === 'uploaded' ? '查看校验任务' : '上传并校验' }}
           </button>
-          <button v-if="busy" type="button" @click="controller?.abort()">停止传输</button>
+          <button v-if="busy" type="button" @click="task.stop">停止传输</button>
           <button v-if="upload && !busy && upload.state === 'uploading'" type="button" class="danger-button" @click="cancel">取消本次上传</button>
         </div>
       </form>
@@ -280,7 +181,7 @@ onBeforeUnmount(() => controller?.abort());
         </div>
         <div class="upload-aside-block">
           <h3>中断后重传</h3>
-          <p class="muted">可以刷新页面恢复上传记录，重新选择原文件。服务器已经确认的文件会保留，未完成的文件从头传输。</p>
+          <p class="muted">切换页面后上传会继续，返回时保留进度。刷新页面后可恢复上传记录，重新选择尚未确认的原文件；未完成的文件从头传输。</p>
           <p class="muted">上传完成后由服务器验签、验包，再决定是否允许确认发布；传输完成不代表版本已发布。</p>
         </div>
         <div class="upload-aside-footer">

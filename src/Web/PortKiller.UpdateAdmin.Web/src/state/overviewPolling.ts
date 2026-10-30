@@ -3,7 +3,7 @@ import { ApiError } from '../api/http';
 /** A bounded GET channel. All deadlines use the same monotonic clock. */
 export class OverviewChannel {
   private controller?: AbortController;
-  private retryAt = 0;
+  retryAt = 0;
   private failures = 0;
   private lastStarted = -Infinity;
   nextAt = 0;
@@ -27,6 +27,7 @@ export class OverviewChannel {
         this.retryAt = this.clock() + Math.max(this.interval, error.retryAfter * 1000);
         this.rateLimited(this.retryAt);
       }
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) this.retryAt = Infinity;
       this.failed(controller.signal.reason === 'timeout' ? new ApiError(0, 'timeout', '监控请求超时，正在重试。') : error);
     } finally {
       clearTimeout(timeout);

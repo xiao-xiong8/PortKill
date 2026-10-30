@@ -186,6 +186,10 @@ public partial class MainViewModel
             var notice = await UpdateMaintenance.RunAsync(install, cache, UpdateService.CurrentVersion, _lifetime.Token, healthLaunch)
                 .ConfigureAwait(false);
             completion = notice;
+            // Persist before the completion notice can be consumed; this does not perform network I/O.
+            if (_clientReports is { } queuedReports)
+                await queuedReports.QueueAsync(UpdateService.CurrentVersion, notice?.Outcome ?? "started", _lifetime.Token)
+                    .ConfigureAwait(false);
             if (notice != null)
                 Dispatcher.UIThread.Post(() =>
                 {
@@ -207,16 +211,22 @@ public partial class MainViewModel
                 var reportToken = _lifetime.Token;
                 _ = Task.Run(async () =>
                 {
-                    await reports.ReportAsync(UpdateService.CurrentVersion, "started", reportToken);
-                    if (completion?.Outcome is { } outcome)
-                        await reports.ReportAsync(UpdateService.CurrentVersion, outcome, reportToken);
+                    if (completion == null)
+                        await reports.ReportAsync(UpdateService.CurrentVersion, "started", reportToken);
+                    else
+                        await reports.RetryPendingAsync(reportToken);
                 });
             }
         }
     }
 
     private void OnUpdateNetworkChanged(object? sender, NetworkAvailabilityEventArgs args)
-    { if (args.IsAvailable) _updates?.NotifyEnvironmentChanged(); }
+    {
+        if (!args.IsAvailable) return;
+        _updates?.NotifyEnvironmentChanged();
+        if (_clientReports is { } reports)
+            _ = Task.Run(() => reports.RetryPendingAsync(_lifetime.Token, networkAvailable: true));
+    }
 
     internal void NotifyUpdateEnvironmentChanged() => _updates?.NotifyEnvironmentChanged();
 

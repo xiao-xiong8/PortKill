@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch, type Ref } from 'vue';
 import type { components } from '../api/contracts.generated';
-import { api, errorText } from '../api/http';
+import { api, ApiError, errorText } from '../api/http';
 import { useAuth } from './auth';
 import { OverviewChannel } from './overviewPolling';
 
@@ -12,6 +12,8 @@ export function createOverviewStore(request = api, monotonic = () => performance
   const history = shallowRef<components['schemas']['PageResponseOfJobListItem']>();
   const monitorError = ref(''), currentError = ref(''), historyError = ref('');
   const ticking = ref(0), refreshing = ref(false), failureCount = ref(0);
+  const paused = ref(false), forbidden = ref(false);
+  const diagnostic = shallowRef<{ at: number; elapsedMs: number; status: number; code: string }>();
   let receivedAt = 0, blockedUntil = 0, active = false, screen = false;
   let timer: ReturnType<typeof setInterval> | undefined;
   const serverNow = computed(() => {
@@ -20,21 +22,39 @@ export function createOverviewStore(request = api, monotonic = () => performance
   });
   const transport = computed(() => {
     void ticking.value;
-    if (!monitoring.value) return monitorError.value ? 'disconnected' : 'loading';
-    if (failureCount.value >= 3 || monotonic() - receivedAt >= 25_000) return 'disconnected';
+    if (paused.value) return 'paused';
+    if (monotonic() < blockedUntil) return 'rate_limited';
+    if (forbidden.value) return 'forbidden';
+    if (failureCount.value >= 3) return 'disconnected';
+    if (!monitoring.value) return monitorError.value ? 'delayed' : 'loading';
+    if (!monitorError.value && monotonic() - receivedAt >= 25_000) return 'refreshing';
     return monitorError.value ? 'delayed' : 'connected';
   });
-  const limited = (until: number) => { blockedUntil = Math.max(blockedUntil, until); };
+  const limited = (until: number) => { blockedUntil = Math.max(blockedUntil, until); ticking.value++; };
+  const retrySeconds = computed(() => {
+    void ticking.value;
+    return Math.max(0, Math.ceil((Math.max(blockedUntil, monitorChannel.retryAt) - monotonic()) / 1000));
+  });
+  let startedAt = 0;
   const monitorChannel = new OverviewChannel(async signal => {
-    refreshing.value = true;
+    refreshing.value = true; startedAt = monotonic();
     try {
       const result = await request<Monitoring>('/api/v1/system/monitoring', 'GET', undefined, signal);
       if (!signal.aborted && active) {
         monitoring.value = result; receivedAt = monotonic(); ticking.value++;
         monitorError.value = ''; failureCount.value = 0;
+        forbidden.value = false;
+        diagnostic.value = { at: Date.now(), elapsedMs: monotonic() - startedAt, status: 200, code: '' };
       }
     } finally { if (!signal.aborted || !active) refreshing.value = false; }
-  }, 5000, error => { monitorError.value = errorText(error); failureCount.value++; refreshing.value = false; }, limited, monotonic);
+  }, 5000, error => {
+    monitorError.value = errorText(error); refreshing.value = false;
+    const status = error instanceof ApiError ? error.status : 0;
+    forbidden.value = status === 401 || status === 403;
+    if (status !== 429 && !forbidden.value) failureCount.value++;
+    diagnostic.value = { at: Date.now(), elapsedMs: monotonic() - startedAt, status,
+      code: error instanceof ApiError ? error.code : 'network_error' };
+  }, limited, monotonic);
   const currentChannel = new OverviewChannel(async signal => {
     const result = await request<components['schemas']['CurrentReleaseResponse']>('/api/v1/releases/current', 'GET', undefined, signal);
     if (!signal.aborted && active) { current.value = result; currentError.value = ''; }
@@ -51,15 +71,15 @@ export function createOverviewStore(request = api, monotonic = () => performance
     if (!screen) void historyChannel.run(now, force);
   }
   function cancel() { monitorChannel.cancel(); currentChannel.cancel(); historyChannel.cancel(); refreshing.value = false; }
-  function visibility() { if (document.hidden) cancel(); else refresh(false); }
+  function visibility() { paused.value = document.hidden; if (document.hidden) cancel(); else refresh(false); }
   function deactivate() {
-    active = false; clearInterval(timer); timer = undefined; cancel();
+    active = false; paused.value = true; clearInterval(timer); timer = undefined; cancel();
     document.removeEventListener('visibilitychange', visibility);
   }
   function activate(display: boolean) {
     screen = display;
     if (active) return;
-    active = true; refresh(false); timer = setInterval(() => refresh(false), 1000);
+    active = true; paused.value = document.hidden; refresh(false); timer = setInterval(() => refresh(false), 1000);
     document.addEventListener('visibilitychange', visibility);
   }
   function setScreen(display: boolean) { screen = display; if (display) historyChannel.cancel(); else refresh(false); }
@@ -67,10 +87,11 @@ export function createOverviewStore(request = api, monotonic = () => performance
     cancel(); monitorChannel.reset(); currentChannel.reset(); historyChannel.reset();
     monitoring.value = current.value = history.value = undefined;
     monitorError.value = currentError.value = historyError.value = '';
-    blockedUntil = receivedAt = 0; failureCount.value = 0; ticking.value++;
+    blockedUntil = receivedAt = 0; failureCount.value = 0; paused.value = forbidden.value = false;
+    diagnostic.value = undefined; ticking.value++;
   }
   return { monitoring, current, history, monitorError, currentError, historyError, serverNow, transport, refreshing,
-    refresh, activate, deactivate, reset, setScreen };
+    diagnostic, retrySeconds, refresh, activate, deactivate, reset, setScreen };
 }
 
 const store = createOverviewStore();

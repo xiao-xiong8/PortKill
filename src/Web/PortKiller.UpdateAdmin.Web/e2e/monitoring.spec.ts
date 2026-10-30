@@ -86,7 +86,7 @@ test('failed refresh preserves the page but old observations turn unknown', asyn
   await page.goto('/overview');
   await expect(page.getByText('23.5%', { exact: true })).toBeVisible();
   calls.fail = true;
-  await page.clock.fastForward(25_000);
+  await page.clock.runFor(25_000);
   await expect(page.getByText(/与监控接口的连接中断/)).toBeVisible();
   await expect(page.getByText('采集已断流', { exact: true })).toHaveCount(0);
   await expect(page.getByText('23.5%', { exact: true })).toHaveCount(0);
@@ -154,7 +154,7 @@ test('a delayed healthy sample stays distinct from a server-confirmed stopped co
   await expect(page.getByText('采集已断流', { exact: true })).toHaveCount(0);
   calls.status = 'stale'; calls.sampleAge = 21_000;
   await page.clock.fastForward(5000);
-  await expect(page.getByText(/采集器快照已停止更新，上次采样/)).toBeVisible();
+  await expect(page.getByText(/采集器快照已过期，上次采样/)).toBeVisible();
   await expect(page.getByText('23.5%', { exact: true })).toHaveCount(0);
   await expect(page.locator('tbody tr').first()).toContainText('运行中');
 });

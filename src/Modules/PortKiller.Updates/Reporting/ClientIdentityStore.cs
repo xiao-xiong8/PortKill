@@ -131,6 +131,18 @@ internal sealed class ClientIdentity
     public bool Registered { get; set; }
     public string InstallDirectory { get; set; } = "";
     public string InstallationScope { get; set; } = "";
+    public PendingClientReport? PendingReport { get; set; }
+}
+
+internal sealed class PendingClientReport
+{
+    public string Version { get; set; } = "";
+    public string Result { get; set; } = "";
+    public string Endpoint { get; set; } = "";
+    public long QueuedUtcMs { get; set; }
+    public long NextAttemptUtcMs { get; set; }
+    public bool RateLimited { get; set; }
+    public int Attempts { get; set; }
 }
 
 internal sealed class ClientIdentityCollection

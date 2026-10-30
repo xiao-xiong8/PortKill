@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import runpy
 from pathlib import Path
 import shutil
 import subprocess
@@ -85,12 +86,15 @@ def main():
     (output / "docker").mkdir()
     for name in ("Dockerfile", "Caddyfile", "Caddy.Dockerfile"):
         shutil.copy2(kit / "docker" / name, output / "docker" / name)
+    configure_caddy = runpy.run_path(str(REPOSITORY / "deploy/docker/package/enable-client-reports.py"))["configure_caddy"]
+    caddyfile = output / "docker/Caddyfile"
+    caddyfile.write_text(configure_caddy(caddyfile.read_text(encoding="utf-8-sig")), encoding="utf-8", newline="\n")
     copy_tree(REPOSITORY / "deploy/docker/monitor", output / "docker/monitor")
     (output / "docker/monitor/README.md").write_text(
         "# 完整部署包内的 monitor\n\n"
         "主 docker-compose.yml 已合入全部监控配置，不要再次合并 compose.monitoring.example.yaml。\n"
         "安装、升级、验收和回退请按包根目录的《使用说明.md》操作。\n"
-        "API、Worker、Notifier 统一使用本包新的应用镜像标签；Caddy 配置沿用原包。\n"
+        "API、Worker、Notifier 统一使用本包新的应用镜像标签；Caddy 保留原站点并补齐两个客户端上报入口。\n"
         "monitor 只向快照卷写入数据，不开放公网端口；Docker socket 的 ro 挂载不等于 API 只读授权。\n",
         encoding="utf-8", newline="\n")
     for entry in (REPOSITORY / "deploy/docker/package").iterdir():

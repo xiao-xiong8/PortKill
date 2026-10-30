@@ -42,6 +42,7 @@ export function label(state: string | null | undefined): string {
     running: '运行中', exited: '已停止', dead: '已停止', restarting: '重启中', paused: '已暂停',
     created: '已创建', removing: '移除中', ambiguous: '发现多个实例', unhealthy: '不健康',
     starting: '启动检查中', not_configured: '未配置', unavailable_manifest: '清单不可用', loading: '正在加载监控',
-    delayed: '监控更新延迟', disconnected: '监控连接中断' };
+    delayed: '监控更新延迟', disconnected: '监控连接中断', refreshing: '正在读取最新监控',
+    rate_limited: '请求限流，等待重试', forbidden: '监控访问权限失效' };
   return state ? names[state] ?? state : '未知';
 }

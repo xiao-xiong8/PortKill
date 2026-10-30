@@ -11,6 +11,7 @@ internal static class ClientReportChecks
 {
     internal static async Task Run()
     {
+        await ClientReportRetryChecks.Run();
         using var fixture = new Fixture();
         string path = Path.Combine(fixture.Root, "client-identity.json");
         var store = new ClientIdentityStore(path);

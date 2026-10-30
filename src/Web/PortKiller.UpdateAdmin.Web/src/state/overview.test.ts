@@ -70,6 +70,22 @@ describe('overview session memory and lifecycle', () => {
     request.mockRejectedValue(new ApiError(429, 'limited', 'limited', 60));
     store.activate(false); await settle(); expect(request).toHaveBeenCalledTimes(3);
     await vi.advanceTimersByTimeAsync(30_000); store.refresh(); await settle(); expect(request).toHaveBeenCalledTimes(3);
+    expect(store.transport.value).toBe('rate_limited');
     await vi.advanceTimersByTimeAsync(30_000); await settle(); expect(request).toHaveBeenCalledTimes(6);
+  });
+  it('never classifies a paused cache as failed transport on return', async () => {
+    store.activate(false); await settle(); store.deactivate();
+    await vi.advanceTimersByTimeAsync(30_000);
+    request.mockImplementation(() => new Promise(() => {})); store.activate(false);
+    expect(store.transport.value).toBe('refreshing');
+    expect(store.serverNow.value).toBe(result.servedAtUtcMs + 30_000);
+  });
+  it('keeps shared rate limiting distinct from monitor failures and sample age', async () => {
+    request.mockImplementation(url => url.includes('/releases/current')
+      ? Promise.reject(new ApiError(429, 'limited', 'limited', 60)) : Promise.resolve(result));
+    store.activate(false); await settle(); await vi.advanceTimersByTimeAsync(26_000);
+    expect(store.transport.value).toBe('rate_limited');
+    expect(store.monitorError.value).toBe(''); expect(store.retrySeconds.value).toBe(34);
+    expect(store.monitoring.value).toEqual(result);
   });
 });

@@ -10,7 +10,8 @@ import JobTable from '../components/JobTable.vue';
 
 const route = useRoute(), router = useRouter(), auth = useAuth();
 const screen = computed(() => route.query.display === 'screen');
-const { monitoring, current, history, monitorError, currentError, historyError, serverNow, transport, refreshing, refresh } = useOverview(screen);
+const { monitoring, current, history, monitorError, currentError, historyError, serverNow, transport, refreshing,
+  diagnostic, retrySeconds, refresh } = useOverview(screen);
 const snapshot = computed(() => monitoring.value?.snapshot);
 const resources = computed(() => snapshot.value?.resources);
 const policy = computed(() => freshness(monitoring.value));
@@ -60,9 +61,13 @@ async function toggleScreen() {
       <div class="actions"><button :disabled="refreshing" @click="refresh()">刷新总览</button><button @click="toggleScreen">{{ screen ? '退出大屏' : '进入大屏' }}</button></div>
     </section>
     <p v-if="transport === 'disconnected'" class="notice danger" role="alert">与监控接口的连接中断，无法确认最新采集状态。已保留最近结果，过期指标显示未知。</p>
-    <p v-else-if="monitorError || overall === 'delayed'" class="notice" role="status">监控更新延迟，正在重试。已保留最近结果，过期指标显示未知。</p>
+    <p v-else-if="transport === 'rate_limited'" class="notice" role="status">管理接口请求限流，{{ retrySeconds }} 秒后重试。已保留最近结果，过期指标显示未知。</p>
+    <p v-else-if="transport === 'forbidden'" class="notice danger" role="alert">无法访问监控接口，请刷新会话并核对账号权限。</p>
+    <p v-else-if="transport === 'refreshing'" class="notice" role="status">正在读取最新监控。已保留最近结果，过期指标显示未知。</p>
+    <p v-else-if="transport === 'delayed' || overall === 'delayed'" class="notice" role="status">监控更新延迟，正在重试。已保留最近结果，过期指标显示未知。</p>
+    <details v-if="diagnostic"><summary>监控请求详情</summary><p class="muted">最近请求 {{ time(diagnostic.at) }} · 耗时 {{ Math.round(diagnostic.elapsedMs) }} ms · {{ diagnostic.status ? 'HTTP ' + diagnostic.status : '网络或超时错误' }}<span v-if="diagnostic.code"> · {{ diagnostic.code }}</span><span v-if="retrySeconds && Number.isFinite(retrySeconds)"> · {{ retrySeconds }} 秒后重试</span></p></details>
     <p v-if="overall === 'unconfigured'" class="notice">未启用宿主机监控。正式版本与任务仍可正常使用。</p>
-    <p v-else-if="overall === 'stale'" class="notice danger" role="alert">采集器快照已停止更新，上次采样 {{ time(snapshot?.generatedAtUtcMs) }}。各项状态按最近有效检查时间显示。</p>
+    <p v-if="monitoring?.status === 'stale' || agedSnapshot" class="notice danger" role="alert">采集器快照已过期，上次采样 {{ time(snapshot?.generatedAtUtcMs) }}。各项状态按最近有效检查时间显示。</p>
     <p v-else-if="overall === 'invalid_snapshot' || overall === 'unavailable'" class="notice danger" role="alert">监控快照不可用，请检查采集容器。</p>
     <section v-if="currentAlerts.length" class="surface monitor-alerts" aria-label="当前异常">
       <h2>{{ alertTitle }}</h2><ul><li v-for="row in currentAlerts" :key="row.alert.code + row.alert.source" :class="row.alert.severity">{{ row.alert.message }}</li></ul>

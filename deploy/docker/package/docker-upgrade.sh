@@ -31,9 +31,13 @@ if [[ "$actual_hash" != "$reference_hash" ]]; then
     echo "现有 Compose 与已核对的 20261026 版本不同，已停止；请人工合并配置，不能直接覆盖。" >&2
     exit 2
 fi
-for config in docker/Dockerfile docker/Caddyfile docker/Caddy.Dockerfile; do
+for config in docker/Dockerfile docker/Caddy.Dockerfile; do
     cmp -s "$package_dir/$config" "$target_dir/$config" || { echo "$config 已有自定义修改，已停止，请人工核对。" >&2; exit 2; }
 done
+candidate_caddy="$(mktemp)"
+trap 'rm -f -- "$candidate_caddy"' EXIT
+python3 "$package_dir/enable-client-reports.py" --input "$target_dir/docker/Caddyfile" --output "$candidate_caddy"
+cmp -s "$package_dir/docker/Caddyfile" "$candidate_caddy" || { echo 'Caddyfile 有额外自定义改动，请人工核对。' >&2; exit 2; }
 
 export MONITOR_COMPOSE_PROJECT="$project"
 old_compose=(docker compose --project-directory "$target_dir" --env-file "$target_dir/.env" -f "$target_dir/docker-compose.yml" -p "$project")
@@ -71,6 +75,7 @@ printf '\nMONITOR_COMPOSE_PROJECT=%s\n' "$project" >> "$target_dir/.env"
 "${old_compose[@]}" config --quiet
 "${old_compose[@]}" run --rm --no-deps --entrypoint /opt/portkill/api/PortKiller.UpdateAdmin.Api api db migrate
 "${old_compose[@]}" up -d --no-deps api worker notifier monitor
+bash "$package_dir/docker-client-reports-update.sh" "$target_dir" "$project"
 "${old_compose[@]}" ps
 trap - ERR
 echo "升级命令执行完成，备份保存在 $backup_dir。请登录运行总览并按使用说明完成验收。"

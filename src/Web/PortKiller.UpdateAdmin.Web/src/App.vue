@@ -5,17 +5,26 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import StrongAuthentication from './components/StrongAuthentication.vue';
 import { useAuth } from './state/auth';
 import { errorText } from './api/http';
+import { appearanceKey, type ThemePreference } from './state/appearance';
 
 const auth = useAuth();
 const route = useRoute();
 const router = useRouter();
-const dark = ref(false), error = ref(''), accountMenuOpen = ref(false);
+const themePreference = ref<ThemePreference>('system');
+const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+const systemDark = ref(systemTheme.matches);
+const dark = computed(() => themePreference.value === 'system' ? systemDark.value : themePreference.value === 'dark');
+const error = ref(''), accountMenuOpen = ref(false);
 const userMenuRef = ref<HTMLElement | null>(null);
 const accountTrigger = ref<HTMLButtonElement | null>(null), accountMenu = ref<HTMLElement | null>(null);
 provide('portkill.dark', dark);
+provide(appearanceKey, { dark, preference: themePreference, setPreference });
 let sessionTimer: ReturnType<typeof setInterval> | undefined, lastForbidden = -Infinity;
 let redirectingToLogin = false;
-try { dark.value = localStorage.getItem('portkill.theme') === 'dark'; } catch { /* Optional preference. */ }
+try {
+  const stored = localStorage.getItem('portkill.theme');
+  if (stored === 'light' || stored === 'dark' || stored === 'system') themePreference.value = stored;
+} catch { /* Optional preference. */ }
 const entries = computed(() => [
   { id: 'overview', title: '运行总览', permission: 'release.read', path: 'M3 4h18v7H3z M3 14h18v7H3z' },
   { id: 'upload', title: '上传版本', permission: 'release.upload', path: 'M12 16V3 M7 8l5-5 5 5 M4 16v5h16v-5' },
@@ -43,7 +52,12 @@ function openReauth() {
   closeAccountMenu(true);
   auth.reauthOpen.value = true;
 }
-function changeTheme(value: boolean | string | number) { dark.value = !!value; try { localStorage.setItem('portkill.theme', dark.value ? 'dark' : 'light'); } catch { /* Optional preference. */ } }
+function setPreference(value: ThemePreference) {
+  themePreference.value = value;
+  try { localStorage.setItem('portkill.theme', value); } catch { /* Optional preference. */ }
+}
+function changeTheme(value: boolean | string | number) { setPreference(value ? 'dark' : 'light'); }
+function onSystemTheme() { systemDark.value = systemTheme.matches; }
 function accountItems() { return Array.from(accountMenu.value?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? []); }
 async function openAccountMenu(last = false) {
   accountMenuOpen.value = true;
@@ -95,7 +109,7 @@ function onForbidden() {
   lastForbidden = performance.now(); void auth.restore().catch(() => {});
 }
 function onUnauthorized() {
-  if (redirectingToLogin || route.path === '/login') return;
+  if (redirectingToLogin || !isAdminRoute.value) return;
   redirectingToLogin = true;
   void router.replace({ path: '/login', query: { returnTo: route.fullPath } }).finally(() => { redirectingToLogin = false; });
 }
@@ -105,12 +119,14 @@ watch(auth.session, value => {
   else if (value?.phase === 'full' && route.meta.permission && !auth.can(String(route.meta.permission))) void router.replace('/security');
 });
 onMounted(() => {
+  systemTheme.addEventListener('change', onSystemTheme);
   onFocus(); sessionTimer = setInterval(onFocus, 30_000);
   window.addEventListener('focus', onFocus); document.addEventListener('visibilitychange', onFocus);
   window.addEventListener('admin:unauthorized', onUnauthorized); window.addEventListener('admin:forbidden', onForbidden);
   document.addEventListener('click', onDocumentClick);
 });
 onBeforeUnmount(() => {
+  systemTheme.removeEventListener('change', onSystemTheme);
   clearInterval(sessionTimer); window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus);
   window.removeEventListener('admin:unauthorized', onUnauthorized); window.removeEventListener('admin:forbidden', onForbidden);
   document.removeEventListener('click', onDocumentClick);
@@ -221,25 +237,6 @@ onBeforeUnmount(() => {
       <StrongAuthentication v-if="auth.reauthOpen.value" />
     </div>
     <div v-else class="login-shell" :class="{ dark }">
-      <header class="login-header">
-        <button
-          type="button"
-          class="theme-icon-btn"
-          role="switch"
-          aria-label="切换深色主题"
-          :aria-checked="dark"
-          :title="dark ? '切换为浅色主题' : '切换为深色主题'"
-          @click="changeTheme(!dark)"
-        >
-          <svg v-if="!dark" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="4" />
-            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-          </svg>
-          <svg v-else viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-          </svg>
-        </button>
-      </header>
       <RouterView />
     </div>
   </ConfigProvider>

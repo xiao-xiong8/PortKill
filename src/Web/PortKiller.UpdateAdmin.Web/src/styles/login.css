@@ -1,0 +1,1072 @@
+/* Login experience: artwork and layout ported from the reviewed SVG demo. */
+
+.login-experience {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
+  color-scheme: light;
+  --page: #fdfefe;
+  --text: #233246;
+  --muted: #68798c;
+  --label: #46566a;
+  --field: #f7f9fb;
+  --border: #e1e7ed;
+  --focus: #447deb;
+  --accent: #386ee1;
+  --accent-hover: #295bc7;
+  --button-text: #fff;
+  --control: #e7eef3;
+  --control-active: #fff;
+  --sky-top: #e9f3f8;
+  --sky-bottom: #f3f6ef;
+  --scene-text: #3b5c70;
+  --scene-muted: #5f7c8b;
+  --hill-far: #cddfe2;
+  --hill-near: #b9d0d1;
+  --water: #dbe9e8;
+  --shore: #d3e0d6;
+  --road: #e7e6dc;
+  --road-line: #fffdf3;
+  --road-edge: #baccc2;
+  --cloud: #fff;
+  --cloud-opacity: .87;
+  --bike: #4e88aa;
+  --bike-highlight: #7daec5;
+  --rubber: #425560;
+  --sidewall: #c5b99a;
+  --rim: #e3edf0;
+  --spoke: #7894a1;
+  --bird: #fffef4;
+  --bird-shade: #e0e8e5;
+  --bird-wing: #d6e1dd;
+  --bird-line: #b9cbc6;
+  --beak: #e9ac50;
+  --beak-top: #f4c065;
+  --pouch: #f2cc86;
+  --leg: #d99a47;
+  --leg-back: #b98546;
+  --shadow: #486567;
+  --error: #c44747;
+  --success: #327c66;
+}
+
+.login-experience[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #141c28;
+  --text: #e8edf3;
+  --muted: #8998ad;
+  --label: #b9c5d4;
+  --field: #1b2636;
+  --border: #2d3b4f;
+  --focus: #7fa7ff;
+  --accent: #6796f3;
+  --accent-hover: #81a8f8;
+  --button-text: #10213d;
+  --control: #233347;
+  --control-active: #364c65;
+  --sky-top: #14263c;
+  --sky-bottom: #314c5b;
+  --scene-text: #d2e5e9;
+  --scene-muted: #92afb9;
+  --hill-far: #2a4b5c;
+  --hill-near: #365b66;
+  --water: #284956;
+  --shore: #41646a;
+  --road: #526b6c;
+  --road-line: #adbbb1;
+  --road-edge: #50727a;
+  --cloud: #668393;
+  --cloud-opacity: .38;
+  --bike: #7bacca;
+  --bike-highlight: #a3c9dc;
+  --rubber: #203442;
+  --sidewall: #958f7c;
+  --rim: #b0cad4;
+  --spoke: #8ba9b6;
+  --bird: #e8ece5;
+  --bird-shade: #bacccc;
+  --bird-wing: #a7bfc0;
+  --bird-line: #8ea9ad;
+  --beak: #d89d54;
+  --beak-top: #e8b76a;
+  --pouch: #d6b57e;
+  --leg: #d7a569;
+  --leg-back: #ab885b;
+  --shadow: #0e2232;
+  --error: #fb9c9c;
+  --success: #93d6ba;
+}
+
+.login-experience * {
+  box-sizing: border-box;
+}
+
+.login-experience button,
+.login-experience input:not([type="checkbox"]) {
+  font: inherit;
+}
+
+.login-experience button {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.login-experience button:focus-visible,
+.login-experience input:not([type="checkbox"]):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+
+.login-experience button svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.login-experience .icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.login-experience .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.login-experience .login-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 100svh;
+}
+
+.login-experience .world {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  min-height: 760px;
+  overflow: hidden;
+  background: var(--sky-top);
+}
+
+.login-experience .scene {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.login-experience .pelican-brand {
+  position: absolute;
+  z-index: 2;
+  top: 42px;
+  left: 48px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: var(--scene-text);
+}
+
+.login-experience .pelican-brand-mark {
+  width: 31px;
+  height: 31px;
+  color: #4d85a9;
+}
+
+.login-experience[data-theme="dark"] .pelican-brand-mark {
+  color: #a7ccde;
+}
+
+.login-experience .pelican-brand-name {
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -.55px;
+}
+
+.login-experience .pelican-brand-divider {
+  width: 1px;
+  height: 14px;
+  background: currentColor;
+  opacity: .23;
+  margin-left: 2px;
+}
+
+.login-experience .pelican-brand-subtitle {
+  font-size: 12px;
+  opacity: .65;
+  letter-spacing: 1px;
+}
+
+.login-experience .scene-copy {
+  position: absolute;
+  z-index: 1;
+  top: 151px;
+  left: 52px;
+  pointer-events: none;
+}
+
+.login-experience .eyebrow {
+  margin: 0 0 13px;
+  color: var(--scene-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 3.2px;
+}
+
+.login-experience .scene-copy h2 {
+  margin: 0;
+  color: var(--scene-text);
+  font-size: clamp(29px, 2.5vw, 40px);
+  font-weight: 500;
+  letter-spacing: 2px;
+  line-height: 1.48;
+}
+
+.login-experience .scene-copy .scene-caption {
+  margin: 15px 0 0;
+  color: var(--scene-muted);
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.login-experience .weather-dock {
+  position: absolute;
+  z-index: 3;
+  bottom: 36px;
+  left: 48px;
+  right: 48px;
+}
+
+.login-experience .weather-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 15px;
+  color: var(--scene-text);
+  font-size: 11px;
+  letter-spacing: .5px;
+}
+
+.login-experience .weather-dot {
+  height: 5px;
+  width: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.login-experience .weather-options {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.login-experience button.weather-button:not(.ant-switch) {
+  border: 0;
+  background: transparent;
+  color: var(--scene-text);
+  border-radius: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  font-size: 11px;
+  min-height: 37px;
+  transition: background .2s, color .2s;
+}
+
+.login-experience button.weather-button:not(.ant-switch):hover {
+  color: var(--scene-text);
+  background: color-mix(in srgb, var(--cloud) 22%, transparent);
+}
+
+.login-experience button.weather-button:not(.ant-switch)[aria-pressed="true"] {
+  color: var(--scene-text);
+  background: color-mix(in srgb, var(--cloud) 55%, transparent);
+}
+
+.login-experience button.weather-button:not(.ant-switch) svg {
+  width: 16px;
+  height: 16px;
+}
+
+.login-experience button.motion-button:not(.ant-switch) {
+  margin-left: auto;
+  width: 34px;
+  height: 34px;
+  padding: 8px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--scene-text);
+  background: transparent;
+  display: grid;
+  place-items: center;
+}
+
+.login-experience button.motion-button:not(.ant-switch):hover {
+  background: color-mix(in srgb, var(--cloud) 35%, transparent);
+}
+
+.login-experience .login-side {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 760px;
+  padding: 120px 48px 110px;
+  background: var(--page);
+}
+
+.login-experience .theme-tools {
+  position: absolute;
+  top: 39px;
+  right: 44px;
+  display: flex;
+  padding: 4px;
+  gap: 2px;
+  border-radius: 24px;
+  background: var(--field);
+}
+
+.login-experience button.theme-button:not(.ant-switch) {
+  height: 32px;
+  width: 34px;
+  border-radius: 50%;
+  padding: 8px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.login-experience button.theme-button:not(.ant-switch)[aria-pressed="true"] {
+  background: var(--control-active);
+  color: var(--text);
+  box-shadow: 0 2px 7px #10263c0b;
+}
+
+.login-experience button.theme-button:not(.ant-switch):hover {
+  color: var(--text);
+}
+
+.login-experience .login {
+  width: min(100%, 354px);
+  transform: translateY(-2px);
+}
+
+.login-experience .login-kicker {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2.1px;
+  margin: 0 0 20px;
+}
+
+.login-experience .login-kicker::before {
+  content: "";
+  width: 17px;
+  height: 2px;
+  background: currentColor;
+  border-radius: 2px;
+}
+
+.login-experience h1 {
+  font-size: 27px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: .3px;
+  margin: 0 0 12px;
+}
+
+.login-experience .login-subtitle {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+  margin: 0;
+}
+
+.login-experience form {
+  margin-top: 37px;
+}
+
+.login-experience .field {
+  margin-bottom: 23px;
+}
+
+.login-experience .field label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--label);
+}
+
+.login-experience .input-wrap {
+  position: relative;
+}
+
+.login-experience .input-icon {
+  position: absolute;
+  left: 15px;
+  top: 16px;
+  height: 17px;
+  width: 17px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.login-experience input:not([type="checkbox"]) {
+  width: 100%;
+  height: 49px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 0 42px;
+  background: var(--field);
+  color: var(--text);
+  font-size: 12px;
+  line-height: normal;
+  transition: border-color .2s, background .2s;
+}
+
+.login-experience input:not([type="checkbox"])::placeholder {
+  color: var(--muted);
+  opacity: .85;
+}
+
+.login-experience input:not([type="checkbox"]):focus {
+  border-color: var(--focus);
+  outline: 3px solid color-mix(in srgb, var(--focus) 13%, transparent);
+  outline-offset: 0;
+}
+
+.login-experience input:not([type="checkbox"])[aria-invalid="true"] {
+  border-color: var(--error);
+}
+
+.login-experience button.password-toggle:not(.ant-switch) {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: 0;
+  padding: 7px;
+  height: 33px;
+  width: 33px;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.login-experience button.password-toggle:not(.ant-switch):hover {
+  color: var(--text);
+  background: var(--control);
+}
+
+.login-experience .field-error {
+  display: block;
+  color: var(--error);
+  font-size: 11px;
+  margin-top: 7px;
+}
+
+.login-experience .field-error:empty {
+  display: none;
+}
+
+.login-experience button.login-submit:not(.ant-switch) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 47px;
+  margin-top: 29px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--button-text);
+  font-size: 13px;
+  font-weight: 550;
+  letter-spacing: 3px;
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--accent) 15%, transparent);
+  transition: background .2s, transform .2s;
+}
+
+.login-experience button.login-submit:not(.ant-switch):hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.login-experience button.login-submit:not(.ant-switch):active {
+  transform: translateY(0);
+}
+
+.login-experience button.login-submit:not(.ant-switch):disabled {
+  cursor: wait;
+  opacity: .75;
+  transform: none;
+}
+
+.login-experience button.login-submit:not(.ant-switch) svg {
+  width: 15px;
+  height: 15px;
+  opacity: .75;
+}
+
+.login-experience .form-status {
+  min-height: 18px;
+  margin: 18px 0 0;
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.8;
+}
+
+.login-experience .form-status[data-state="success"] {
+  color: var(--success);
+}
+
+.login-experience .footer {
+  position: absolute;
+  bottom: 35px;
+  left: 24px;
+  right: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: .15px;
+}
+
+.login-experience .footer .footer-lock {
+  width: 11px;
+  height: 11px;
+  margin-right: 5px;
+  vertical-align: -1px;
+  opacity: .8;
+}
+
+.login-experience .footer span {
+  opacity: .6;
+  margin: 0 7px;
+}
+
+.login-experience .sky-stop-top {
+  stop-color: var(--sky-top);
+  transition: stop-color .7s;
+}
+
+.login-experience .sky-stop-bottom {
+  stop-color: var(--sky-bottom);
+  transition: stop-color .7s;
+}
+
+.login-experience .scenery path,
+.login-experience .scenery ellipse,
+.login-experience .bird path {
+  transition: fill .5s;
+}
+
+.login-experience .clouds {
+  fill: var(--cloud);
+  opacity: var(--cloud-opacity);
+  transition: opacity .7s, fill .7s;
+}
+
+.login-experience[data-weather="cloudy"] .clouds,
+.login-experience[data-weather="rain"] .clouds,
+.login-experience[data-weather="snow"] .clouds {
+  opacity: .8;
+}
+
+.login-experience[data-weather="rain"] {
+  --sky-top: #d9e5ed;
+  --sky-bottom: #e7edef;
+  --cloud: #edf3f5;
+}
+
+.login-experience[data-weather="snow"] {
+  --sky-top: #e3edf4;
+  --sky-bottom: #f0f4f5;
+  --shore: #dbe5e2;
+  --road: #e8efed;
+  --hill-near: #c8dada;
+}
+
+.login-experience[data-weather="rain"][data-theme="dark"] {
+  --sky-top: #162538;
+  --sky-bottom: #344b5b;
+  --cloud: #71899b;
+}
+
+.login-experience[data-weather="snow"][data-theme="dark"] {
+  --sky-top: #1c2d44;
+  --sky-bottom: #405c6e;
+  --shore: #4a6671;
+  --road: #657f88;
+  --hill-near: #56737f;
+}
+
+.login-experience .sun,
+.login-experience .moon,
+.login-experience .stars {
+  transition: opacity .7s;
+}
+
+.login-experience .moon,
+.login-experience .stars {
+  opacity: 0;
+}
+
+.login-experience[data-theme="dark"] .sun {
+  opacity: 0;
+}
+
+.login-experience[data-theme="dark"] .moon,
+.login-experience[data-theme="dark"] .stars {
+  opacity: 1;
+}
+
+.login-experience[data-weather="rain"] .sun,
+.login-experience[data-weather="snow"] .sun {
+  opacity: .18;
+}
+
+.login-experience[data-weather="cloudy"] .sun {
+  opacity: .45;
+}
+
+.login-experience[data-theme="dark"][data-weather="rain"] .moon,
+.login-experience[data-theme="dark"][data-weather="snow"] .moon {
+  opacity: .24;
+}
+
+.login-experience[data-theme="dark"][data-weather="rain"] .stars,
+.login-experience[data-theme="dark"][data-weather="snow"] .stars,
+.login-experience[data-theme="dark"][data-weather="cloudy"] .stars {
+  opacity: .25;
+}
+
+.login-experience[data-theme="dark"] .day-sparkle {
+  opacity: .15;
+}
+
+.login-experience .extra-cloud {
+  opacity: 0;
+  transition: opacity .7s;
+}
+
+.login-experience[data-weather="cloudy"] .extra-cloud,
+.login-experience[data-weather="rain"] .extra-cloud,
+.login-experience[data-weather="snow"] .extra-cloud {
+  opacity: 1;
+}
+
+.login-experience .bike-frame {
+  fill: none;
+  stroke: var(--bike);
+  stroke-width: 9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.login-experience .leg {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.login-experience .back-leg {
+  stroke: var(--leg-back);
+}
+
+.login-experience .front-leg {
+  stroke: var(--leg);
+}
+
+.login-experience .pedal {
+  fill: var(--rubber);
+}
+
+.login-experience .wind {
+  fill: none;
+  stroke: var(--scene-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  opacity: .3;
+}
+
+@media (min-width: 1800px) {
+  .login-experience .scene-copy {
+    left: 8%;
+    top: 17%;
+  }
+  .login-experience .pelican-brand {
+    left: 8%;
+  }
+  .login-experience .weather-dock {
+    left: 8%;
+    right: 8%;
+  }
+  .login-experience .login {
+    width: 380px;
+  }
+}
+
+@media (max-width: 1100px) and (min-width: 761px) {
+  .login-experience .pelican-brand {
+    left: 30px;
+  }
+  .login-experience .scene-copy {
+    left: 33px;
+    top: 137px;
+  }
+  .login-experience .weather-dock {
+    left: 24px;
+    right: 24px;
+  }
+  .login-experience .weather-options {
+    gap: 1px;
+  }
+  .login-experience button.weather-button:not(.ant-switch) {
+    padding: 9px 8px;
+    gap: 4px;
+  }
+  .login-experience .login-side {
+    padding-left: 35px;
+    padding-right: 35px;
+  }
+  .login-experience .scene-copy h2 {
+    font-size: 29px;
+  }
+  .login-experience .pelican-brand-subtitle {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 760px) {
+  .login-experience .login-layout {
+    grid-template-columns: 1fr;
+  }
+  .login-experience .world {
+    min-height: 560px;
+    height: 67svh;
+    max-height: 680px;
+  }
+  .login-experience .scene {
+    height: 100%;
+    width: 100%;
+  }
+  .login-experience .pelican-brand {
+    top: 25px;
+    left: 25px;
+    gap: 10px;
+  }
+  .login-experience .pelican-brand-name {
+    font-size: 18px;
+  }
+  .login-experience .pelican-brand-subtitle {
+    font-size: 10px;
+  }
+  .login-experience .scene-copy {
+    top: 105px;
+    left: 29px;
+  }
+  .login-experience .scene-copy h2 {
+    font-size: 26px;
+    line-height: 1.45;
+  }
+  .login-experience .eyebrow {
+    font-size: 9px;
+    letter-spacing: 2px;
+    margin-bottom: 9px;
+  }
+  .login-experience .scene-caption {
+    display: none;
+  }
+  .login-experience .weather-dock {
+    bottom: 19px;
+    left: 22px;
+    right: 22px;
+  }
+  .login-experience .weather-heading {
+    margin-bottom: 7px;
+    font-size: 10px;
+  }
+  .login-experience .weather-options {
+    gap: 2px;
+  }
+  .login-experience button.weather-button:not(.ant-switch) {
+    padding: 8px 10px;
+    font-size: 10px;
+    gap: 4px;
+  }
+  .login-experience button.weather-button:not(.ant-switch) svg {
+    width: 15px;
+    height: 15px;
+  }
+  .login-experience .login-side {
+    min-height: 640px;
+    padding: 87px 30px 97px;
+  }
+  .login-experience .theme-tools {
+    top: 23px;
+    right: 25px;
+  }
+  .login-experience .login {
+    transform: none;
+    width: min(100%, 354px);
+  }
+  .login-experience h1 {
+    font-size: 25px;
+  }
+  .login-experience .footer {
+    bottom: 27px;
+    font-size: 9px;
+  }
+  .login-experience .login-kicker {
+    margin-bottom: 15px;
+  }
+}
+
+@media (max-width: 360px) {
+  .login-experience button.weather-button:not(.ant-switch) {
+    padding: 8px 7px;
+  }
+  .login-experience .weather-dock {
+    left: 15px;
+    right: 15px;
+  }
+  .login-experience .login-side {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-experience *,
+  .login-experience *::before,
+  .login-experience *::after {
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.login-shell {
+  min-height: 100svh;
+}
+
+.login-experience {
+  --surface: var(--page);
+  --surface-subtle: var(--field);
+  --line: var(--border);
+  --text-secondary: var(--label);
+  --danger: var(--error);
+  min-height: 100svh;
+  background: var(--page);
+  color: var(--text);
+}
+
+.login-experience .login-symbols {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.login-experience .scene {
+  fill: none;
+  stroke: none;
+}
+
+.login-experience .auth-panel {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.login-experience .auth-header {
+  margin: 0;
+  text-align: left;
+}
+
+.login-experience .auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 23px;
+  margin: 37px 0 0;
+}
+
+.login-experience .auth-field {
+  min-width: 0;
+  margin: 0;
+}
+
+.login-experience .auth-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.login-experience .auth-alert {
+  margin: 22px 0 -13px;
+  padding: 10px 12px;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: 7px;
+  color: var(--error);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.login-experience .field-error {
+  margin-top: 7px;
+}
+
+.login-experience .auth-field input:not([type="checkbox"]) {
+  min-height: 49px;
+  box-shadow: none;
+}
+
+.login-experience .auth-field input:not([type="checkbox"]):focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 13%, transparent);
+}
+
+.login-experience .auth-field > input:not([type="checkbox"]) {
+  padding: 0 14px;
+}
+
+.login-experience .auth-field input.is-invalid {
+  border-color: var(--error);
+}
+
+.login-experience .auth-field input:disabled {
+  opacity: .7;
+  cursor: wait;
+}
+
+.login-experience .auth-field label.check-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 0;
+  line-height: 1.6;
+}
+
+.login-experience .check-label input {
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.login-experience .field-hint,
+.login-experience .auth-hint {
+  display: block;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+
+.login-experience .field-hint {
+  margin-top: 9px;
+}
+
+.login-experience .auth-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.login-experience .auth-label-row label {
+  flex: none;
+}
+
+.login-experience button.auth-switch-mode:not(.ant-switch),
+.login-experience button.auth-back-btn:not(.ant-switch) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+.login-experience button.auth-switch-mode:not(.ant-switch):hover:not(:disabled),
+.login-experience button.auth-back-btn:not(.ant-switch):hover:not(:disabled) {
+  background: transparent;
+  color: var(--accent-hover);
+}
+
+.login-experience button.auth-secondary-btn:not(.ant-switch) {
+  width: 100%;
+  min-height: 43px;
+  color: var(--accent);
+  background: var(--field);
+  border-color: var(--border);
+}
+
+.login-experience button.auth-secondary-btn:not(.ant-switch):hover:not(:disabled) {
+  background: var(--control);
+  border-color: var(--focus);
+  color: var(--accent);
+}
+
+.login-experience button.auth-submit-btn:not(.ant-switch) {
+  margin-top: 6px;
+}
+
+.login-experience button.auth-back-btn:not(.ant-switch) {
+  width: 100%;
+  min-height: 30px;
+  margin-top: -10px;
+}
+
+.login-experience .auth-hint-after {
+  margin: -6px 0 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.login-experience .recovery-codes {
+  margin: 0;
+  padding: 14px;
+  background: var(--field);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  max-height: 290px;
+  overflow: auto;
+}
+
+.login-experience .auth-form .notice {
+  margin: 0;
+  font-size: 12px;
+}
+
+.login-experience .login-side:focus {
+  outline: none;
+}
+
+@media (max-width: 760px) {
+  .login-experience .login-side {
+    min-height: 640px;
+  }
+}

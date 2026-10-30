@@ -13,7 +13,7 @@ test('actual API rejects anonymous access and shell remains usable', async ({ pa
 
 test('theme switch changes the working surface', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('switch', { name: '切换深色主题' }).click();
+  await page.getByRole('button', { name: '深色模式', exact: true }).click();
   await expect(page.locator('.login-shell')).toHaveClass(/dark/);
   await expect(page.getByRole('heading', { name: '登录发布管理' })).toBeVisible();
   await page.screenshot({ path: '../../../.local/artifacts/admin-browser/dark.png', fullPage: true, animations: 'disabled' });

@@ -11,7 +11,10 @@ public sealed class AdminCookieEvents(AdminSessionService sessions) : CookieAuth
     {
         var ticket = context.Principal == null ? null : await sessions.ValidateAsync(context.Principal, context.HttpContext.RequestAborted);
         if (ticket == null)
-        { context.RejectPrincipal(); await context.HttpContext.SignOutAsync(AdminIdentity.Scheme); return; }
+        {
+            // A delayed rejection must not erase a newer login cookie in the same browser.
+            context.RejectPrincipal(); context.ShouldRenew = false; return;
+        }
         context.ReplacePrincipal(await sessions.PrincipalAsync(ticket));
     }
     public override Task RedirectToLogin(RedirectContext<CookieAuthenticationOptions> context)

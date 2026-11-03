@@ -29,7 +29,7 @@ foreach ($path in $desktop) {
         if ($package.Include -match 'EntityFrameworkCore|Identity.EntityFrameworkCore') { throw 'Desktop references backend persistence' }
     }
 }
-foreach ($entry in @('src/Services/PortKiller.UpdateAdmin.Api/PortKiller.UpdateAdmin.Api.csproj','src/Services/PortKiller.UpdatePublisher.Worker/PortKiller.UpdatePublisher.Worker.csproj','src/Services/PortKiller.UpdateNotifier/PortKiller.UpdateNotifier.csproj','src/Tools/PortKiller.UpdateTool/PortKiller.UpdateTool.csproj')) {
+foreach ($entry in @('src/Services/PortKiller.UpdateAdmin.Api/PortKiller.UpdateAdmin.Api.csproj','src/Services/PortKiller.ServerUpdateRunner/PortKiller.ServerUpdateRunner.csproj','src/Services/PortKiller.UpdatePublisher.Worker/PortKiller.UpdatePublisher.Worker.csproj','src/Services/PortKiller.UpdateNotifier/PortKiller.UpdateNotifier.csproj','src/Tools/PortKiller.UpdateTool/PortKiller.UpdateTool.csproj')) {
     foreach ($path in (Get-Closure $entry)) {
         if ($path -match 'PortKiller.Desktop|Infrastructure.Windows|Modules.Ports|PortKiller.Updates[\\/]') { throw "Server references client/Windows code: $path" }
         foreach ($package in $projects[$path].SelectNodes('//PackageReference')) {

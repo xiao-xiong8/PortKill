@@ -1,3 +1,4 @@
+import { advanceSessionEpoch, authenticationChanged, sessionEpoch } from '../api/sessionEpoch';
 import { computed, ref } from 'vue';
 import type { components } from '../api/contracts.generated';
 import { api, ApiError, errorText } from '../api/http';
@@ -7,12 +8,14 @@ const session = ref<Session | null>(null);
 const loading = ref(true);
 const reauthOpen = ref(false);
 const connectionError = ref('');
+const sessionNotice = ref('');
 let strongCompletion: ((value: boolean) => void) | undefined;
 let generation = 0;
 let restoredAt = -Infinity, retryAt = 0;
 let pending: Promise<void> | undefined, controller: AbortController | undefined;
 
 function clear() {
+  advanceSessionEpoch();
   generation++; controller?.abort(); controller = undefined; pending = undefined;
   session.value = null; loading.value = false; restoredAt = -Infinity; retryAt = 0;
   connectionError.value = ''; finishStrong(false);
@@ -54,7 +57,11 @@ async function ensureSession() {
   if (!hasSession()) { if (session.value) clear(); await restoreSession(); }
   else void restoreSession(false).catch(() => { /* connectionError is shown without blocking navigation. */ });
 }
-async function logout() { try { await api('/api/v1/auth/logout', 'POST', {}); } finally { clear(); } }
+async function logout() {
+  const epoch = sessionEpoch();
+  try { await api('/api/v1/auth/logout', 'POST', {}); }
+  catch (error) { if (epoch === sessionEpoch()) authenticationChanged(); throw error; }
+}
 export function finishStrong(value: boolean) { reauthOpen.value = false; const completion = strongCompletion; strongCompletion = undefined; completion?.(value); }
 async function requireStrong() {
   if (Number(session.value?.strongAuthenticationExpiresUtcMs) > Date.now() + 5000) return true;
@@ -63,8 +70,17 @@ async function requireStrong() {
   return new Promise<boolean>((resolve) => { strongCompletion = resolve; });
 }
 export function useAuth() {
-  return { session, loading, reauthOpen, connectionError, restore: restoreSession, ensure: ensureSession, clear, logout, requireStrong,
+  return { session, loading, reauthOpen, connectionError, sessionNotice, restore: restoreSession, ensure: ensureSession, clear, logout, requireStrong,
     full: computed(() => session.value?.phase === 'full'),
     can: (permission: string) => session.value?.phase === 'full' && session.value.permissions.includes(permission) };
 }
-window.addEventListener('admin:unauthorized', clear);
+window.addEventListener('admin:unauthorized', () => {
+  const hadSession = session.value != null;
+  clear();
+  if (hadSession) sessionNotice.value = '会话已失效，请重新登录。';
+});
+window.addEventListener('admin:authentication-changed', () => { clear(); sessionNotice.value = ''; });
+window.addEventListener('admin:authentication-remote', () => {
+  clear(); sessionNotice.value = '登录状态已变化，正在重新确认。';
+  void restoreSession().then(() => { if (session.value) sessionNotice.value = ''; }).catch(() => {});
+});

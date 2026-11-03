@@ -12,6 +12,7 @@ public sealed class PublicVerificationTaskExecutor(PublicVerificationTaskQueue q
     {
         using var executionLock = PublishExecutionLease.TryAcquire(options);
         if (executionLock == null) return false;
+        if (ServerUpdates.ServerUpdateFiles.IsPending(options)) return false;
         PublicVerificationTask? task = await queue.ClaimAsync(workerId, token);
         if (task == null) return false;
         using var execution = CancellationTokenSource.CreateLinkedTokenSource(token);

@@ -9,7 +9,7 @@ using PortKiller.UpdateManagement.Persistence.Entities;
 
 namespace PortKiller.UpdateManagement.Security;
 
-public sealed class UploadManagementService(UpdateAdminDbContext database, AdminOptions options, TimeProvider clock, ValidationTaskQueue tasks)
+public sealed class UploadManagementService(UpdateAdminDbContext database, AdminOptions options, TimeProvider clock, ValidationTaskQueue tasks, AdminSessionService sessions)
 {
     private const long ManifestLimit = 65_536;
     private long Now => clock.GetUtcNow().ToUnixTimeMilliseconds();
@@ -46,6 +46,7 @@ public sealed class UploadManagementService(UpdateAdminDbContext database, Admin
             throw new AdminFailure("upload_quota_exceeded", 429, "上传预留空间超出账号或服务配额。");
         string userId = UserId(principal); long now = Now;
         await using var transaction = await database.Database.BeginTransactionAsync(token);
+        await sessions.RequireFullAsync(principal, token);
         // Only release a completed upload's reservation after its staging payload was removed.
         // Rejected/failed validation records continue to consume quota until their session expires.
         var activeUploads = database.UploadSessions.Where(x => x.ExpiresUtcMs > now)
@@ -134,6 +135,7 @@ public sealed class UploadManagementService(UpdateAdminDbContext database, Admin
             try
             {
                 await using var transaction = await database.Database.BeginTransactionAsync(token);
+                await sessions.RequireFullAsync(principal, token);
                 var current = await OwnedAsync(principal, id, token);
                 if (current.State != UploadState.Uploading || current.ExpiresUtcMs <= Now)
                     throw new AdminFailure("upload_closed", 409, "上传会话已关闭或过期。");
@@ -157,6 +159,7 @@ public sealed class UploadManagementService(UpdateAdminDbContext database, Admin
         string lockPath = Path.Combine(directory, ".session.lock");
         await using var sessionLock = AcquireSessionLock(lockPath);
         await using var transaction = await database.Database.BeginTransactionAsync(token);
+        await sessions.RequireFullAsync(principal, token);
         var upload = await OwnedAsync(principal, id, token);
         if (upload.State == UploadState.Uploaded)
         {
@@ -193,6 +196,7 @@ public sealed class UploadManagementService(UpdateAdminDbContext database, Admin
         var before = await OwnedAsync(principal, id, token); string directory = DirectoryFor(before);
         await using var sessionLock = AcquireSessionLock(Path.Combine(directory, ".session.lock"));
         await using var transaction = await database.Database.BeginTransactionAsync(token);
+        await sessions.RequireFullAsync(principal, token);
         var upload = await OwnedAsync(principal, id, token);
         if (upload.State != UploadState.Uploading) throw new AdminFailure("upload_closed", 409, "只有未完成的上传可以取消。");
         upload.State = UploadState.Cancelled; upload.LastActivityUtcMs = Now;

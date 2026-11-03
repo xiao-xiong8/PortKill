@@ -37,6 +37,7 @@ function Publish-ServerComponent([hashtable]$Component) {
 
 foreach ($component in @(
     @{Name='api';Project='Services/PortKiller.UpdateAdmin.Api'},
+    @{Name='runner';Project='Services/PortKiller.ServerUpdateRunner'},
     @{Name='worker';Project='Services/PortKiller.UpdatePublisher.Worker'},
     @{Name='notifier';Project='Services/PortKiller.UpdateNotifier'},
     @{Name='tool';Project='Tools/PortKiller.UpdateTool'}
@@ -57,6 +58,11 @@ $privateFiles=@(Get-ChildItem -LiteralPath $OutputDirectory -Recurse -File | Whe
 if ($privateFiles.Count -gt 0) { throw "交付包包含本地或私钥文件：$($privateFiles[0].FullName)" }
 
 $version=Get-EvaluatedVersion (Join-Path $repository 'src/Services/PortKiller.UpdateAdmin.Api/PortKiller.UpdateAdmin.Api.csproj')
+$fingerprintFile = Join-Path $OutputDirectory '.database-fingerprint'
+& dotnet run --project (Join-Path $repository 'src/Services/PortKiller.UpdateAdmin.Api') -c Release -- export-server-schema $fingerprintFile
+if ($LASTEXITCODE -ne 0) { throw '数据库版本指纹导出失败' }
+$databaseFingerprint = [IO.File]::ReadAllText($fingerprintFile).Trim()
+Remove-Item -LiteralPath $fingerprintFile
 $commit=(& git -C $repository rev-parse HEAD).Trim()
 $dirty=@(& git -C $repository status --porcelain)
 $files=@(Get-ChildItem -LiteralPath $OutputDirectory -Recurse -File | Where-Object { $_.Name -ne 'bundle.json' } | ForEach-Object {
@@ -65,8 +71,10 @@ $files=@(Get-ChildItem -LiteralPath $OutputDirectory -Recurse -File | Where-Obje
 $bundle=[ordered]@{
     schema=1; application='PortKill Update Administration'; version=$version; runtime=$Runtime; selfContained=$true; nativeAot=$false
     commit=$commit; dirty=($dirty.Count -gt 0); contractVersion=1
+    databaseFingerprint=$databaseFingerprint
     components=@(
         [ordered]@{ name='api'; path='api'; entrypoint='PortKiller.UpdateAdmin.Api'; nativeAot=$false },
+        [ordered]@{ name='runner'; path='runner'; entrypoint='PortKiller.ServerUpdateRunner'; nativeAot=$false },
         [ordered]@{ name='worker'; path='worker'; entrypoint='PortKiller.UpdatePublisher.Worker'; nativeAot=$false },
         [ordered]@{ name='notifier'; path='notifier'; entrypoint='PortKiller.UpdateNotifier'; nativeAot=$false },
         [ordered]@{ name='tool'; path='tool'; entrypoint='PortKiller.UpdateTool'; nativeAot=$false },

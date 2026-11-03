@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
-import { api, errorText } from '../api/http';
+import { api, ApiError, errorText } from '../api/http';
 import type { components } from '../api/contracts.generated';
 import { useAuth } from '../state/auth';
 
@@ -8,6 +8,15 @@ const auth = useAuth();
 const userName = ref(''), password = ref(''), code = ref(''), recovery = ref(false), acknowledged = ref(false);
 const secret = ref<components['schemas']['EnrollmentSecret'] | null>(null), codes = ref<string[]>([]);
 const busy = ref(false), error = ref('');
+const retryUntil = ref(0), now = ref(Date.now());
+const retrySeconds = computed(() => Math.max(0, Math.ceil((retryUntil.value - now.value) / 1000)));
+const retryTimer = setInterval(() => { now.value = Date.now(); }, 1000);
+function showError(cause: unknown) {
+  error.value = cause instanceof ApiError && cause.status === 429 ? cause.message : errorText(cause);
+  if (cause instanceof ApiError && cause.status === 429 && cause.retryAfter > 0)
+    retryUntil.value = Date.now() + cause.retryAfter * 1000;
+  now.value = Date.now();
+}
 const passwordVisible = ref(false), formRef = ref<HTMLFormElement | null>(null);
 const fieldErrors = reactive({ userName: '', password: '', code: '', acknowledged: '' });
 
@@ -82,7 +91,7 @@ function validateForm(): boolean {
 }
 
 async function submit() {
-  if (busy.value) return;
+  if (busy.value || retrySeconds.value > 0) return;
   error.value = '';
   if (!validateForm()) {
     await nextTick();
@@ -105,7 +114,7 @@ async function submit() {
     }
     await auth.restore();
   } catch (cause) {
-    error.value = errorText(cause);
+    showError(cause);
   } finally {
     busy.value = false;
     password.value = '';
@@ -115,27 +124,28 @@ async function submit() {
 }
 
 async function startEnrollment() {
-  if (busy.value) return;
+  if (busy.value || retrySeconds.value > 0) return;
   busy.value = true;
   error.value = '';
   try {
     secret.value = await api('/api/v1/auth/mfa/enrollment/start', 'POST', {});
   } catch (cause) {
-    error.value = errorText(cause);
+    showError(cause);
   } finally {
     busy.value = false;
   }
 }
 
 async function backToLogin() {
-  if (busy.value) return;
+  if (busy.value || retrySeconds.value > 0) return;
   busy.value = true;
   try { await auth.logout(); }
-  catch (cause) { error.value = errorText(cause); }
+  catch (cause) { showError(cause); }
   finally { busy.value = false; }
 }
 
 onBeforeUnmount(() => {
+  clearInterval(retryTimer);
   secret.value = null;
   codes.value = [];
   password.value = '';
@@ -153,7 +163,9 @@ onBeforeUnmount(() => {
       </p>
     </div>
 
+    <p v-if="auth.sessionNotice.value && !error" class="auth-alert" role="status">{{ auth.sessionNotice.value }}</p>
     <p v-if="error" class="auth-alert" role="alert">{{ error }}</p>
+    <p v-if="retrySeconds > 0" role="status">请在 {{ retrySeconds }} 秒后重试。</p>
 
     <form ref="formRef" class="auth-form" novalidate :aria-busy="busy" @submit.prevent="submit">
       <template v-if="!phase">
@@ -170,7 +182,7 @@ onBeforeUnmount(() => {
             required
             maxlength="100"
             autofocus
-            :disabled="busy"
+            :disabled="busy || retrySeconds > 0"
             aria-describedby="auth-username-error"
             :class="{ 'is-invalid': Boolean(fieldErrors.userName) }"
             :aria-invalid="Boolean(fieldErrors.userName)"
@@ -194,14 +206,14 @@ onBeforeUnmount(() => {
             placeholder="请输入登录密码"
             required
             maxlength="256"
-            :disabled="busy"
+            :disabled="busy || retrySeconds > 0"
             aria-describedby="auth-password-error"
             :class="{ 'is-invalid': Boolean(fieldErrors.password) }"
             :aria-invalid="Boolean(fieldErrors.password)"
             @input="fieldErrors.password && validateField('password')"
             @blur="validateField('password')"
           >
-          <button type="button" class="password-toggle" :disabled="busy" :aria-label="passwordVisible ? '隐藏密码' : '显示密码'"
+          <button type="button" class="password-toggle" :disabled="busy || retrySeconds > 0" :aria-label="passwordVisible ? '隐藏密码' : '显示密码'"
             :title="passwordVisible ? '隐藏密码' : '显示密码'" :aria-pressed="passwordVisible" @click="passwordVisible = !passwordVisible">
             <svg class="icon" aria-hidden="true"><use :href="passwordVisible ? '#login-i-eye-off' : '#login-i-eye'" /></svg>
           </button>
@@ -212,7 +224,7 @@ onBeforeUnmount(() => {
 
       <template v-else-if="phase === 'enrollmentRequired'">
         <p class="auth-hint">请在身份验证器中添加 PortKill 账户，并输入下方生成的密钥。</p>
-        <button v-if="!secret" type="button" class="auth-secondary-btn" :disabled="busy" @click="startEnrollment">
+        <button v-if="!secret" type="button" class="auth-secondary-btn" :disabled="busy || retrySeconds > 0" @click="startEnrollment">
           生成绑定密钥
         </button>
         <div v-else class="auth-field field">
@@ -239,7 +251,7 @@ onBeforeUnmount(() => {
             required
             pattern="[0-9]{6}"
             maxlength="6"
-            :disabled="busy"
+            :disabled="busy || retrySeconds > 0"
             aria-describedby="auth-enroll-code-error"
             :class="{ 'is-invalid': Boolean(fieldErrors.code) }"
             :aria-invalid="Boolean(fieldErrors.code)"
@@ -260,7 +272,7 @@ onBeforeUnmount(() => {
               v-model="acknowledged"
               type="checkbox"
               required
-              :disabled="busy"
+              :disabled="busy || retrySeconds > 0"
               :aria-invalid="Boolean(fieldErrors.acknowledged)"
               aria-describedby="auth-ack-error"
               @change="fieldErrors.acknowledged && validateField('acknowledged')"
@@ -278,7 +290,7 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="text-button auth-switch-mode"
-              :disabled="busy"
+              :disabled="busy || retrySeconds > 0"
               @click="recovery = !recovery; code = ''; fieldErrors.code = ''"
             >
               {{ recovery ? '使用验证器动态码' : '使用恢复码登录' }}
@@ -292,7 +304,7 @@ onBeforeUnmount(() => {
             :placeholder="recovery ? '请输入一次性恢复码' : '请输入 6 位数字动态码'"
             required
             :maxlength="recovery ? 100 : 6"
-            :disabled="busy"
+            :disabled="busy || retrySeconds > 0"
             aria-describedby="auth-verify-code-error"
             :class="{ 'is-invalid': Boolean(fieldErrors.code) }"
             :aria-invalid="Boolean(fieldErrors.code)"
@@ -306,14 +318,14 @@ onBeforeUnmount(() => {
       <button
         type="submit"
         class="auth-submit-btn login-submit"
-        :disabled="busy || (phase === 'enrollmentRequired' && !secret)"
+        :disabled="busy || retrySeconds > 0 || (phase === 'enrollmentRequired' && !secret)"
       >
         <span>{{ busy ? '正在验证…' : !phase ? '登录' : phase === 'recoveryAcknowledgementRequired' ? '已保存，进入工作空间' : '验证并继续' }}</span>
         <svg v-if="!phase && !busy" class="icon" aria-hidden="true"><use href="#login-i-arrow" /></svg>
       </button>
 
       <p v-if="!phase" class="auth-hint-after">登录后按提示完成身份验证</p>
-      <button v-if="phase" type="button" class="text-button auth-back-btn" :disabled="busy" @click="backToLogin">
+      <button v-if="phase" type="button" class="text-button auth-back-btn" :disabled="busy || retrySeconds > 0" @click="backToLogin">
         返回登录
       </button>
     </form>

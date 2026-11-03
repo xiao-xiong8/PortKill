@@ -14,6 +14,8 @@ using PortKiller.UpdateAdmin.Api.Releases;
 using PortKiller.UpdateAdmin.Api.ClientInstallations;
 using PortKiller.UpdateAdmin.Api.Monitoring;
 using PortKiller.UpdateManagement.Monitoring;
+using PortKiller.UpdateManagement.ServerUpdates;
+using PortKiller.UpdateAdmin.Api.ServerUpdates;
 
 namespace PortKiller.UpdateAdmin.Api;
 
@@ -31,6 +33,13 @@ public static class AdminApiHost
         configure?.Invoke(builder);
         var administration = AdminHostConfiguration.Load(builder.Configuration, args);
         builder.Services.AddSingleton(administration);
+        var serverUpdate = new ServerUpdateOptions();
+        builder.Configuration.GetSection("ServerUpdate").Bind(serverUpdate);
+        serverUpdate.Validate();
+        builder.Services.TryAddSingleton(serverUpdate);
+        builder.Services.TryAddSingleton<IDockerCommand, DockerCommand>();
+        builder.Services.AddSingleton<ServerUpdateStore>();
+        builder.Services.AddScoped<ServerUpdateService>();
         var updateTool = new UpdateToolOptions();
         builder.Configuration.GetSection("UpdateTool").Bind(updateTool);
         builder.Services.TryAddSingleton(updateTool);
@@ -64,14 +73,18 @@ public static class AdminApiHost
                 options.Cookie.Path = "/";
                 options.EventsType = typeof(AdminCookieEvents);
                 options.ExpireTimeSpan = TimeSpan.FromDays(administration.PersistentCookieDays);
-                options.SlidingExpiration = true;
+                options.SlidingExpiration = false;
             });
         var fullSessionPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser()
             .RequireClaim(AdminIdentity.PhaseClaim, SessionPhase.Full.ToString()).Build();
         var authorization = builder.Services.AddAuthorizationBuilder().SetFallbackPolicy(fullSessionPolicy).SetDefaultPolicy(fullSessionPolicy)
             .AddPolicy(AdminIdentity.PendingPolicy, policy => policy.RequireAuthenticatedUser());
         AdminPermissions.AddPolicies(authorization);
-        builder.Services.AddProblemDetails();
+        builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
+        {
+            context.ProblemDetails.Extensions.Remove("traceId");
+            context.ProblemDetails.Extensions["correlationId"] = System.Diagnostics.Activity.Current?.Id ?? context.HttpContext.TraceIdentifier;
+        });
         builder.Services.AddExceptionHandler<AdminExceptionHandler>();
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase)));
@@ -146,6 +159,7 @@ public static class AdminApiHost
         app.MapMonitoring();
         app.MapAdminAccounts();
         app.MapUploadEndpoints();
+        app.MapServerUpdates();
         app.MapPublishEndpoints();
         app.MapJobEventEndpoints();
         app.MapClientInstallationEndpoints();

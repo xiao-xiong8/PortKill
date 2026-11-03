@@ -1,0 +1,351 @@
+{
+  "name": "portkill-docker-kit-20261026",
+  "networks": {
+    "api_proxy": {
+      "name": "portkill-docker-kit-20261026_api_proxy",
+      "ipam": {
+        "config": [
+          {
+            "subnet": "172.30.246.0/24",
+            "ip_range": "172.30.246.128/25"
+          }
+        ]
+      }
+    },
+    "portkill": {
+      "name": "portkill-docker-kit-20261026_portkill",
+      "ipam": {}
+    }
+  },
+  "services": {
+    "api": {
+      "build": {
+        "context": "DEPLOYMENT_ROOT/.portkill-server-install",
+        "dockerfile": "Application.Dockerfile"
+      },
+      "command": [
+        "/opt/portkill/api/PortKiller.UpdateAdmin.Api"
+      ],
+      "entrypoint": null,
+      "environment": {
+        "ASPNETCORE_ENVIRONMENT": "Production",
+        "ASPNETCORE_URLS": "http://0.0.0.0:5081",
+        "Administration__DataRoot": "/var/lib/portkill/admin",
+        "Administration__MonitoringSnapshotDirectory": "/run/portkill-monitor",
+        "AllowedHosts": "admin.example.test;localhost;127.0.0.1;[::1]",
+        "PORTKILL_DOCKER_MODE": "true",
+        "ReverseProxy__KnownProxies__0": "172.30.246.2",
+        "UpdateTool__Enabled": "false",
+        "UpdateTool__ExecutablePath": "/opt/portkill/tool/PortKiller.UpdateTool",
+        "UpdateTool__ReleaseRoot": "/srv/portkill/stable",
+        "UpdateTool__VerificationConfigPath": "/etc/portkill/verification.json",
+        "ServerUpdate__Enabled": "true",
+        "ServerUpdate__DeploymentRoot": "DEPLOYMENT_ROOT",
+        "ServerUpdate__Project": "portkill-docker-kit-20261026",
+        "ServerUpdate__VerificationConfigPath": "/etc/portkill/verification.json",
+        "PORTKILL_DOCKER_GID": "988"
+      },
+      "image": "portkill-update-server:install-9ce907b66385a197",
+      "networks": {
+        "api_proxy": null
+      },
+      "restart": "unless-stopped",
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "DEPLOYMENT_ROOT/data/admin",
+          "target": "/var/lib/portkill/admin",
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "DEPLOYMENT_ROOT/data/public",
+          "target": "/srv/portkill/stable",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "DEPLOYMENT_ROOT/verification.json",
+          "target": "/etc/portkill/verification.json",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "volume",
+          "source": "monitor_snapshot",
+          "target": "/run/portkill-monitor",
+          "read_only": true,
+          "volume": {}
+        },
+        {
+          "type": "bind",
+          "source": "/var/run/docker.sock",
+          "target": "/var/run/docker.sock"
+        }
+      ],
+      "group_add": [
+        "988"
+      ]
+    },
+    "caddy": {
+      "build": {
+        "context": "DEPLOYMENT_ROOT",
+        "dockerfile": "docker/Caddy.Dockerfile"
+      },
+      "command": null,
+      "depends_on": {
+        "api": {
+          "condition": "service_started",
+          "required": true
+        },
+        "notifier": {
+          "condition": "service_started",
+          "required": true
+        }
+      },
+      "entrypoint": null,
+      "environment": {
+        "ACME_EMAIL": "admin@example.test",
+        "ADMIN_DOMAIN": "admin.example.test",
+        "DNS_RESOLVER": "223.5.5.5:53",
+        "DUCKDNS_TOKEN": "test-token",
+        "UPDATES_DOMAIN": "updates.example.test"
+      },
+      "image": "portkill-caddy-duckdns:2.10.2-duckdns-0.5.0",
+      "networks": {
+        "api_proxy": {
+          "ipv4_address": "172.30.246.2"
+        },
+        "portkill": {}
+      },
+      "ports": [
+        {
+          "mode": "ingress",
+          "target": 80,
+          "published": "80",
+          "protocol": "tcp"
+        },
+        {
+          "mode": "ingress",
+          "target": 443,
+          "published": "443",
+          "protocol": "tcp"
+        }
+      ],
+      "restart": "unless-stopped",
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "DEPLOYMENT_ROOT/docker/Caddyfile",
+          "target": "/etc/caddy/Caddyfile",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "DEPLOYMENT_ROOT/server-bundle/web",
+          "target": "/srv/web",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "DEPLOYMENT_ROOT/data/public",
+          "target": "/srv/public",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "volume",
+          "source": "caddy_data",
+          "target": "/data",
+          "volume": {}
+        },
+        {
+          "type": "volume",
+          "source": "caddy_config",
+          "target": "/config",
+          "volume": {}
+        }
+      ]
+    },
+    "monitor": {
+      "build": {
+        "context": "DEPLOYMENT_ROOT/docker/monitor",
+        "dockerfile": "Dockerfile"
+      },
+      "cap_drop": [
+        "ALL"
+      ],
+      "command": null,
+      "entrypoint": null,
+      "environment": {
+        "MONITOR_API_HOST": "admin.example.test",
+        "MONITOR_API_URL": "http://api:5081/health/ready",
+        "MONITOR_COMPOSE_PROJECT": "portkill-docker-kit-20261026",
+        "MONITOR_DOWNLOAD_URL": "https://updates.example.test/stable/manifest.json",
+        "MONITOR_INTERFACE": "",
+        "MONITOR_NOTIFIER_URL": "http://notifier:8091/health"
+      },
+      "image": "portkill-monitor:999569bbb69b",
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-file": "2",
+          "max-size": "5m"
+        }
+      },
+      "networks": {
+        "api_proxy": null,
+        "portkill": null
+      },
+      "read_only": true,
+      "restart": "unless-stopped",
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
+      "tmpfs": [
+        "/tmp:size=8m"
+      ],
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "/proc",
+          "target": "/host/proc",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "/sys",
+          "target": "/host/sys",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "/var/run/docker.sock",
+          "target": "/var/run/docker.sock",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "DEPLOYMENT_ROOT/data/admin",
+          "target": "/host/data",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "DEPLOYMENT_ROOT/data/public",
+          "target": "/host/public",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "volume",
+          "source": "monitor_snapshot",
+          "target": "/snapshot",
+          "volume": {}
+        }
+      ]
+    },
+    "notifier": {
+      "build": {
+        "context": "DEPLOYMENT_ROOT/.portkill-server-install",
+        "dockerfile": "Application.Dockerfile"
+      },
+      "command": [
+        "/opt/portkill/notifier/PortKiller.UpdateNotifier",
+        "/srv/portkill/stable",
+        "/etc/portkill/verification.json",
+        "http://0.0.0.0:8091"
+      ],
+      "entrypoint": null,
+      "image": "portkill-update-server:install-9ce907b66385a197",
+      "networks": {
+        "portkill": null
+      },
+      "restart": "unless-stopped",
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "DEPLOYMENT_ROOT/data/public",
+          "target": "/srv/portkill/stable",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "DEPLOYMENT_ROOT/verification.json",
+          "target": "/etc/portkill/verification.json",
+          "read_only": true,
+          "bind": {}
+        }
+      ]
+    },
+    "worker": {
+      "build": {
+        "context": "DEPLOYMENT_ROOT/.portkill-server-install",
+        "dockerfile": "Application.Dockerfile"
+      },
+      "command": [
+        "/opt/portkill/worker/PortKiller.UpdatePublisher.Worker"
+      ],
+      "entrypoint": null,
+      "environment": {
+        "ASPNETCORE_ENVIRONMENT": "Production",
+        "Administration__DataRoot": "/var/lib/portkill/admin",
+        "UpdateTool__Enabled": "true",
+        "UpdateTool__ExecutablePath": "/opt/portkill/tool/PortKiller.UpdateTool",
+        "UpdateTool__ReleaseRoot": "/srv/portkill/stable",
+        "UpdateTool__VerificationConfigPath": "/etc/portkill/verification.json"
+      },
+      "image": "portkill-update-server:install-9ce907b66385a197",
+      "networks": {
+        "portkill": null
+      },
+      "restart": "unless-stopped",
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "DEPLOYMENT_ROOT/data/admin",
+          "target": "/var/lib/portkill/admin",
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "DEPLOYMENT_ROOT/data/public",
+          "target": "/srv/portkill/stable",
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "DEPLOYMENT_ROOT/data/state",
+          "target": "/srv/portkill/.stable-update-state",
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "DEPLOYMENT_ROOT/verification.json",
+          "target": "/etc/portkill/verification.json",
+          "read_only": true,
+          "bind": {}
+        }
+      ]
+    }
+  },
+  "volumes": {
+    "caddy_config": {
+      "name": "portkill-docker-kit-20261026_caddy_config"
+    },
+    "caddy_data": {
+      "name": "portkill-docker-kit-20261026_caddy_data"
+    },
+    "monitor_snapshot": {
+      "name": "portkill-docker-kit-20261026_monitor_snapshot"
+    }
+  }
+}

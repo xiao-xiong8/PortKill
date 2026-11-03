@@ -58,7 +58,12 @@ public sealed class AdminOptions
     public int MfaPerMinute { get; set; } = 10;
     public int ApiPerIpPerMinute { get; set; } = 240;
     public int LoginAccountIpFailureLimit { get; set; } = 5;
-    public int LoginAccountIpLockoutMinutes { get; set; } = 15;
+    public int LoginAccountIpLockoutSeconds { get; set; } = 60;
+    public int LoginFailureWindowMinutes { get; set; } = 10;
+    public int LoginAccountFailureLimit { get; set; } = 10;
+    public int LoginAccountLockoutMinutes { get; set; } = 5;
+    public int LoginProtectionMaximumEntries { get; set; } = 10_000;
+    public int MfaLockoutMinutes { get; set; } = 15;
     public int AuditRetentionDays { get; set; } = 90;
     public int AuditMaximumRows { get; set; } = 100_000;
     public int JobEventRetentionDays { get; set; } = 30;
@@ -96,7 +101,12 @@ public sealed class AdminOptions
             || LoginIpPerMinute is < 1 or > 120 || MfaPerMinute is < 1 or > 120
             || ApiPerIpPerMinute is < 1 or > 10_000
             || LoginAccountIpFailureLimit is < 1 or > 20
-            || LoginAccountIpLockoutMinutes is < 1 or > 1440
+            || LoginAccountIpLockoutSeconds is < 1 or > 3600
+            || LoginFailureWindowMinutes is < 1 or > 60
+            || LoginAccountFailureLimit is < 1 or > 100
+            || LoginAccountLockoutMinutes is < 1 or > 60
+            || LoginProtectionMaximumEntries is < 100 or > 100_000
+            || MfaLockoutMinutes is < 1 or > 1440
             || AuditMaximumRows is < 100 or > 10_000_000 || MaxUploadPackageBytes is < 1 or > 268_435_456
             || MaxActiveUploadsPerUser is < 1 or > 20 || MaxActiveUploadsTotal is < 1 or > 1000
             || MaxReservedUploadBytesPerUser < MaxUploadPackageBytes || MaxReservedUploadBytesPerUser > 10_737_418_240

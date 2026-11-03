@@ -22,7 +22,11 @@ public static class RequestSecurity
                 throw new InvalidOperationException("ReverseProxy:KnownProxies must contain explicit proxy IP addresses.");
             knownProxies.Add(proxy);
         }
-        builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 64 * 1024);
+        builder.WebHost.ConfigureKestrel(options =>
+        {
+            options.AddServerHeader = false;
+            options.Limits.MaxRequestBodySize = 64 * 1024;
+        });
         builder.Services.AddAntiforgery(options =>
         {
             options.HeaderName = CsrfHeader;

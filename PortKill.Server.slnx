@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="src/Services/PortKiller.ServerUpdateRunner/PortKiller.ServerUpdateRunner.csproj" />
   <Project Path="src/Modules/PortKiller.UpdateProtocol/PortKiller.UpdateProtocol.csproj" />
   <Folder Name="/tests/">
     <Project Path="tests/PortKiller.UpdateAdmin.BrowserHost/PortKiller.UpdateAdmin.BrowserHost.csproj" />

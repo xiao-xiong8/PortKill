@@ -7,9 +7,12 @@ import { useAuth } from './state/auth';
 import { errorText } from './api/http';
 import { appearanceKey, type ThemePreference } from './state/appearance';
 import { useUpload } from './state/upload';
+import { useServerUpdate } from './state/serverUpdate';
 
 const auth = useAuth();
 const uploadTask = useUpload();
+const serverUpdate = useServerUpdate();
+watch([() => auth.session.value?.currentSessionId, () => auth.can('server.read'), () => auth.can('server.update')], () => serverUpdate.reset());
 const route = useRoute();
 const router = useRouter();
 const themePreference = ref<ThemePreference>('system');
@@ -29,6 +32,7 @@ try {
 } catch { /* Optional preference. */ }
 const entries = computed(() => [
   { id: 'overview', title: '运行总览', permission: 'release.read', path: 'M3 4h18v7H3z M3 14h18v7H3z' },
+  { id: 'server-update', title: '服务器更新', permission: 'server.read', path: 'M3 4h18v7H3z M3 14h18v7H3z M7 7h1 M7 17h1' },
   { id: 'upload', title: '上传版本', permission: 'release.upload', path: 'M12 16V3 M7 8l5-5 5 5 M4 16v5h16v-5' },
   { id: 'history', title: '发布历史', permission: 'release.read', path: 'M3 12a9 9 0 1 0 3-6 M3 3v6h6 M12 7v5l3 2' },
   { id: 'clients', title: '客户端版本', permission: 'release.read', path: 'M3 4h18v13H3z M8 21h8 M12 17v4' },

@@ -24,6 +24,7 @@ public sealed class PublishTaskExecutor(
     {
         using var executionLock = PublishExecutionLease.TryAcquire(options);
         if (executionLock == null) return false;
+        if (ServerUpdates.ServerUpdateFiles.IsPending(options)) return false;
         PublishTaskContext? task = await queue.ClaimAsync(workerId, token);
         if (task == null) return false;
         using var execution = CancellationTokenSource.CreateLinkedTokenSource(token);

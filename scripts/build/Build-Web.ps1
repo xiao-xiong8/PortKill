@@ -20,6 +20,13 @@ try {
             if ($LASTEXITCODE -ne 0) { throw "Frontend $checkName failed" }
         }
     }
+    $webRoot=[IO.Path]::GetFullPath((Get-Location).Path)
+    $dist=[IO.Path]::GetFullPath((Join-Path $webRoot 'dist'))
+    if (-not $dist.StartsWith($webRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid frontend output path' }
+    if (Test-Path -LiteralPath $dist) {
+        if ((Get-Item -LiteralPath $dist -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Frontend output path is a link' }
+        Remove-Item -LiteralPath $dist -Recurse -Force
+    }
     & $Pnpm run build
     if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
 } finally { Pop-Location }

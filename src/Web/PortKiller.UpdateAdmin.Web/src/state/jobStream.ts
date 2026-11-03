@@ -1,3 +1,4 @@
+import { onSessionEpochChanged, sessionEpoch } from '../api/sessionEpoch';
 import { onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 import type { components } from '../api/contracts.generated';
 import { ApiError, errorText, parseJson, readResponse, reportAuthentication } from '../api/http';
@@ -13,6 +14,7 @@ export function useJobStream(id: string) {
   const page = useResource(signal => api<components['schemas']['JobEventPageResponse']>(`/api/v1/jobs/${encodeURIComponent(id)}/events?after=${encodeURIComponent(id + ':0')}`, 'GET', undefined, signal));
   const snapshot = shallowRef<Snapshot>(), events = ref<Event[]>([]), connection = ref('正在连接任务'), gap = ref(false);
   let controller: AbortController | undefined;
+  const stopOnSessionChange = onSessionEpochChanged(() => controller?.abort());
   watch(page.data, data => {
     controller?.abort(); if (!data) { snapshot.value = undefined; events.value = []; gap.value = false; return; }
     if (newer(snapshot.value, data.snapshot, id)) snapshot.value = data.snapshot;
@@ -28,7 +30,8 @@ export function useJobStream(id: string) {
   async function refresh() { controller?.abort(); await page.load(); }
   async function follow(initial: string, signal: AbortSignal) {
     let cursor = initial, failures = 0;
-    while (!signal.aborted) {
+    const streamEpoch = sessionEpoch();
+    while (!signal.aborted && streamEpoch === sessionEpoch()) {
       if (snapshot.value && terminal(snapshot.value)) { connection.value = '任务已结束'; return; }
       const attempt = new AbortController(), abort = () => attempt.abort(); signal.addEventListener('abort', abort, { once: true });
       let idle = setTimeout(abort, 15000), reader: ReadableStreamDefaultReader<Uint8Array> | undefined, closed = false;
@@ -36,11 +39,12 @@ export function useJobStream(id: string) {
       try {
         const path = `/api/v1/jobs/${encodeURIComponent(id)}/events/stream`;
         const response = await fetch(path, { credentials: 'same-origin', redirect: 'error', cache: 'no-store', headers: { 'Last-Event-ID': cursor }, signal: attempt.signal });
+        if (streamEpoch !== sessionEpoch()) return;
         if (!response.ok) await readResponse(response);
         if (!response.headers.get('content-type')?.includes('text/event-stream') || !response.body) throw new ApiError(0, 'invalid_stream', '任务连接返回了无法识别的内容。');
         connection.value = '实时连接中'; reader = response.body.getReader(); const decoder = new TextDecoder();
         const parser = new SseParser(frame => {
-          if (signal.aborted) return;
+          if (signal.aborted || streamEpoch !== sessionEpoch()) return;
           if (frame.event === 'closed') { closed = true; connection.value = '会话或访问权限已变化，请重新确认'; return; }
           if (frame.id) eventSequence(frame.id, id);
           if (frame.event === 'job') {
@@ -64,11 +68,11 @@ export function useJobStream(id: string) {
           parser.push(decoder.decode(chunk.value, { stream: true }));
           if (snapshot.value && terminal(snapshot.value)) break;
         }
-        if (closed) { try { await restoreSession(); } catch { /* Explicit retry remains available. */ } return; }
+        if (closed && streamEpoch === sessionEpoch()) { try { await restoreSession(); } catch { /* Explicit retry remains available. */ } return; }
       } catch (cause) {
-        if (signal.aborted) return;
+        if (signal.aborted || streamEpoch !== sessionEpoch()) return;
         if (cause instanceof ApiError) {
-          reportAuthentication(cause, '/api/v1/jobs/' + id);
+          reportAuthentication(cause, '/api/v1/jobs/' + id, streamEpoch);
           if ([400, 401, 403, 404].includes(cause.status)) { connection.value = errorText(cause); return; }
           retry = Math.max(retry, cause.retryAfter * 1000);
           connection.value = cause.retryAfter > 0
@@ -83,6 +87,6 @@ export function useJobStream(id: string) {
       await delay(retry, signal);
     }
   }
-  onBeforeUnmount(() => controller?.abort());
+  onBeforeUnmount(() => { stopOnSessionChange(); controller?.abort(); });
   return { ...page, load: refresh, snapshot, events, connection, gap };
 }

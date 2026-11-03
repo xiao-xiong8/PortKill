@@ -2,8 +2,8 @@
 set -euo pipefail
 
 package_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-if [[ "$#" -ne 2 ]]; then
-    echo "用法：sudo bash docker-upgrade.sh /现有部署目录 现有Compose项目名" >&2
+if [[ "$#" -ne 2 && !( "$#" -eq 3 && "$3" == --revoke-sessions ) ]]; then
+    echo "用法：sudo bash docker-upgrade.sh /现有部署目录 现有Compose项目名 [--revoke-sessions]" >&2
     exit 2
 fi
 [[ "$(id -u)" -eq 0 ]] || { echo "请使用 sudo 运行。" >&2; exit 2; }
@@ -31,12 +31,16 @@ if [[ "$actual_hash" != "$reference_hash" ]]; then
     echo "现有 Compose 与已核对的 20261026 版本不同，已停止；请人工合并配置，不能直接覆盖。" >&2
     exit 2
 fi
-for config in docker/Dockerfile docker/Caddy.Dockerfile; do
+reference_dockerfile="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["referenceDockerfileSha256"])' "$package_dir/kit.json")"
+[[ "$(sha256sum "$target_dir/docker/Dockerfile" | cut -d ' ' -f 1)" == "$reference_dockerfile" ]] || { echo '原 Dockerfile 已有自定义修改，请人工核对。' >&2; exit 2; }
+for config in docker/Caddy.Dockerfile; do
     cmp -s "$package_dir/$config" "$target_dir/$config" || { echo "$config 已有自定义修改，已停止，请人工核对。" >&2; exit 2; }
 done
 candidate_caddy="$(mktemp)"
-trap 'rm -f -- "$candidate_caddy"' EXIT
-python3 "$package_dir/enable-client-reports.py" --input "$target_dir/docker/Caddyfile" --output "$candidate_caddy"
+reports_caddy="$(mktemp)"
+trap 'rm -f -- "$candidate_caddy" "$reports_caddy"' EXIT
+python3 "$package_dir/enable-client-reports.py" --input "$target_dir/docker/Caddyfile" --output "$reports_caddy"
+python3 "$package_dir/configure-admin-security.py" --input "$reports_caddy" --output "$candidate_caddy"
 cmp -s "$package_dir/docker/Caddyfile" "$candidate_caddy" || { echo 'Caddyfile 有额外自定义改动，请人工核对。' >&2; exit 2; }
 
 export MONITOR_COMPOSE_PROJECT="$project"
@@ -74,6 +78,9 @@ printf '\nMONITOR_COMPOSE_PROJECT=%s\n' "$project" >> "$target_dir/.env"
 
 "${old_compose[@]}" config --quiet
 "${old_compose[@]}" run --rm --no-deps --entrypoint /opt/portkill/api/PortKiller.UpdateAdmin.Api api db migrate
+if [[ "${3:-}" == --revoke-sessions ]]; then
+    "${old_compose[@]}" run --rm --no-deps --entrypoint /opt/portkill/api/PortKiller.UpdateAdmin.Api api admin revoke-sessions
+fi
 "${old_compose[@]}" up -d --no-deps api worker notifier monitor
 bash "$package_dir/docker-client-reports-update.sh" "$target_dir" "$project"
 "${old_compose[@]}" ps

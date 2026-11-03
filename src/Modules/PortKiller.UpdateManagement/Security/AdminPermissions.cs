@@ -10,8 +10,9 @@ public static class AdminPermissions
 {
     public const string Claim = "admin_permission";
     public const string Read = "release.read", Upload = "release.upload", Validate = "release.validate",
-        Publish = "release.publish", Audit = "audit.read", Accounts = "accounts.manage", Recent = "recent-strong-authentication";
-    public static readonly string[] All = [Read, Upload, Validate, Publish, Audit, Accounts];
+        Publish = "release.publish", Audit = "audit.read", Accounts = "accounts.manage", Recent = "recent-strong-authentication",
+        ServerRead = "server.read", ServerUpdate = "server.update";
+    public static readonly string[] All = [Read, Upload, Validate, Publish, Audit, Accounts, ServerRead, ServerUpdate];
     public static string[] ForRoles(IEnumerable<string> roles) => roles.SelectMany(role => role switch
     {
         "Administrator" => All,
@@ -25,7 +26,7 @@ public static class AdminPermissions
             {
                 policy.RequireAuthenticatedUser().RequireClaim(AdminIdentity.PhaseClaim, SessionPhase.Full.ToString())
                     .RequireClaim(Claim, permission);
-                if (permission is Publish or Accounts) policy.AddRequirements(new RecentStrongRequirement());
+                if (permission is Publish or Accounts or ServerUpdate) policy.AddRequirements(new RecentStrongRequirement());
             });
         builder.AddPolicy(Recent, policy => policy.RequireAuthenticatedUser()
             .RequireClaim(AdminIdentity.PhaseClaim, SessionPhase.Full.ToString()).AddRequirements(new RecentStrongRequirement()));

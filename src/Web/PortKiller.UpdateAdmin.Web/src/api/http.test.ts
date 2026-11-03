@@ -1,7 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiError, parseJson, readResponse, retryAfterSeconds } from './http';
+import { advanceSessionEpoch } from './sessionEpoch';
 afterEach(() => vi.unstubAllGlobals());
 describe('authenticated management transport', () => {
+  it('ignores an old unauthorized response after a new authentication state', async () => {
+    const listener = vi.fn(); vi.stubGlobal('window', { dispatchEvent: listener });
+    let finish!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { finish = resolve; })));
+    const old = api('/api/v1/auth/me');
+    advanceSessionEpoch();
+    finish(Response.json({ code: 'authentication_required' }, { status: 401 }));
+    await expect(old).rejects.toMatchObject({ status: 401 });
+    expect(listener).not.toHaveBeenCalled();
+  });
+  it('rejects old successful data and cancels a mutation waiting for CSRF after authentication changes', async () => {
+    let finish!: (response: Response) => void;
+    const fetcher = vi.fn(() => new Promise<Response>(resolve => { finish = resolve; }));
+    vi.stubGlobal('fetch', fetcher);
+    const old = api('/api/v1/system/status'); advanceSessionEpoch(); finish(Response.json({ secret: 'old-user' }));
+    await expect(old).rejects.toMatchObject({ name: 'AbortError' });
+    const mutation = api('/api/v1/uploads/', 'POST', {});
+    advanceSessionEpoch(); finish(Response.json({ requestToken: 'old-token' }));
+    await expect(mutation).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   it('retains HTTP failures even if the JSON error body is damaged', async () => {
     const listener = vi.fn(); vi.stubGlobal('window', { dispatchEvent: listener });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{broken', { status: 401, headers: { 'content-type': 'application/json' } })));

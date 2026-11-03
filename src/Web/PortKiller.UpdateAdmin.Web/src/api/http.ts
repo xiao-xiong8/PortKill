@@ -1,3 +1,4 @@
+import { authenticationChanged, sessionEpoch } from './sessionEpoch';
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public retryAfter = 0) { super(message); }
 }
@@ -43,9 +44,9 @@ export async function csrfToken(signal?: AbortSignal): Promise<string> {
   return data.requestToken;
 }
 
-export function reportAuthentication(error: unknown, path: string) {
-  if (typeof window === 'undefined') return;
-  if (error instanceof ApiError && error.status === 401 && !/^\/api\/v1\/auth\/(login|mfa\/|reauthenticate)/.test(path))
+export function reportAuthentication(error: unknown, path: string, epoch = sessionEpoch()) {
+  if (typeof window === 'undefined' || epoch !== sessionEpoch()) return;
+  if (error instanceof ApiError && error.status === 401 && (error.code === 'authentication_required' || !/^\/api\/v1\/auth\/(login|mfa\/|reauthenticate)/.test(path)))
     window.dispatchEvent(new Event('admin:unauthorized'));
   if (error instanceof ApiError && error.status === 403 && !path.startsWith('/api/v1/auth/'))
     window.dispatchEvent(new Event('admin:forbidden'));
@@ -54,14 +55,19 @@ export function reportAuthentication(error: unknown, path: string) {
 export async function api<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal,
   extraHeaders?: HeadersInit): Promise<T> {
   if (!path.startsWith('/api/v1/')) throw new Error('Invalid management path.');
+  const epoch = sessionEpoch();
   try {
     const headers = new Headers();
     if (method !== 'GET') headers.set('X-PortKill-CSRF', await csrfToken(signal));
+    if (epoch !== sessionEpoch()) throw new DOMException('Authentication changed', 'AbortError');
     if (body !== undefined) headers.set('Content-Type', 'application/json');
     if (extraHeaders) for (const [name, value] of new Headers(extraHeaders)) headers.set(name, value);
-    return await readResponse<T>(await fetch(path, { method, headers, credentials: 'same-origin', redirect: 'error',
+    const result = await readResponse<T>(await fetch(path, { method, headers, credentials: 'same-origin', redirect: 'error',
       cache: 'no-store', body: body === undefined ? undefined : JSON.stringify(body), signal }));
-  } catch (error) { reportAuthentication(error, path); throw error; }
+    if (epoch !== sessionEpoch()) throw new DOMException('Authentication changed', 'AbortError');
+    if (method !== 'GET' && /^\/api\/v1\/auth\/(?:login|logout|mfa\/(?:verify|recovery|enrollment\/(?:confirm|acknowledge)))$/.test(path)) authenticationChanged();
+    return result;
+  } catch (error) { reportAuthentication(error, path, epoch); throw error; }
 }
 
 export function errorText(error: unknown): string {

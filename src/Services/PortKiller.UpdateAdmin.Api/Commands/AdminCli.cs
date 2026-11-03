@@ -41,6 +41,13 @@ public static class AdminCli
                 var restored = await scope.ServiceProvider.GetRequiredService<AdminBackupService>().RestoreAsync(input);
                 Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(restored)); return 0;
             }
+            if (args[0] == "admin" && args[1] == "revoke-sessions" && flags.Keys.All(key => key == "--data-root"))
+            {
+                using var maintenance = AdminRuntimeLease.Exclusive(options);
+                await AdminDatabaseReadiness.RequireAsync(scope.ServiceProvider.GetRequiredService<UpdateAdminDbContext>(), options);
+                int count = await scope.ServiceProvider.GetRequiredService<AdminSessionService>().RevokeAllOfflineAsync();
+                Console.WriteLine($"Revoked {count} sessions."); return 0;
+            }
             if (args[0] != "admin" || args[1] is not ("init" or "reset-mfa") || !flags.TryGetValue("--user", out string? name)
                 || flags.Keys.Any(key => key is not ("--data-root" or "--user"))) return Usage();
             using var offline = AdminRuntimeLease.Exclusive(options);
@@ -62,7 +69,7 @@ public static class AdminCli
     }
 
     private static int Usage()
-    { Console.Error.WriteLine("Usage: db migrate | db backup --output absolute-directory | db restore --input absolute-directory | admin init --user name | admin reset-mfa --user name. Optional: --data-root directory. Migration, restore and account maintenance require stopped API/Worker. Password is read from terminal/stdin."); return 2; }
+    { Console.Error.WriteLine("Usage: db migrate | db backup --output absolute-directory | db restore --input absolute-directory | admin init --user name | admin reset-mfa --user name | admin revoke-sessions. Optional: --data-root directory. Migration, restore and account maintenance require stopped API/Worker. Password is read from terminal/stdin."); return 2; }
 
     private static async Task<string> ReadPasswordAsync()
     {

@@ -18,6 +18,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
   let page: Page;
   let context: BrowserContext;
   let authenticatorKey = '';
+  let recoveryCodes: string[] = [];
   const fixtures = fileURLToPath(new URL('../../../../.local/artifacts/admin-browser/runtime/fixtures/', import.meta.url));
   test.beforeAll(async ({ browser }) => { context = await browser.newContext({ ignoreHTTPSErrors: true }); page = await context.newPage(); });
   test.afterAll(async () => { await context?.close(); });
@@ -34,6 +35,7 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await page.getByRole('button', { name: '验证并继续' }).click();
     await expect(page.getByRole('heading', { name: '保存恢复码' })).toBeVisible();
     const recovery = (await page.locator('.recovery-codes').innerText()).trim().split('\n');
+    recoveryCodes = recovery;
     await expect(page.getByRole('heading', { name: '当前正式版本' })).toHaveCount(0);
     await page.getByLabel('我已安全保存恢复码').check();
     await page.getByRole('button', { name: '已保存，进入工作空间' }).click();
@@ -309,5 +311,32 @@ test.describe.serial('authenticated administration with real HTTPS API', () => {
     await page.locator('tr').filter({ hasText: 'browser-viewer' }).getByRole('button', { name: '停用' }).click();
     await completeStrongIfShown();
     await expect(page.locator('tr').filter({ hasText: 'browser-viewer' })).toContainText('已停用');
+  });
+  test('single account keeps the old login until successful MFA and then replaces it', async ({ browser }) => {
+    const nextContext = await browser.newContext({ ignoreHTTPSErrors: true });
+    try {
+      const next = await nextContext.newPage(); await next.goto('/login');
+      await next.getByLabel('账号', { exact: true }).fill('browser-admin');
+      await next.getByLabel('密码', { exact: true }).fill('Browser-Test-Only!492');
+      await next.getByRole('button', { name: '登录', exact: true }).click();
+      await expect(next.getByRole('heading', { name: '验证登录' })).toBeVisible();
+      expect((await context.request.get('/api/v1/auth/me')).status()).toBe(200);
+      const failedMfa = await next.evaluate(async () => {
+        const { requestToken } = await (await fetch('/api/v1/auth/csrf')).json();
+        return (await fetch('/api/v1/auth/mfa/verify', { method: 'POST', headers: {
+          'Content-Type': 'application/json', 'X-PortKill-CSRF': requestToken,
+        }, body: JSON.stringify({ code: 'invalid' }) })).status;
+      });
+      expect(failedMfa).toBe(401);
+      expect((await context.request.get('/api/v1/auth/me')).status()).toBe(200);
+      await next.getByRole('button', { name: '使用恢复码登录' }).click();
+      await next.getByLabel('恢复码', { exact: true }).fill(recoveryCodes[1]);
+      await next.getByRole('button', { name: '验证并继续' }).click();
+      await expect(next.locator('.sidebar')).toBeVisible();
+      expect((await context.request.get('/api/v1/auth/me')).status()).toBe(401);
+      await page.reload();
+      await expect(page.getByRole('heading', { name: '登录发布管理' })).toBeVisible();
+      expect((await nextContext.request.get('/api/v1/auth/me')).status()).toBe(200);
+    } finally { await nextContext.close(); }
   });
 });

@@ -34,7 +34,6 @@ public static class AuthenticationEndpoints
             try
             {
                 ticket = await authentication.LoginAsync(request.UserName, request.Password, context.RequestAborted);
-                protection.RecordSuccess(request.UserName, address);
             }
             catch (AdminFailure failure) when (failure.Status == 401)
             {
@@ -85,10 +84,11 @@ public static class AuthenticationEndpoints
             return new AuthenticationResponse("complete", ticket.Session.Phase);
         }).WithName("UseRecoveryCode").ProducesProblem(401).ProducesProblem(403);
         app.MapPost("/api/v1/auth/reauthenticate", async (ReauthenticationRequest request, AdminMfaService mfa,
-            AdminSessionService sessions, HttpContext context) =>
+            HttpContext context) =>
         {
             var ticket = await mfa.ReauthenticateAsync(context.User, request.Password, request.Code, context.RequestAborted);
-            await SignInAsync(context, sessions, ticket);
+            // Strong authentication is stored on the existing DB session; no new browser cookie is needed.
+            // An older reauthentication response must not overwrite a later login cookie.
             return new AuthenticationResponse("complete", ticket.Session.Phase);
         }).RequireRateLimiting("mfa").WithName("Reauthenticate").ProducesProblem(401).ProducesProblem(403);
 
@@ -101,19 +101,20 @@ public static class AuthenticationEndpoints
         app.MapDelete("/api/v1/auth/sessions/{id}", async (string id, AdminSessionService sessions, HttpContext context) =>
         {
             await sessions.RevokeAsync(context.User, id, context.RequestAborted);
-            if (id == context.User.FindFirstValue(AdminIdentity.SessionClaim)) await context.SignOutAsync(AdminIdentity.Scheme);
             return Results.NoContent();
         }).WithName("RevokeOwnSession").ProducesProblem(401).ProducesProblem(403).ProducesProblem(404);
         app.MapPost("/api/v1/auth/logout", async (AdminSessionService sessions, HttpContext context) =>
         {
             await sessions.RevokeAsync(context.User, context.User.FindFirstValue(AdminIdentity.SessionClaim)!, context.RequestAborted);
-            await context.SignOutAsync(AdminIdentity.Scheme);
             return Results.NoContent();
         }).RequireAuthorization(AdminIdentity.PendingPolicy).WithName("Logout").ProducesProblem(401);
     }
 
     internal static async Task SignInAsync(HttpContext context, AdminSessionService sessions, SessionTicket ticket)
     {
+        if (ticket.Session.Phase == SessionPhase.Full)
+            context.RequestServices.GetRequiredService<LoginProtectionService>()
+                .RecordSuccess(ticket.User.UserName, context.Connection.RemoteIpAddress);
         var principal = await sessions.PrincipalAsync(ticket);
         var options = context.RequestServices.GetRequiredService<AdminOptions>();
         DateTimeOffset issued = DateTimeOffset.FromUnixTimeMilliseconds(ticket.Session.CreatedUtcMs);

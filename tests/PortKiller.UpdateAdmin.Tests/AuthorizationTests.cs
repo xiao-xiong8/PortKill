@@ -105,7 +105,7 @@ public sealed class AuthorizationTests
     {
         await using var app = await TestApplication.StartAsync(); var (_, codes, _) = await MfaTests.EnrollAsync(app);
         using var other = app.NewClient(); await MfaTests.LoginAsync(other);
-        (await other.PostAsJsonAsync("/api/v1/auth/mfa/recovery", new { code = codes[0] })).EnsureSuccessStatusCode();
+        // A pending login must also be revoked when recovery credentials are rotated.
         var result = await app.Client.PostAsJsonAsync("/api/v1/auth/recovery-codes", new { }); result.EnsureSuccessStatusCode();
         Assert.Equal(10, (await result.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("recoveryCodes").GetArrayLength());
         Assert.Equal(HttpStatusCode.OK, (await app.Client.GetAsync("/api/v1/system/status")).StatusCode);

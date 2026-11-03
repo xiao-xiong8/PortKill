@@ -19,6 +19,20 @@ public sealed class AdminSessionService(UpdateAdminDbContext database, UserManag
     {
         await using var transaction = database.Database.CurrentTransaction == null ? await database.Database.BeginTransactionAsync(token) : null;
         long now = clock.GetUtcNow().ToUnixTimeMilliseconds();
+        if (phase == SessionPhase.Full)
+        {
+            // The SQLite write transaction serializes activation, including independent request scopes.
+            int replaced = await database.AdminSessions.Where(x => x.UserId == user.Id && x.RevokedUtcMs == null)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.RevokedUtcMs, now), token);
+            foreach (var entry in database.ChangeTracker.Entries<AdminSession>()
+                .Where(x => x.Entity.UserId == user.Id && x.Entity.RevokedUtcMs == null))
+            {
+                entry.Property(x => x.RevokedUtcMs).CurrentValue = now;
+                entry.Property(x => x.RevokedUtcMs).OriginalValue = now;
+                entry.Property(x => x.RevokedUtcMs).IsModified = false;
+            }
+            if (replaced > 0) audit.Stage("session.replaced", user.Id, actorUserId: user.Id);
+        }
         var session = new AdminSession
         {
             UserId = user.Id, SecurityStamp = await users.GetSecurityStampAsync(user), Phase = phase,
@@ -127,6 +141,26 @@ public sealed class AdminSessionService(UpdateAdminDbContext database, UserManag
         await database.SaveChangesAsync(token); await transaction.CommitAsync(token);
     }
 
+    public async Task<int> RevokeAllOfflineAsync(CancellationToken token = default)
+    {
+        await using var transaction = await database.Database.BeginTransactionAsync(token);
+        long now = clock.GetUtcNow().ToUnixTimeMilliseconds();
+        int count = await database.AdminSessions.Where(x => x.RevokedUtcMs == null)
+            .ExecuteUpdateAsync(update => update.SetProperty(x => x.RevokedUtcMs, now), token);
+        audit.Stage("session.revoked_offline", "all", "success");
+        await database.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
+        return count;
+    }
+
+    public async Task RequireFullAsync(ClaimsPrincipal principal, CancellationToken token)
+    {
+        string? id = principal.FindFirstValue(AdminIdentity.SessionClaim);
+        string? userId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (id == null || userId == null || !await IsActiveAsync(id, userId, SessionPhase.Full, token))
+            throw new AdminFailure("authentication_required", 401, "会话已失效，请重新登录。");
+    }
+
     public async Task CleanupAsync(CancellationToken token)
     {
         long now = clock.GetUtcNow().ToUnixTimeMilliseconds();
@@ -138,7 +172,7 @@ public sealed class AdminSessionService(UpdateAdminDbContext database, UserManag
     }
 }
 
-public sealed class PasswordAuthenticationService(UserManager<AdminUser> users, SignInManager<AdminUser> signIn,
+public sealed class PasswordAuthenticationService(UserManager<AdminUser> users,
     AdminSessionService sessions, DummyPasswordVerifier dummy)
 {
     public async Task<SessionTicket> LoginAsync(string? userName, string? password, CancellationToken token = default)
@@ -148,8 +182,9 @@ public sealed class PasswordAuthenticationService(UserManager<AdminUser> users, 
         var user = await users.FindByNameAsync(userName!);
         if (user == null)
         { dummy.Check(password); throw new AdminFailure("invalid_credentials", 401, "账号或凭据无效。"); }
-        var result = await signIn.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true);
-        if (!result.Succeeded || user.Disabled)
+        // Password failures have independent bounded windows. Never reset/consume MFA failures here.
+        bool valid = await users.CheckPasswordAsync(user, password);
+        if (!valid || user.Disabled || await users.IsLockedOutAsync(user))
             throw new AdminFailure("invalid_credentials", 401, "账号或凭据无效。");
         var phase = !user.TwoFactorEnabled ? SessionPhase.EnrollmentRequired
             : !user.RecoveryCodesAcknowledged ? SessionPhase.RecoveryAcknowledgementRequired : SessionPhase.MfaRequired;

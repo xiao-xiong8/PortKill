@@ -8,6 +8,7 @@
       '$(MSBuildProjectName)' == 'PortKiller.UpdateAdmin.Api' Or
       '$(MSBuildProjectName)' == 'PortKiller.UpdatePublisher.Worker' Or
       '$(MSBuildProjectName)' == 'PortKiller.UpdateNotifier' Or
+      '$(MSBuildProjectName)' == 'PortKiller.ServerUpdateRunner' Or
       '$(MSBuildProjectName)' == 'PortKiller.UpdateTool'">true</PortKillProductProject>
     <Version Condition="'$(PortKillProductProject)' == 'true' and '$(Version)' == ''">$(ProductVersion)</Version>
     <AssemblyVersion Condition="'$(PortKillProductProject)' == 'true' and '$(AssemblyVersion)' == ''">$(Version)</AssemblyVersion>

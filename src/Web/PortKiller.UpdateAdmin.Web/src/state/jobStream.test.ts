@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { advanceSessionEpoch, onSessionEpochChanged } from '../api/sessionEpoch';
 import type { components } from '../api/contracts.generated';
 import { newer, terminalPublication, terminalValidation } from './jobState';
 
@@ -12,6 +13,15 @@ function publish(id: string, sequence: string, state: components['schemas']['Pub
 }
 
 describe('task stream snapshot ordering', () => {
+  it('aborts a subscribed stream on identity change and releases its listener', () => {
+    const abort = vi.fn();
+    const unsubscribe = onSessionEpochChanged(abort);
+    advanceSessionEpoch();
+    expect(abort).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    advanceSessionEpoch();
+    expect(abort).toHaveBeenCalledTimes(1);
+  });
   it('compares 64-bit event sequences without numeric rounding', () => {
     const current = publish('job', '9223372036854775806', 'publishing');
     expect(newer(current, publish('job', '9223372036854775807', 'completed'), 'job')).toBe(true);

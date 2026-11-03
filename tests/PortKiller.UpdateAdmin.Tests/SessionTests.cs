@@ -36,15 +36,19 @@ public sealed class SessionTests
     public async Task AbsoluteDeadlineCannotBeExtendedByTraffic()
     {
         await using var app = await TestApplication.StartAsync(); await MfaTests.EnrollAsync(app);
+        using var scope = app.App.Services.CreateScope();
+        var database = scope.ServiceProvider.GetRequiredService<UpdateAdminDbContext>();
+        var session = await database.AdminSessions.SingleAsync(x => x.Phase == SessionPhase.Full);
+        var sessions = scope.ServiceProvider.GetRequiredService<AdminSessionService>();
         for (int day = 0; day < 4; day++)
         {
             app.Clock.Advance(TimeSpan.FromDays(6));
-            Assert.Equal(HttpStatusCode.OK, (await app.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+            Assert.True(await sessions.IsActiveAsync(session.Id, session.UserId, SessionPhase.Full, default));
+            await database.AdminSessions.Where(x => x.Id == session.Id)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.LastSeenUtcMs, app.Clock.GetUtcNow().ToUnixTimeMilliseconds()));
         }
-        app.Clock.Advance(TimeSpan.FromDays(5));
-        Assert.Equal(HttpStatusCode.OK, (await app.Client.GetAsync("/api/v1/auth/me")).StatusCode);
-        app.Clock.Advance(TimeSpan.FromDays(2));
-        Assert.Equal(HttpStatusCode.Unauthorized, (await app.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+        app.Clock.Advance(TimeSpan.FromDays(7));
+        Assert.False(await sessions.IsActiveAsync(session.Id, session.UserId, SessionPhase.Full, default));
     }
 
     [Fact]
@@ -70,14 +74,16 @@ public sealed class SessionTests
     }
 
     [Fact]
-    public async Task UserCanRevokeAnotherOwnSession()
+    public async Task CompletingAnotherLoginRevokesThePreviousSession()
     {
         await using var app = await TestApplication.StartAsync(); var (key, _, _) = await MfaTests.EnrollAsync(app);
         using var second = app.NewClient(); await MfaTests.LoginAsync(second);
+        Assert.Equal(HttpStatusCode.OK, (await app.Client.GetAsync("/api/v1/auth/me")).StatusCode);
         (await second.PostAsJsonAsync("/api/v1/auth/mfa/verify", new { code = MfaTests.Code(key, 1) })).EnsureSuccessStatusCode();
-        var me = await second.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
-        string id = me.GetProperty("currentSessionId").GetString()!;
-        Assert.Equal(HttpStatusCode.NoContent, (await app.Client.DeleteAsync("/api/v1/auth/sessions/" + id)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await app.Client.GetAsync("/api/v1/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await second.GetAsync("/api/v1/auth/me")).StatusCode);
+        var response = await second.PostAsJsonAsync("/api/v1/auth/logout", new { });
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await second.GetAsync("/api/v1/auth/me")).StatusCode);
     }
 

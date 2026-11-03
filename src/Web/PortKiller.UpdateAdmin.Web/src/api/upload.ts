@@ -1,12 +1,14 @@
+import { sessionEpoch } from './sessionEpoch';
 import type { components } from './contracts.generated';
 import { ApiError, csrfToken, readResponse, reportAuthentication } from './http';
 export async function uploadPart(id: string, part: 'manifest' | 'package', file: File, signal: AbortSignal, progress: (bytes: number) => void) {
+  const epoch = sessionEpoch();
   const token = await csrfToken(signal), path = `/api/v1/uploads/${encodeURIComponent(id)}/${part}`;
-  if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
+  if (signal.aborted || epoch !== sessionEpoch()) throw new DOMException('Cancelled', 'AbortError');
   return new Promise<components['schemas']['UploadSessionResponse']>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     const abort = () => xhr.abort();
-    const fail = (error: unknown) => { signal.removeEventListener('abort', abort); reportAuthentication(error, path); reject(error); };
+    const fail = (error: unknown) => { signal.removeEventListener('abort', abort); reportAuthentication(error, path, epoch); reject(error); };
     xhr.open('PUT', path); xhr.timeout = 600000;
     xhr.setRequestHeader('Content-Type', 'application/octet-stream'); xhr.setRequestHeader('X-PortKill-CSRF', token);
     xhr.upload.onprogress = event => progress(Math.min(file.size, event.loaded));
@@ -15,6 +17,7 @@ export async function uploadPart(id: string, part: 'manifest' | 'package', file:
     xhr.onabort = () => fail(new DOMException('Cancelled', 'AbortError'));
     xhr.onload = () => {
       signal.removeEventListener('abort', abort);
+      if (epoch !== sessionEpoch()) { fail(new DOMException('Authentication changed', 'AbortError')); return; }
       if (new URL(xhr.responseURL).origin !== window.location.origin) { fail(new ApiError(0, 'invalid_response', '上传返回了意外地址。')); return; }
       void readResponse<components['schemas']['UploadSessionResponse']>(new Response(xhr.responseText, { status: xhr.status, headers: {
         'content-type': xhr.getResponseHeader('content-type') ?? '', 'retry-after': xhr.getResponseHeader('retry-after') ?? '',

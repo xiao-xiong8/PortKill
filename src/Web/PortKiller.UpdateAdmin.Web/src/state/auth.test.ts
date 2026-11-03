@@ -6,6 +6,15 @@ const value = { userId: 'u1', currentSessionId: 's1', userName: 'reader', phase:
 beforeAll(async () => { vi.stubGlobal('window', new EventTarget()); auth = (await import('./auth')).useAuth(); });
 afterEach(() => { auth.clear(); vi.mocked(api).mockReset(); vi.useRealTimers(); });
 describe('non-blocking authenticated navigation', () => {
+  it('rechecks shared cookies on a remote tab change and closes strong authentication', async () => {
+    vi.mocked(api).mockResolvedValueOnce(value); await auth.restore();
+    const strong = auth.requireStrong();
+    vi.mocked(api).mockResolvedValueOnce({ ...value, currentSessionId: 'replacement' });
+    window.dispatchEvent(new Event('admin:authentication-remote'));
+    await auth.restore();
+    expect(await strong).toBe(false);
+    expect(auth.session.value?.currentSessionId).toBe('replacement');
+  });
   it('deduplicates bootstrap requests and reuses a valid session for navigation', async () => {
     let resolve!: (value: unknown) => void;
     vi.mocked(api).mockImplementation(() => new Promise(done => { resolve = done; }));

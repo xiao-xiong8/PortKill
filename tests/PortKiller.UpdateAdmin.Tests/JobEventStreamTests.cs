@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -158,17 +158,13 @@ public sealed class JobEventStreamTests
     }
 
     [Fact]
-    public async Task ConnectionLimitAppliesAcrossSessionsOfTheSameAccountAndDisconnectReclaimsCapacity()
+    public async Task ConnectionLimitAppliesAcrossConnectionsOfTheSameSessionAndDisconnectReclaimsCapacity()
     {
         await using var app = await JobEventTests.StartAsync(realHttp: true); string id = await JobEventTests.CreateTaskAsync(app);
         app.App.Services.GetRequiredService<AdminOptions>().JobStreamMaximumConnectionsPerUser = 1;
-        using var second = app.NewClient(); await MfaTests.LoginAsync(second);
-        await using (var scope = app.App.Services.CreateAsyncScope())
-        {
-            var users = scope.ServiceProvider.GetRequiredService<UserManager<AdminUser>>();
-            string key = (await users.GetAuthenticatorKeyAsync((await users.FindByNameAsync("operator"))!))!;
-            (await second.PostAsJsonAsync("/api/v1/auth/mfa/verify", new { code = MfaTests.Code(key, 1) })).EnsureSuccessStatusCode();
-        }
+        var cookies = new CookieContainer();
+        cookies.SetCookies(app.Client.BaseAddress!, app.DefaultCookieHeader.Replace("; ", ", "));
+        using var second = app.NewClient(cookies);
         await using (var stream = await EventConnection.OpenAsync(app, id))
         {
             await stream.NextAsync();

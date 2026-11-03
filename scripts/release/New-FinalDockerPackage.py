@@ -12,6 +12,7 @@ import yaml
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 EXPECTED_COMPOSE_SHA256 = "15ae87cb0fb67b1131f6ecf53a6ea43f65dbf58d069b1a3d17919b36610943f1"
+PACKAGE_DOCUMENT_NAMES = {"使用说明.md": "README.md", "验证记录.md": "VERIFICATION.md"}
 
 
 def sha(path):
@@ -20,6 +21,29 @@ def sha(path):
 
 def copy_tree(source, destination):
     shutil.copytree(source, destination, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".DS_Store"))
+
+
+def copy_deployment_files(source, destination):
+    # ASCII member names survive legacy unzip filename decoding on deployment hosts.
+    for entry in source.iterdir():
+        if not entry.is_file():
+            continue
+        name = PACKAGE_DOCUMENT_NAMES.get(entry.name, entry.name)
+        if not name.isascii():
+            raise ValueError(f"Deployment filename needs an ASCII mapping: {entry.name}")
+        target = destination / name
+        if target.exists():
+            raise ValueError(f"Duplicate deployment filename: {name}")
+        shutil.copy2(entry, target)
+        if entry.suffix == ".sh":
+            target.write_text(entry.read_text(encoding="utf-8-sig"), encoding="utf-8", newline="\n")
+        elif entry.suffix in (".md", ".txt"):
+            original = entry.read_bytes().decode("utf-8-sig")
+            updated = original
+            for previous, replacement in PACKAGE_DOCUMENT_NAMES.items():
+                updated = updated.replace(previous, replacement)
+            if updated != original:
+                target.write_bytes(updated.encode("utf-8"))
 
 
 def docker_compose(original, template, app_image, monitor_image):
@@ -86,22 +110,21 @@ def main():
     (output / "docker").mkdir()
     for name in ("Dockerfile", "Caddyfile", "Caddy.Dockerfile"):
         shutil.copy2(kit / "docker" / name, output / "docker" / name)
+    # New installations carry the CLI, but Docker Socket access stays opt-in via bootstrap.
+    shutil.copy2(REPOSITORY / 'deploy/docker/server-update/Application.Dockerfile', output / 'docker/Dockerfile')
     configure_caddy = runpy.run_path(str(REPOSITORY / "deploy/docker/package/enable-client-reports.py"))["configure_caddy"]
     caddyfile = output / "docker/Caddyfile"
-    caddyfile.write_text(configure_caddy(caddyfile.read_text(encoding="utf-8-sig")), encoding="utf-8", newline="\n")
+    secure_caddy = runpy.run_path(str(REPOSITORY / "deploy/docker/package/configure-admin-security.py"))["configure"]
+    caddyfile.write_text(secure_caddy(configure_caddy(caddyfile.read_text(encoding="utf-8-sig"))), encoding="utf-8", newline="\n")
     copy_tree(REPOSITORY / "deploy/docker/monitor", output / "docker/monitor")
     (output / "docker/monitor/README.md").write_text(
         "# 完整部署包内的 monitor\n\n"
         "主 docker-compose.yml 已合入全部监控配置，不要再次合并 compose.monitoring.example.yaml。\n"
-        "安装、升级、验收和回退请按包根目录的《使用说明.md》操作。\n"
+        "安装、升级、验收和回退请按包根目录的 README.md 操作。\n"
         "API、Worker、Notifier 统一使用本包新的应用镜像标签；Caddy 保留原站点并补齐两个客户端上报入口。\n"
         "monitor 只向快照卷写入数据，不开放公网端口；Docker socket 的 ro 挂载不等于 API 只读授权。\n",
         encoding="utf-8", newline="\n")
-    for entry in (REPOSITORY / "deploy/docker/package").iterdir():
-        if entry.is_file():
-            shutil.copy2(entry, output / entry.name)
-            if entry.suffix == ".sh":
-                (output / entry.name).write_text(entry.read_text(encoding="utf-8-sig"), encoding="utf-8", newline="\n")
+    copy_deployment_files(REPOSITORY / "deploy/docker/package", output)
     shutil.copyfile(kit / ".env.example", output / ".env.example")
     shutil.copyfile(kit / "verification.json.example", output / "verification.json.example")
     example_env = (output / ".env.example").read_text(encoding="utf-8-sig").splitlines()
@@ -131,6 +154,7 @@ def main():
         "sourceCommit": commit,
         "sourceDirty": dirty,
         "referenceComposeSha256": EXPECTED_COMPOSE_SHA256,
+        "referenceDockerfileSha256": before['docker/Dockerfile'],
         "applicationImage": app_image,
         "monitorImage": monitor_image,
         "privateKeyIncluded": False,
@@ -143,6 +167,8 @@ def main():
     files = sorted(path for path in output.rglob("*") if path.is_file())
     for path in files:
         relative = path.relative_to(output)
+        if not relative.as_posix().isascii():
+            raise ValueError(f"Deployment archive paths must be ASCII: {relative}")
         if path.name in (".env", "verification.json") or "data" in relative.parts or path.suffix.lower() in (".key", ".pem", ".pfx", ".p12"):
             raise ValueError(f"Private deployment material cannot be packaged: {relative}")
     (output / "SHA256SUMS.txt").write_text(

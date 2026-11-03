@@ -8,6 +8,7 @@ import ClientsPage from './pages/ClientsPage.vue';
 import SecurityPage from './pages/SecurityPage.vue';
 import AuditPage from './pages/AuditPage.vue';
 import LoginPage from './pages/LoginPage.vue';
+import ServerUpdatePage from './pages/ServerUpdatePage.vue';
 
 export type RouteMeta = { requiresAuth: boolean; requiresFullSession?: boolean; permission?: string };
 const legacyRoutes = ['overview', 'upload', 'history', 'clients', 'security', 'audit'];
@@ -27,7 +28,7 @@ function internalPath(value: unknown): string | undefined {
     const parsed = new URL(value, window.location.origin);
     if (parsed.origin !== window.location.origin) return undefined;
     const path = parsed.pathname + parsed.search + parsed.hash;
-    if (/^\/(?:overview|history|clients|security|audit)$/.test(parsed.pathname)
+    if (/^\/(?:overview|history|clients|security|audit|server-update)$/.test(parsed.pathname)
       || /^\/upload(?:\/[^/]+)?$/.test(parsed.pathname) || /^\/job\/[^/]+$/.test(parsed.pathname)) return path;
   } catch { /* Invalid return targets are ignored. */ }
   return undefined;
@@ -35,6 +36,7 @@ function internalPath(value: unknown): string | undefined {
 
 migrateLegacyHash();
 const routes: RouteRecordRaw[] = [
+  { path: '/server-update', name: 'server-update', component: ServerUpdatePage, meta: { requiresAuth: true, requiresFullSession: true, permission: 'server.read' } satisfies RouteMeta },
   { path: '/login', name: 'login', component: LoginPage, meta: { requiresAuth: false } satisfies RouteMeta },
   { path: '/overview', name: 'overview', component: OverviewPage, meta: { requiresAuth: true, requiresFullSession: true, permission: 'release.read' } satisfies RouteMeta },
   { path: '/upload/:id?', name: 'upload', component: UploadPage, props: true, meta: { requiresAuth: true, requiresFullSession: true, permission: 'release.upload' } satisfies RouteMeta },

@@ -12,7 +12,13 @@ public static class PublishExecutionLease
         string path = Path.Combine(options.DataRoot, "publisher-execution.lock");
         AdminRuntimeLease.RequireLocalPath(path);
         FileStream handle;
-        try { handle = new(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+        try
+        {
+            bool exists = File.Exists(path);
+            handle = new(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            if (!exists && !OperatingSystem.IsWindows())
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.GroupWrite);
+        }
         catch (IOException) { return null; }
         try
         {

@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -336,8 +336,10 @@ public sealed class UploadTests
         await using var app = await TestApplication.StartAsync(); await MfaTests.EnrollAsync(app);
         var created = await CreateAsync(app.Client, 4, 4); string id = created.GetProperty("id").GetString()!;
         var gate = new GatedStream([1, 2, 3, 4]);
+        var me = await app.Client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me");
         var principal = new ClaimsPrincipal(new ClaimsIdentity([
-            new Claim(ClaimTypes.NameIdentifier, (await app.Client.GetFromJsonAsync<JsonElement>("/api/v1/auth/me")).GetProperty("userId").GetString()!),
+            new Claim(ClaimTypes.NameIdentifier, me.GetProperty("userId").GetString()!),
+            new Claim(AdminIdentity.SessionClaim, me.GetProperty("currentSessionId").GetString()!),
             new Claim(ClaimTypes.Role, "Administrator"), new Claim(AdminIdentity.PhaseClaim, SessionPhase.Full.ToString())
         ], AdminIdentity.Scheme));
         Task<UploadSessionResponse> write;

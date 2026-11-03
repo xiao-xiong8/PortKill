@@ -36,7 +36,7 @@ public static class AdminIdentity
             identity.Password.RequiredUniqueChars = 5;
             identity.User.AllowedUserNameCharacters = string.Empty;
             identity.Lockout.MaxFailedAccessAttempts = 5;
-            identity.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(options.LoginAccountIpLockoutMinutes);
+            identity.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(options.MfaLockoutMinutes);
         }).AddRoles<IdentityRole>().AddEntityFrameworkStores<UpdateAdminDbContext>()
             .AddSignInManager().AddDefaultTokenProviders();
         services.Configure<PasswordHasherOptions>(hasher => hasher.IterationCount = 210_000);

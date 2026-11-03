@@ -1905,6 +1905,201 @@
         }
       }
     },
+    "/api/v1/server-updates": {
+      "get": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "GetServerUpdates",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerUpdateSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/server-updates/packages": {
+      "post": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "UploadServerPackage",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerPackage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/server-updates/packages/{id}": {
+      "delete": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "DeleteServerPackage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v1/server-updates/packages/{id}/apply": {
+      "post": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "ApplyServerUpdate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerUpdateTask"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/server-updates/tasks/{id}": {
+      "get": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "GetServerUpdateTask",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerUpdateTask"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/server-updates/tasks/{id}/logs": {
+      "get": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "GetServerUpdateLogs",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "format": "int64",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ServerUpdateEvent"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/server-updates/tasks/{id}/rollback": {
+      "post": {
+        "tags": [
+          "PortKiller.UpdateAdmin.Api"
+        ],
+        "operationId": "RollbackServerUpdate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerUpdateTask"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/releases/current": {
       "get": {
         "tags": [
@@ -4066,6 +4261,141 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "ServerPackage": {
+        "required": [
+          "id",
+          "version",
+          "applicationImage",
+          "runnerImage",
+          "bytes",
+          "createdUtcMs"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "applicationImage": {
+            "type": "string"
+          },
+          "runnerImage": {
+            "type": "string"
+          },
+          "bytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "createdUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          }
+        }
+      },
+      "ServerUpdateEvent": {
+        "required": [
+          "seq",
+          "atUtcMs",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "seq": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "atUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ServerUpdateSummary": {
+        "required": [
+          "enabled",
+          "maximumPackageBytes",
+          "currentVersion",
+          "packages",
+          "tasks"
+        ],
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "maximumPackageBytes": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "currentVersion": {
+            "type": "string"
+          },
+          "packages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServerPackage"
+            }
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServerUpdateTask"
+            }
+          }
+        }
+      },
+      "ServerUpdateTask": {
+        "required": [
+          "id",
+          "packageId",
+          "version",
+          "actorId",
+          "state",
+          "stage",
+          "updatedUtcMs"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "packageId": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "updatedUtcMs": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "format": "int64"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "rollbackOf": {
+            "type": "string",
+            "nullable": true
+          },
+          "terminal": {
+            "type": "boolean"
           }
         }
       },

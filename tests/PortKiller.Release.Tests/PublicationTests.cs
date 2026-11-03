@@ -29,7 +29,7 @@ public sealed class PublicationTests(ITestOutputHelper output)
         var signed = UpdateManifest.Verify(prepared.Manifest, verification);
         var service = new UpdateService(new UpdateOptions { Enabled = true, AllowHttp = true, RealtimeEnabled = false,
             ManifestUrl = verification.ManifestUrl, PublicKeyPem = verification.PublicKeyPem }, Path.Combine(local.Root, "client-cache"),
-            current: "8.2.0", trustPath: Path.Combine(local.Root, "client-trust.json"));
+            current: "0.0.0", trustPath: Path.Combine(local.Root, "client-trust.json"));
         await service.CheckAsync(default, download: false);
         Assert.Equal(UpdateStage.Available, service.Snapshot.Stage); Assert.Null(service.Ready);
         await service.DownloadAvailableAsync(default);

@@ -67,7 +67,7 @@
 
         <!-- 行右键菜单 · 全表共享单实例（原先内联在每行 DataTemplate 里，
             虚拟化滚动每实例化一行都要白造约 40 个菜单控件，是滚动卡顿主因）-->
-        <ContextMenu x:Key="RowCtxMenu" Classes="ctx">
+        <ContextMenu x:Key="RowCtxMenu" Classes="ctx" x:DataType="m:PortConnectionItem">
             <MenuItem Click="OnCtxCopyRow">
                 <MenuItem.Header>
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
@@ -96,7 +96,7 @@
                                 Data="M9.5 3.5 5.5 20.5M18.5 3.5 14.5 20.5M3.5 9h17M3.5 15h17" />
                             </Canvas>
                         </Viewbox>
-                        <TextBlock Grid.Column="1" Text="仅复制端口与 PID" VerticalAlignment="Center"
+                        <TextBlock Grid.Column="1" Text="{Binding ContextCopyEndpointLabel, FallbackValue='仅复制端口与 PID'}" VerticalAlignment="Center"
                         Foreground="{DynamicResource TextPrimary}" />
                     </Grid>
                 </MenuItem.Header>
@@ -113,7 +113,7 @@
                                 Data="M8 12h8" />
                             </Canvas>
                         </Viewbox>
-                        <TextBlock Grid.Column="1" Text="终止该进程" VerticalAlignment="Center"
+                        <TextBlock Grid.Column="1" Text="{Binding ContextKillLabel, FallbackValue='终止该进程'}" VerticalAlignment="Center"
                         FontWeight="Medium" Foreground="{DynamicResource DangerFg}" />
                         <TextBlock Grid.Column="2" Text="Delete" VerticalAlignment="Center"
                         FontSize="{DynamicResource TypeCaption}"
@@ -134,7 +134,7 @@
                                 Data="M12 8.8v3.4M12 12.2H5.6v3M12 12.2h6.4v3" />
                             </Canvas>
                         </Viewbox>
-                        <TextBlock Grid.Column="1" Text="终止进程树（含全部子进程）" VerticalAlignment="Center"
+                        <TextBlock Grid.Column="1" Text="{Binding ContextKillTreeLabel, FallbackValue='终止进程树（含全部子进程）'}" VerticalAlignment="Center"
                         Foreground="{DynamicResource DangerFg}" />
                     </Grid>
                 </MenuItem.Header>
@@ -996,6 +996,13 @@
                         <Grid Grid.Row="1" RowDefinitions="*,Auto">
                             <ScrollViewer>
                                 <StackPanel Margin="16" Spacing="14">
+                                    <Border Classes="card" Padding="12"
+                                            IsVisible="{Binding InspectorDockerText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="Docker 容器与归属证据" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="{Binding InspectorDockerText}" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}" />
+                                        </StackPanel>
+                                    </Border>
                                     <!-- 进程卡片 -->
                                     <Border Classes="card" Padding="12">
                                         <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="11">
@@ -1114,7 +1121,7 @@
                                 <Button Classes="danger" Height="38" CornerRadius="6"
                                         IsVisible="{Binding InspCanKill}" Click="OnKillTreeClick"
                                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                        Content="终止进程树（含全部子进程）" FontSize="{DynamicResource TypeBody}" />
+                                        Content="{Binding InspectorActionText}" FontSize="{DynamicResource TypeBody}" />
                                 <Button Classes="primary" Height="38"
                                         IsVisible="{Binding InspCanDiagnose}" Click="OnDiagnoseInspectorClick"
                                         HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
@@ -1356,6 +1363,44 @@
                             <Button x:Name="FamilyCancelButton" Classes="dialogAction" Content="取消" Click="OnCancelFamilyKill" />
                             <Button x:Name="FamilyConfirmButton" Classes="dialogAction destructive" Content="全部终止" Click="OnConfirmFamilyKill" />
                         </StackPanel>
+                    </Border>
+                </Grid>
+            </ContentControl>
+        </Panel>
+
+        <Panel x:Name="DockerOverlay" IsVisible="{Binding IsDockerConfirmVisible}" ZIndex="91">
+            <Border Background="{DynamicResource Scrim}" />
+            <ContentControl x:Name="DockerCard" Width="640" MaxHeight="640" Margin="24" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Classes="dialogCard" Theme="{StaticResource DialogCardTheme}" KeyboardNavigation.TabNavigation="Cycle">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <Border Classes="dialogHeader">
+                        <TextBlock Classes="dialogTitle" Text="{Binding DockerDialogTitle}" />
+                    </Border>
+                    <ScrollViewer x:Name="DockerBody" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Margin="24" Spacing="14">
+                              <ComboBox ItemsSource="{Binding DockerPolicyChoices}" SelectedItem="{Binding SelectedDockerPolicy, Mode=TwoWay}"
+                                        IsVisible="{Binding IsDockerPolicyReview}" IsEnabled="{Binding DockerDialogEnabled}"
+                                        HorizontalAlignment="Stretch" AutomationProperties.Name="选择待恢复的容器策略">
+                                  <ComboBox.ItemTemplate>
+                                      <DataTemplate x:DataType="vm:DockerPolicyChoice">
+                                          <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                                      </DataTemplate>
+                                  </ComboBox.ItemTemplate>
+                              </ComboBox>
+                            <TextBlock Classes="dialogBody" Text="{Binding DockerConfirmDetails}" TextWrapping="Wrap" />
+                            <CheckBox Content="同时禁用目标容器的自动重启（保留恢复记录）"
+                                      IsVisible="{Binding DockerCanSelectPolicy}" IsEnabled="{Binding DockerDialogEnabled}"
+                                      IsChecked="{Binding DockerDisableRestart, Mode=TwoWay}" />
+                        </StackPanel>
+                    </ScrollViewer>
+                    <Border x:Name="DockerFooter" Grid.Row="2" Classes="dialogFooter">
+                        <WrapPanel HorizontalAlignment="Right" IsEnabled="{Binding DockerDialogEnabled}">
+                            <Button x:Name="DockerCancelButton" Classes="dialogAction" Content="关闭" Margin="0,0,8,0" Command="{Binding CloseDockerDialogCommand}" />
+                            <Button Classes="dialogAction" Content="继续等待 / 重新验证" Margin="0,0,8,0"
+                                    IsVisible="{Binding DockerCanContinue}" Command="{Binding ContinueDockerStopCommand}" />
+                            <Button x:Name="DockerConfirmButton" Classes="dialogAction destructive" Content="{Binding DockerConfirmActionText}"
+                                    IsVisible="{Binding DockerCanConfirm}" Command="{Binding ConfirmDockerStopCommand}" />
+                        </WrapPanel>
                     </Border>
                 </Grid>
             </ContentControl>

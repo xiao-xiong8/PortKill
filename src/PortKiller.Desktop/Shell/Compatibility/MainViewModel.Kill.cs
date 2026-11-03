@@ -33,6 +33,7 @@ public partial class MainViewModel
         var item = _focusedItem;
         if (IsOperationBlocked) return;
         if (item == null) { ShowToast("未选中目标", "请先选择需要处理的记录。", true); return; }
+        if (await TryHandleDockerRowsAsync(new[] { item })) return;
         if (item.IsKernelHeld) { OpenIntercept(new[] { item }, "single"); return; }
         _operationBusy = true;
         try
@@ -139,6 +140,7 @@ public partial class MainViewModel
         var item = _focusedItem;
         if (IsOperationBlocked) return;
         if (item == null) { ShowToast("未选中目标", "请选择需要终止的进程树。", true); return; }
+        if (await TryHandleDockerRowsAsync(new[] { item })) return;
         if (item.IsKernelHeld) { OpenIntercept(new[] { item }, "tree"); return; }
         _operationBusy = true;
         try
@@ -246,6 +248,7 @@ public partial class MainViewModel
         if (IsOperationBlocked) return;
         var checkedRows = FilteredItems.Where(x => x.IsChecked).ToList();
         if (checkedRows.Count == 0) { ShowToast("未勾选记录", "请先勾选需要处理的端口。", true); return; }
+        if (await TryHandleDockerRowsAsync(checkedRows)) return;
         var timeWaits = checkedRows.Where(x => x.IsTimeWait).ToList();
         var protectedRows = checkedRows.Where(x => !x.IsTimeWait && IsProtectedProcess(x)).DistinctBy(x => x.Pid).ToList();
         var origins = checkedRows.Where(x => !x.IsTimeWait && !IsProtectedProcess(x) && x.Pid > 0).ToList();
@@ -357,7 +360,7 @@ public partial class MainViewModel
             return;
         }
 
-        string text = $"{item.Protocol}\t{item.LocalEndpoint}\t{item.RemoteEndpoint}\t{item.State}\tPID:{item.Pid}\t{item.ProcessName}";
+        string text = item.CopySummary;
         await SetClipboardTextAsync(text);
         ShowToast("已复制当前行数据", "制表符分隔，可直接粘贴到 Excel");
     }
@@ -371,12 +374,20 @@ public partial class MainViewModel
     }
 
     [RelayCommand]
+    public async Task CopyEndpointOwnerAsync()
+    {
+        if (_focusedItem == null) return;
+        await SetClipboardTextAsync(_focusedItem.EndpointOwnerSummary);
+        ShowToast("已复制端点与对象标识", _focusedItem.LocalEndpoint);
+    }
+
+    [RelayCommand]
     public async Task CopyInspectorAsync()
     {
         var item = _focusedItem;
         if (item == null) return;
 
-        string text = $"进程: {InspName}\nPID: {item.Pid}\n可执行文件: {InspExePath}\n启动时间: {InspStartTime}\n父进程: {InspParent}\n端口: {item.LocalEndpoint}\n状态: {item.State}";
+        string text = $"对象: {InspName}\n宿主 PID: {item.PidDisplay}\n可执行文件: {InspExePath}\n启动时间: {InspStartTime}\n所属项目/父进程: {InspParent}\n端口: {item.LocalEndpoint}\n状态: {item.State}\n{InspectorDockerText}";
         await SetClipboardTextAsync(text);
         ShowToast("已复制进程详情", "可直接粘贴到工单或排查报告中");
     }
@@ -418,6 +429,12 @@ public partial class MainViewModel
         {
             // 原静默 return：连接已消失（TIME_WAIT 等短生命周期行）时点了像「没反应」
             ShowToast("无法定位文件", "该连接已不存在，请刷新后重试。", isError: true);
+            return;
+        }
+
+        if (_focusedItem.IsDockerPublication)
+        {
+            ShowToast("容器没有宿主可执行文件", "请通过容器详情中的镜像及 Compose 信息定位服务。", true);
             return;
         }
 

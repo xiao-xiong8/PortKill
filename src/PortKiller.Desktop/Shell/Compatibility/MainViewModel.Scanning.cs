@@ -131,13 +131,11 @@ public partial class MainViewModel
     internal void ApplyScanResult(ScanResult result, bool force)
     {
         if (_shuttingDown) return;
+        _nativeDockerSource = result;
         bool changed = result.HasChanged || HasScanError || force;
         _publishedScans++;
         if (changed) _changedPublishes++;
         _lastFingerprint = result.Fingerprint;
-        _allItems = result.Items;
-        if (changed) _connectionRowCache.UpdateSnapshot(result.Items);
-        if (changed) _connectionQueries.Invalidate();
         ApplyProcessMetadata(MetadataSnapshot);
         TotalCount = result.TotalCount;
         ListeningCount = result.ListeningCount;
@@ -149,16 +147,10 @@ public partial class MainViewModel
         ScanErrorTitle = ScanErrorDescription = string.Empty;
         if (changed)
         {
-            UpdateHudRows();
-            // 交互静默期：归并推迟到闸口归零时补做；手动强制刷新（F5/刷新按钮）不受限
-            if (!force && IsMergeHeld && !_queryBypassesHold) _mergePending = true;
-            else
-            {
-                _mergePending = false;
-                if (force) _inspectorProcess = null;
-                RequestConnectionFilter(respectHold: !force, refreshInspector: force);
-                MaybeRefreshKernelView();
-            }
+            if (force) _inspectorProcess = null;
+            if (result.Items.Count == 0) HudRows.Clear();
+            RequestDockerEnrichment(respectHold: !force, refreshInspector: force);
+            MaybeRefreshKernelView();
         }
         StatusMessage = $"扫描完成：{TotalCount} 条连接，监听 {ListeningCount}，采集耗时 {ScanDurationText}";
     }
@@ -273,10 +265,13 @@ public partial class MainViewModel
         if (_shuttingDown) return;
         _queryBypassesHold |= !respectHold;
         _refreshInspectorPending |= refreshInspector;
+        // 新网络/Docker 快照正在关联时保留用户查询意图，避免先提交旧归属再覆盖。
+        if (_dockerEnrichmentPending) return;
         if (_backgroundQueriesEnabled && !IsPortsViewVisible) { _queryDirty = true; return; }
         if (!_queryBypassesHold && IsMergeHeld) { _mergePending = true; return; }
         var query = new PortKiller.Features.Ports.Services.PortQuery(_allItems, MetadataSnapshot,
-            SearchText, SelectedCategory, SelectedState, _sortCol, _sortAsc, !_queryBypassesHold, _refreshInspectorPending);
+            SearchText, SelectedCategory, SelectedState, _sortCol, _sortAsc, !_queryBypassesHold, _refreshInspectorPending,
+            new(ExactLocalPort.Trim(), ExactLocalAddress.Trim(), ExactProtocol, ExactFamily, ExactOwner));
         if (_backgroundQueriesEnabled)
         {
             _queryInFlight = true;

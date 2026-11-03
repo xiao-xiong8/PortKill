@@ -40,7 +40,7 @@ public partial class MainViewModel : ViewModelBase
     /// <summary>防止不同释放入口同时操作同一批连接。</summary>
     private bool _operationBusy;
     /// <summary>准备、执行与待确认范围共用入口保护，防止快捷键覆盖待确认目标。</summary>
-    private bool IsOperationBlocked => _operationBusy || _shuttingDown || IsFamilyConfirmVisible || IsInterceptVisible || IsInstallingUpdate || IsUpdateConfirmVisible;
+    private bool IsOperationBlocked => _operationBusy || _shuttingDown || IsDockerConfirmVisible || IsFamilyConfirmVisible || IsInterceptVisible || IsInstallingUpdate || IsUpdateConfirmVisible;
     /// <summary>详情查询序号；焦点切换后旧查询不得覆盖新详情。</summary>
     private int _inspectorVersion;
     /// <summary>最近一次操作报告，复制时不再误用当前行数据。</summary>
@@ -320,6 +320,7 @@ public partial class MainViewModel : ViewModelBase
     {
         _portServices = services;
         InitializeProcessMetadata();
+        InitializeDocker();
         Shell = new PortKiller.Shell.ShellViewModel(Bootstrap.ApplicationComposition.CreateToolCatalog());
         Shell.SelectionChanged += OnToolSelected;
         Shell.UpdatePortCount(0);
@@ -354,6 +355,7 @@ public partial class MainViewModel : ViewModelBase
             _backgroundQueriesEnabled = true;
             await RefreshCoreAsync(true);
             if (!_shuttingDown) InitLiveWatcher();
+            if (!_shuttingDown) _portServices.DockerInventory.Start();
             if (!_shuttingDown)
             {
                 UpdateInstaller.ConfirmHealth();

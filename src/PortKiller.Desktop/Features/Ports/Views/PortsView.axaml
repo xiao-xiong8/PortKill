@@ -165,6 +165,33 @@
                                 <!-- 表头区：批量条（选中时出现，设计稿 50px） + 36px 表头 -->
                                 <StackPanel Grid.Row="0">
 
+                                <Expander Header="精确筛选与 Docker 容器" HorizontalAlignment="Stretch" Margin="12,4">
+                                    <StackPanel Spacing="8" Margin="0,8">
+                                        <WrapPanel>
+                                            <TextBox Width="115" Margin="0,0,8,6" PlaceholderText="本地端口"
+                                                     Text="{Binding ExactLocalPort, Mode=TwoWay}" />
+                                            <TextBox Width="185" Margin="0,0,8,6" PlaceholderText="完整宿主 IP 地址"
+                                                     Text="{Binding ExactLocalAddress, Mode=TwoWay}" />
+                                            <ComboBox Width="115" Margin="0,0,8,6" ItemsSource="{Binding ExactProtocolOptions}"
+                                                      SelectedItem="{Binding ExactProtocol, Mode=TwoWay}" />
+                                            <ComboBox Width="125" Margin="0,0,8,6" ItemsSource="{Binding ExactFamilyOptions}"
+                                                      SelectedItem="{Binding ExactFamily, Mode=TwoWay}" />
+                                            <ComboBox Width="135" Margin="0,0,8,6" ItemsSource="{Binding ExactOwnerOptions}"
+                                                      SelectedItem="{Binding ExactOwner, Mode=TwoWay}" />
+                                            <Button Classes="tool" Margin="0,0,8,6" Content="清除精确筛选" Command="{Binding ClearExactFiltersCommand}" />
+                                        </WrapPanel>
+                                        <TextBlock Text="{Binding ExactFilterError}" TextWrapping="Wrap" Foreground="{DynamicResource WarnFg}" />
+                                        <TextBlock Text="{Binding DockerStatusText}" TextWrapping="Wrap" Foreground="{DynamicResource TextMuted}" />
+                                        <TextBlock Text="Docker 发布记录与 Windows 网络记录分别展示；顶部计数仅统计宿主网络表。"
+                                                   TextWrapping="Wrap" Foreground="{DynamicResource TextMuted}" />
+                                        <WrapPanel>
+                                            <Button Classes="tool" Content="继续观察容器操作" Margin="0,0,8,0"
+                                                    IsVisible="{Binding HasPendingDockerStop}" Command="{Binding ContinueDockerStopCommand}" />
+                                            <Button Classes="tool" Content="查看重启策略恢复记录" Command="{Binding ReviewDockerPolicyCommand}" />
+                                        </WrapPanel>
+                                    </StackPanel>
+                                </Expander>
+
                                 <TextBlock Text="应用名称补全中" IsVisible="{Binding IsApplicationMetadataPending}" Margin="16,6"
                                            FontSize="{DynamicResource TypeCaption}" Foreground="{DynamicResource TextMuted}" />
 
@@ -584,7 +611,7 @@
 
                                                             <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx4}" Classes="mono tableCell"
                                                                        IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible4}"
-                                                                       Text="{Binding Pid}" FontSize="{DynamicResource TypeMono}"
+                                                                       Text="{Binding PidDisplay}" FontSize="{DynamicResource TypeMono}"
                                                                        Foreground="{DynamicResource TextTertiary}" />
 
                                                             <TextBlock Grid.Column="{Binding $parent[Window].((vm:MainViewModel)DataContext).ColIdx5}" Classes="mono tableCell"
@@ -596,7 +623,7 @@
                                                                   VerticalAlignment="Center" HorizontalAlignment="Left"
                                                                   IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsColVisible6}">
                                                                 <Button Classes="danger" Width="76" Height="26"
-                                                                        Content="终止" FontSize="{DynamicResource TypeCaption}" Padding="0"
+                                                                        Content="{Binding ActionLabel}" FontSize="{DynamicResource TypeCaption}" Padding="0"
                                                                         HorizontalAlignment="Left"
                                                                         IsVisible="{Binding ShowKillAction}"
                                                                         Click="OnKillRowClick" />

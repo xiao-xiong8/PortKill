@@ -47,6 +47,8 @@ internal static class UiChecks
                 await FontLicenseChecks.ViewerAndDocuments();
                 await ContextMenuChecks.HoverTransitions();
                 await DialogChecks.RoundedCardsAndInteraction();
+                await DockerChecks.WindowAndIndependentMetadata();
+                await DockerChecks.BatchReportsPreserveProgress();
                 await UpdateUiChecks.StatesAndWindowLifetime();
                 await UpdateBadgeChecks.Run();
                 CheckTemplates();
@@ -349,6 +351,7 @@ internal static class UiChecks
         try
         {
             RefreshChecks.Publish(vm, new() { root });
+            root = vm.FilteredItems.Single();
             while (vm.InspExePath == "正在读取…") await Task.Delay(10, cancellationToken);
             vm.ToggleCheck(root);
             scanner.Arm();
@@ -412,6 +415,7 @@ internal static class UiChecks
                 var owned = RefreshChecks.Row(0, process: child.ProcessName + ".exe");
                 owned.Pid = child.Id;
                 RefreshChecks.Publish(executing, new() { owned });
+                owned = executing.FilteredItems.Single();
                 if (batch)
                 {
                     executing.ToggleCheck(owned);

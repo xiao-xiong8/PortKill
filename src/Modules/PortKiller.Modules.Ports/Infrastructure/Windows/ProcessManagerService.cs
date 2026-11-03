@@ -45,9 +45,7 @@ public class ProcessManagerService : PortKiller.Modules.Ports.Abstractions.ITcpC
         => SystemProtection.IsAbsolutelyProtected(pid, processName);
 
     /// <summary>
-    /// 内核绝对保护级：PID ≤ 4 或蓝屏级关键进程（csrss/lsass/services 等）。
-    /// 任何用户权限都无法安全终止 —— UI 不应对这一级提供「仍要强制终止」选项，
-    /// 强行 TerminateProcess 会直接触发 BSOD 或会话崩溃。
+    /// 禁止通过原生终止入口处理系统关键进程及 Docker/WSL 承载进程。
     /// </summary>
     public static bool IsAbsolutelyProtected(int pid, string processName)
         => SystemProtection.IsAbsolutelyProtected(pid, processName);
@@ -69,7 +67,9 @@ public class ProcessManagerService : PortKiller.Modules.Ports.Abstractions.ITcpC
             return new OperationResult
             {
                 Success = false,
-                Message = $"PID {pid} ({processName}) 属于系统关键保护进程，直接终止将导致系统崩溃或蓝屏，已拦截！"
+                Message = SystemProtection.IsContainerPlatform(processName)
+                    ? $"PID {pid} ({processName}) 为容器平台承载进程，终止会影响其他服务，已拦截；请按端口核验后停止目标容器。"
+                    : $"PID {pid} ({processName}) 属于系统关键保护进程，直接终止可能导致系统崩溃或会话中断，已拦截！"
             };
         }
 

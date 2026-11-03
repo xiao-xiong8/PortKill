@@ -6,6 +6,10 @@ namespace PortKiller.Models;
 /// <summary>无界面依赖的网络表快照记录。原始 TCP 参数仅供原生适配器使用。</summary>
 public class PortConnection
 {
+    public bool IsDockerPublication { get; set; }
+    public PortKiller.Docker.EndpointOwnership? DockerOwnership { get; set; }
+    public bool RequiresDockerResolution => IsDockerPublication || DockerOwnership?.Container != null
+        || DockerOwnership?.Kind == PortKiller.Docker.OwnershipKind.Ambiguous || SystemProtection.IsContainerPlatform(ProcessName);
     public string Protocol { get; set; } = "TCP";
     public string IpVersion { get; set; } = "IPv4";
     public string LocalAddress { get; set; } = string.Empty;

@@ -18,6 +18,7 @@ public partial class MainWindow
     {
         InterceptOverlay.PropertyChanged += OnConfirmationVisibilityChanged;
         FamilyOverlay.PropertyChanged += OnConfirmationVisibilityChanged;
+        DockerOverlay.PropertyChanged += OnConfirmationVisibilityChanged;
         ExitOverlay.PropertyChanged += OnConfirmationVisibilityChanged;
         Opened += (_, _) => SynchronizeConfirmationFocus();
         AddHandler(KeyDownEvent, OnConfirmationPreviewKeyDown, RoutingStrategies.Tunnel);
@@ -33,6 +34,7 @@ public partial class MainWindow
     {
         if (_exitConfirmed || Vm == null) return;
         var next = ExitOverlay.IsVisible ? ExitCard
+            : DockerOverlay.IsVisible ? DockerCard
             : InterceptOverlay.IsVisible ? InterceptCard
             : FamilyOverlay.IsVisible ? FamilyCard : null;
         if (ReferenceEquals(next, _activeConfirmationCard)) return;
@@ -62,6 +64,7 @@ public partial class MainWindow
     }
 
     private Button? ConfirmationCancelButton() => _activeConfirmationCard == ExitCard ? ExitCancelButton
+        : _activeConfirmationCard == DockerCard ? DockerCancelButton
         : _activeConfirmationCard == InterceptCard ? InterceptCancelButton
         : _activeConfirmationCard == FamilyCard ? FamilyCancelButton : null;
 
@@ -78,6 +81,7 @@ public partial class MainWindow
         if (e.Key == Key.Escape)
         {
             if (card == ExitCard) Vm?.CancelExitCommand.Execute(null);
+            else if (card == DockerCard) Vm?.CloseDockerDialogCommand.Execute(null);
             else if (card == InterceptCard) Vm?.CancelInterceptCommand.Execute(null);
             else Vm?.CancelFamilyKillCommand.Execute(null);
             e.Handled = true;

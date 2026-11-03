@@ -35,6 +35,8 @@ public partial class PortConnectionItem : PortConnection
             ProcessPath = snapshot.ProcessPath,
             IsSystemProtected = snapshot.IsSystemProtected,
             IsHttpSys = snapshot.IsHttpSys,
+            IsDockerPublication = snapshot.IsDockerPublication,
+            DockerOwnership = snapshot.DockerOwnership,
         };
     }
 
@@ -47,7 +49,7 @@ public partial class PortConnectionItem : PortConnection
     private static readonly PropertyChangedEventArgs ApplicationNameChanged = new(nameof(ApplicationName));
     private static readonly PropertyChangedEventArgs ApplicationDisplayChanged = new(nameof(ApplicationNameDisplay));
     private static readonly PropertyChangedEventArgs ApplicationTipChanged = new(nameof(ApplicationNameTip));
-    public string ApplicationName => !IsTimeWait ? _metadata?.ApplicationName ?? "" : "";
+    public string ApplicationName => !IsTimeWait ? DockerOwnership?.Container?.Name ?? _metadata?.ApplicationName ?? "" : "";
     public string ApplicationNameDisplay => ApplicationName.Length > 0 ? ApplicationName : "—";
     public string ApplicationNameTip => ApplicationName.Length > 0 ? ApplicationName :
         !IsTimeWait && _metadata?.State == ProcessMetadataState.Pending ? "应用名称读取中" : "应用名称不可用";
@@ -65,8 +67,18 @@ public partial class PortConnectionItem : PortConnection
     /// <summary>只在 UI 线程归并时更新。身份字段不变；状态、保护标志及派生绑定同步失效。</summary>
     internal bool ApplySnapshot(PortConnection next)
     {
+        bool ownerChanged = DockerOwnership?.Kind != next.DockerOwnership?.Kind
+            || DockerOwnership?.Evidence != next.DockerOwnership?.Evidence
+            || DockerOwnership?.Container?.Description != next.DockerOwnership?.Container?.Description
+            || DockerOwnership?.Container?.Identity != next.DockerOwnership?.Container?.Identity;
+        if (DockerOwnership?.Container?.Identity != next.DockerOwnership?.Container?.Identity
+            || DockerOwnership?.Container?.StartedAt != next.DockerOwnership?.Container?.StartedAt
+            || DockerOwnership?.Container?.RestartCount != next.DockerOwnership?.Container?.RestartCount
+            || DockerOwnership?.Container?.BindingSignature != next.DockerOwnership?.Container?.BindingSignature) IsChecked = false;
+        DockerOwnership = next.DockerOwnership;
+        IsDockerPublication = next.IsDockerPublication;
         bool displayChanged = State != next.State || RawState != next.RawState ||
-            IsSystemProtected != next.IsSystemProtected || IsHttpSys != next.IsHttpSys;
+            IsSystemProtected != next.IsSystemProtected || IsHttpSys != next.IsHttpSys || ownerChanged;
         bool stateChanged = State != next.State;
         bool rawStateChanged = RawState != next.RawState;
         bool protectedChanged = IsSystemProtected != next.IsSystemProtected;
@@ -96,10 +108,12 @@ public partial class PortConnectionItem : PortConnection
     {
         nameof(RowKey), nameof(IsTimeWait), nameof(IsListening), nameof(IsEstablished), nameof(IsKernelHeld),
         nameof(ApplicationName), nameof(ApplicationNameDisplay), nameof(ApplicationNameTip),
+        nameof(PidDisplay), nameof(ContextCopyEndpointLabel), nameof(ContextKillLabel), nameof(ContextKillTreeLabel),
         nameof(ServiceCategory), nameof(IsCatWeb), nameof(IsCatDb), nameof(IsCatDev), nameof(IsCatNet),
         nameof(IsCatSys), nameof(IsCatApp), nameof(IsPillListen), nameof(IsPillEstablished), nameof(IsPillTimeWait),
         nameof(IsPillKernel), nameof(IsPillIdle), nameof(StatusBadge), nameof(ProcessDisplay),
         nameof(ShowKillAction), nameof(ShowReleaseAction), nameof(ShowDiagnoseAction),
+        nameof(ActionLabel), nameof(RequiresDockerResolution),
         nameof(ServiceColor), nameof(ServiceBadgeBg), nameof(StatusBadgeColor), nameof(StatusBadgeBg)
     };
 
@@ -145,15 +159,26 @@ public partial class PortConnectionItem : PortConnection
 
     /// <summary>进程列展示文本：TIME_WAIT 孤儿连接没有存活进程。</summary>
     public string ProcessDisplay =>
-        IsTimeWait ? "连接已关闭 · TIME_WAIT" : ProcessName;
+        IsTimeWait ? "连接已关闭 · TIME_WAIT" : IsDockerPublication ? DockerOwnership?.Display ?? "Docker 发布记录" : ProcessName;
+    public string PidDisplay => IsDockerPublication ? "—" : Pid.ToString();
+    public string ContextCopyEndpointLabel => IsDockerPublication ? "复制端点与容器 ID" : "仅复制端口与 PID";
+    public string ContextKillLabel => RequiresDockerResolution ? "核验并停止整个容器" : "终止该进程";
+    public string ContextKillTreeLabel => RequiresDockerResolution ? "核验容器范围（所有服务）" : "终止进程树（含全部子进程）";
+    public string EndpointOwnerSummary => IsDockerPublication
+        ? $"{Protocol}/{IpVersion} {LocalEndpoint}\t容器 ID:{DockerOwnership?.Container?.Identity.Id ?? "未确认"}"
+        : $"{LocalPort}\t{Pid}";
+    public string CopySummary => $"{Protocol}\t{LocalEndpoint}\t{RemoteEndpoint}\t{State}\tPID:{PidDisplay}\t{ProcessDisplay}"
+        + (DockerOwnership?.Container is { } container ? "\t" + container.Description.Replace('\n', '\t') : "");
 
     // ── 操作列语义 ───────────────────────────────────────────────────────
     /// <summary>普通进程 → 玫瑰色「终止」</summary>
-    public bool ShowKillAction => !IsKernelHeld && !IsTimeWait;
+    public bool ShowKillAction => !IsTimeWait && (RequiresDockerResolution || !IsKernelHeld);
+    public string ActionLabel => RequiresDockerResolution
+        ? DockerOwnership?.Kind == PortKiller.Docker.OwnershipKind.Docker ? "停止容器" : "核验容器" : "终止";
     /// <summary>TIME_WAIT → 橙色「释放」</summary>
     public bool ShowReleaseAction => IsTimeWait;
     /// <summary>内核占用 → 中性「诊断」</summary>
-    public bool ShowDiagnoseAction => IsKernelHeld;
+    public bool ShowDiagnoseAction => IsKernelHeld && !RequiresDockerResolution;
 
     // ── 兼容旧调用（命令行自检程序引用的色值属性） ───────────────────────
     public string ServiceColor => ServiceCategory switch

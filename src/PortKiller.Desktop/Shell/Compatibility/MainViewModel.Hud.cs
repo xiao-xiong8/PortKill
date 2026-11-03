@@ -55,7 +55,8 @@ public partial class MainViewModel
                      .OrderBy(x => x.LocalPort).Take(4))
         {
             string port = item.LocalPort.ToString();
-            string process = item.IsKernelHeld ? $"{item.ProcessName} · 受保护" : item.ProcessName;
+            string process = item.DockerOwnership?.Container is { } container ? $"Docker · {container.Name}"
+                : item.IsKernelHeld ? $"{item.ProcessName} · 受保护" : item.ProcessName;
             if (index >= HudRows.Count)
                 HudRows.Add(new HudRow(port, process, item.ServiceCategory));
             else if (HudRows[index].Port != port || HudRows[index].Process != process ||

@@ -98,6 +98,9 @@ public partial class MainViewModel
     { _connectionQueries.Invalidate(); _queryDirty = true; _queryInFlight = false; }
     private void DisposeProcessMetadata()
     {
+        _portServices.DockerInventory.Changed -= OnDockerInventoryChanged;
+        _dockerEnrichment.Completed -= OnDockerEnrichmentCompleted;
+        _dockerEnrichment.Dispose();
         if (MetadataProvider != null) MetadataProvider.Changed -= OnProcessMetadataChanged;
         _connectionQueries.Completed -= OnConnectionQueryCompleted;
         _connectionQueries.Dispose();

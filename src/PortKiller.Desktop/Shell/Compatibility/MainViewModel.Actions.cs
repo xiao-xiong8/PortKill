@@ -104,6 +104,7 @@ public partial class MainViewModel
         }
         IsInterceptVisible = false;
         var batch = _interceptBatch;
+        if (await TryHandleDockerRowsAsync(batch)) return;
         string mode = _interceptMode;
         _operationBusy = true;
         try

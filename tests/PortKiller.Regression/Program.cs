@@ -62,6 +62,17 @@ internal static class Program
             Run("精确匹配 URL 端口", MatchPort_SimilarPorts_DoesNotCrossMatch);
             Run("连接释放能力边界", CanRelease_UnsupportedRecords_ReturnsFalse);
             Run("绑定复检区分地址族与地址", PortStillOccupied_DifferentBinding_ReturnsFalse);
+            Run("Docker 精确端点、服务无关、多候选与承载进程保护", DockerChecks.EndpointIdentityAndOwnership);
+            Run("Docker 发布来源、共享 PID、批量去重与精确查询", DockerChecks.PublicationAndQuery);
+            Run("Docker 共享索引规模、冲突与协议地址边界", DockerChecks.IndexedEnrichmentScaleAndAccuracy);
+            RunAsync("Docker 后台关联取消旧任务并保留最新结果", DockerChecks.BackgroundEnrichmentLatestWins).GetAwaiter().GetResult();
+            Run("Docker 实际映射解析与本机 Engine 限制", DockerChecks.InspectParsingAndLocality);
+            RunAsync("Docker 优雅停止、强杀确认及强制停止信号", DockerChecks.StopAndForceConfirmation).GetAwaiter().GetResult();
+            RunAsync("Docker 重启竞态、原生接管、替代容器与验证失败", DockerChecks.RacesAndVerification).GetAwaiter().GetResult();
+            RunAsync("Docker 重启策略记录、恢复与写入失败", DockerChecks.RestartPoliciesAndJournal).GetAwaiter().GetResult();
+            RunAsync("Docker 本机 Named Pipe、版本协商与无自动强杀 API", DockerChecks.NamedPipeApiContract).GetAwaiter().GetResult();
+            RunAsync("Docker 连接切换、故障恢复与独立停止请求", DockerChecks.ConnectionRecoveryPreservesStop).GetAwaiter().GetResult();
+            RunAsync("Windows TCP/UDP IPv4/IPv6 独占端点探测", DockerChecks.WindowsEndpointProbes).GetAwaiter().GetResult();
             Run("家族收集排除无关同名进程", Family_UnrelatedSameName_Excluded);
             Run("异常进程树可以结束", Family_CyclicSnapshot_Terminates);
             Run("配置原子保存与非有限值", Settings_RoundTrip_PreservesPreference);

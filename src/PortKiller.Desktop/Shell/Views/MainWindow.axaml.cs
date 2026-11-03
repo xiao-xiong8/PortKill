@@ -534,6 +534,7 @@ public partial class MainWindow : Window
         Vm.SearchText = string.Empty;
         Vm.SelectedCategory = "全部分类";
         Vm.SelectedState = "全部状态";
+        Vm.ClearExactFiltersCommand.Execute(null);
         Vm.ShowToast("已清除全部筛选条件", "列表已恢复为全量端口视图");
     }
 
@@ -651,7 +652,7 @@ public partial class MainWindow : Window
         if (Vm == null) return;
         var item = CtxItem(sender);
         if (item != null) Vm.FocusRow(item);
-        Vm.CopyEndpointCommand.Execute(null);
+        Vm.CopyEndpointOwnerCommand.Execute(null);
     }
 
     private void OnCtxKill(object? sender, RoutedEventArgs e)

@@ -169,8 +169,30 @@ public partial class MainViewModel
         InspPillTimeWait = item.IsPillTimeWait;
         InspPillKernel = item.IsPillKernel;
         InspPillIdle = item.IsPillIdle;
-        InspCanKill = !item.IsKernelHeld;
-        InspCanDiagnose = item.IsKernelHeld;
+        InspCanKill = !item.IsKernelHeld || item.RequiresDockerResolution;
+        InspCanDiagnose = item.IsKernelHeld && !item.RequiresDockerResolution;
+        InspectorDockerText = item.RequiresDockerResolution
+            ? (item.DockerOwnership?.Container?.Description ?? "未确认容器归属") + "\n" + item.DockerOwnership?.Evidence : "";
+        OnPropertyChanged(nameof(InspectorActionText));
+
+        if (item.IsDockerPublication || item.DockerOwnership?.Container != null)
+        {
+            // 容器以 Engine + 完整 ID 区分，不能按共享的宿主 PID 装配路径或进程树。
+            var container = item.DockerOwnership?.Container;
+            _inspectorProcess = null; _inspectorVersion++;
+            InspName = container?.Name ?? "Docker 发布记录（归属待确认）";
+            InspMeta = $"容器 {container?.ShortId ?? "未确认"} · {item.Protocol}/{item.IpVersion} {item.LocalEndpoint}";
+            InspExePath = "—";
+            InspStartTime = container == null ? "—" : DateTime.TryParse(container.StartedAt, out var start)
+                ? ProcessDetailService.FormatStartTime(start) : container.StartedAt;
+            InspParent = container?.ComposeProject is { } project ? $"Compose：{project} / {container.ComposeService}" : "未提供 Compose 信息";
+            InspApplicationName = item.ApplicationNameDisplay;
+            InspChildren.Clear(); InspChildCountText = "操作范围：整个容器及其全部服务";
+            InspPorts.Clear();
+            foreach (var binding in container?.Bindings ?? Array.Empty<PortKiller.Docker.PublishedBinding>())
+                InspPorts.Add(new PortChipItem { Port = binding.Host.Port.ToString(), StateText = binding.Host.ToString(), IsListening = false });
+            return;
+        }
 
         var ports = _detailService.GetListeningPorts(item.Pid, _allItems);
         for (int i = 0; i < ports.Count; i++)

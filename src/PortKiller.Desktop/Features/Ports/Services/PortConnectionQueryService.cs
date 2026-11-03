@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using System.Net;
+using PortKiller.Docker;
 using PortKiller.Models;
 
 namespace PortKiller.Features.Ports.Services;
@@ -11,7 +13,26 @@ namespace PortKiller.Features.Ports.Services;
 internal sealed record PortQuery(IReadOnlyList<PortConnection> Items,
     IReadOnlyDictionary<ProcessIdentity, ProcessMetadata> Metadata,
     string Search, string Category, string State, int SortColumn, bool Ascending,
-    bool RespectInteractionHold = false, bool RefreshInspector = false);
+    bool RespectInteractionHold = false, bool RefreshInspector = false, DockerEndpointFilter? EndpointFilter = null);
+
+internal sealed record DockerEndpointFilter(string Port, string Address, string Protocol, string Family, string Owner)
+{
+    public bool Matches(PortConnection row)
+    {
+        if (Port.Length > 0 && (!int.TryParse(Port, out int value) || value is < 1 or > 65535 || row.LocalPort != value)) return false;
+        if (Address.Length > 0 && (!IPAddress.TryParse(Address, out var address)
+            || !IPAddress.TryParse(row.LocalAddress, out var current) || !address.Equals(current))) return false;
+        if (Protocol != "全部协议" && Protocol != row.Protocol) return false;
+        if (Family != "全部地址族" && Family != row.IpVersion) return false;
+        return Owner switch
+        {
+            "Docker 容器" => row.DockerOwnership?.Kind == OwnershipKind.Docker,
+            "Windows 进程" => !row.IsDockerPublication && !row.RequiresDockerResolution,
+            "待确认" => row.RequiresDockerResolution && row.DockerOwnership?.Kind != OwnershipKind.Docker,
+            _ => true
+        };
+    }
+}
 internal sealed record PortQueryResult(long Version, PortQuery Query, List<PortConnection> Items);
 
 /// <summary>单一后台消费者、只保留最新请求；同一字段逻辑同时用于隔离回归。</summary>
@@ -78,6 +99,7 @@ internal sealed class PortConnectionQueryService : IDisposable
         foreach (var item in request.Items)
         {
             token.ThrowIfCancellationRequested();
+            if (request.EndpointFilter != null && !request.EndpointFilter.Matches(item)) continue;
             if (request.Category != "全部分类" && item.ServiceCategory != request.Category) continue;
             if (request.State switch { "LISTENING" => !item.IsListening, "ESTABLISHED" => !item.IsEstablished,
                     "TIME_WAIT" => !item.IsTimeWait, _ => false }) continue;
@@ -91,7 +113,10 @@ internal sealed class PortConnectionQueryService : IDisposable
                 {
                     bool number = int.TryParse(word.AsSpan(word.StartsWith(':') ? 1 : 0), out int numeric);
                     bool named = Contains(item.ProcessName, word) || Contains(metadata?.ApplicationName, word)
-                        || Contains(metadata?.FileDescription, word) || Contains(metadata?.ProductName, word);
+                        || Contains(metadata?.FileDescription, word) || Contains(metadata?.ProductName, word)
+                        || Contains(item.DockerOwnership?.Container?.Name, word) || Contains(item.DockerOwnership?.Container?.Image, word)
+                        || Contains(item.DockerOwnership?.Container?.Identity.Id, word)
+                        || Contains(item.DockerOwnership?.Container?.ComposeProject, word) || Contains(item.DockerOwnership?.Container?.ComposeService, word);
                     if (number ? !named && item.LocalPort != numeric && item.RemotePort != numeric && item.Pid != numeric
                         : !named && !Contains(item.ServiceCategory, word) && !Contains(item.State, word)
                             && !Contains(item.LocalAddress, word) && !Contains(item.Protocol, word))
@@ -108,8 +133,8 @@ internal sealed class PortConnectionQueryService : IDisposable
             int value;
             if (request.SortColumn == 7)
             {
-                string an = GetMetadata(a, request.Metadata)?.ApplicationName ?? "";
-                string bn = GetMetadata(b, request.Metadata)?.ApplicationName ?? "";
+                string an = a.DockerOwnership?.Container?.Name ?? GetMetadata(a, request.Metadata)?.ApplicationName ?? "";
+                string bn = b.DockerOwnership?.Container?.Name ?? GetMetadata(b, request.Metadata)?.ApplicationName ?? "";
                 // 缺失名称在升降序下均位于末尾。
                 value = string.IsNullOrEmpty(an).CompareTo(string.IsNullOrEmpty(bn));
                 if (value != 0) return value;

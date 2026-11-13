@@ -165,6 +165,7 @@ public partial class MainWindow : Window
             ? "M7 3h14v14h-3 M3 7h14v14H3z"
             : "M3 3h18v18H3z");
         ToolTip.SetTip(MaxButton, maximized ? "还原" : "最大化");
+        Avalonia.Automation.AutomationProperties.SetName(MaxButton, maximized ? "还原" : "最大化");
     }
 
     // ── 防抖闸口：移动即开闸，静止 700ms 后释放并合入挂起快照 ─────────
@@ -270,6 +271,7 @@ public partial class MainWindow : Window
     /// <summary>8 向缩放热区：优先交由系统非客户区处理，未接管时回退到手动缩放。</summary>
     private void OnResizeGripPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (WindowState != WindowState.Normal) return;
         if (sender is not Control c || c.Tag is not string tag) return;
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
 

@@ -739,10 +739,27 @@
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
 
-        <!-- 窗口最大化时消除外边框，完美贴合全屏 -->
-        <Style Selector="Window[WindowState=Maximized] Border#WindowFrameBorder">
+        <!-- 描边只负责绘制；内容留边与窗口按钮分层，按钮可从窗口 y=0 开始命中。 -->
+        <Style Selector="Grid#WindowContent">
+            <Setter Property="Margin" Value="1" />
+        </Style>
+        <Style Selector="Border#WindowOutline">
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="StackPanel#WindowControls">
+            <Setter Property="Margin" Value="0,0,1,0" />
+        </Style>
+        <Style Selector="Window[WindowState=Maximized] Grid#WindowContent">
+            <Setter Property="Margin" Value="0" />
+        </Style>
+        <Style Selector="Window[WindowState=Maximized] Border#WindowOutline">
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="CornerRadius" Value="0" />
+        </Style>
+        <Style Selector="Window[WindowState=Maximized] StackPanel#WindowControls">
+            <Setter Property="Margin" Value="0" />
+        </Style>
+        <Style Selector="Window[WindowState=Maximized] Border.windowResizeGrip">
+            <Setter Property="IsVisible" Value="False" />
         </Style>
     </Window.Styles>
 
@@ -758,17 +775,16 @@
          ══════════════════════════════════════════════════════════════════ -->
     <Border Name="WindowFrameBorder"
             CornerRadius="0"
-            Background="{DynamicResource BgBase}"
-            BorderBrush="{DynamicResource BorderStrong}" BorderThickness="1">
+            Background="{DynamicResource BgBase}">
     <Grid>
-        <Grid RowDefinitions="46,*">
+        <Grid Name="WindowContent" RowDefinitions="46,*">
 
             <!-- ────────────────────────────────────────────────────────
                  1. 标题栏 · 46px
                  ──────────────────────────────────────────────────────── -->
             <Border Grid.Row="0" Background="{DynamicResource BgTitleBar}"
                     BorderBrush="{DynamicResource BorderSoft}" BorderThickness="0,0,0,1">
-                <Grid ColumnDefinitions="Auto,*,Auto">
+                <Grid ColumnDefinitions="Auto,*,138">
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="9" VerticalAlignment="Center"
                                 Margin="16,0,0,0" Background="Transparent" PointerPressed="OnTitleBarPressed">
                         <Viewbox Width="18" Height="18">
@@ -840,32 +856,6 @@
                             chrome:WindowDecorationProperties.ElementRole="TitleBar"
                             PointerPressed="OnTitleBarPressed" />
 
-                    <StackPanel Grid.Column="2" Orientation="Horizontal">
-                        <Button Classes="wctl" Width="46" Height="46" Click="OnMinimize" ToolTip.Tip="最小化">
-                            <Viewbox Width="14" Height="14">
-                                <Canvas Width="24" Height="24">
-                                    <Path Classes="ic" Stroke="{DynamicResource TextTertiary}" StrokeThickness="1.6"
-                                          Data="M2.5 12h19" />
-                                </Canvas>
-                            </Viewbox>
-                        </Button>
-                        <Button Classes="wctl" x:Name="MaxButton" Width="46" Height="46" Click="OnToggleMaximize" ToolTip.Tip="最大化">
-                            <Viewbox Width="14" Height="14">
-                                <Canvas Width="24" Height="24">
-                                    <Path Classes="ic" x:Name="MaxButtonIcon" Stroke="{DynamicResource TextTertiary}" StrokeThickness="1.6"
-                                          Data="M3 3h18v18H3z" />
-                                </Canvas>
-                            </Viewbox>
-                        </Button>
-                        <Button Classes="wctl-close" Width="46" Height="46" Click="OnClose" ToolTip.Tip="关闭">
-                            <Viewbox Width="14" Height="14">
-                                <Canvas Width="24" Height="24">
-                                    <Path Classes="ic" Stroke="{DynamicResource TextTertiary}" StrokeThickness="1.6"
-                                          Data="M3.5 3.5l17 17M20.5 3.5l-17 17" />
-                                </Canvas>
-                            </Viewbox>
-                        </Button>
-                    </StackPanel>
                 </Grid>
             </Border>
 
@@ -1212,33 +1202,67 @@
                         </Border>
                     </Panel>
 
+        <!-- 正常态完整外框；透明按钮在未悬停时透出顶边，悬停时只覆盖对应段。 -->
+        <Border Name="WindowOutline" BorderBrush="{DynamicResource BorderStrong}" IsHitTestVisible="False" />
+
         <!-- ══════════════════════════════════════════════════════════
              窗口缩放热区 · 8 向（覆盖在内容之上，透明可命中）
              ══════════════════════════════════════════════════════════ -->
-        <Border Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Top" Background="Transparent"
+        <Border Classes="windowResizeGrip" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Top" Background="Transparent"
                 chrome:WindowDecorationProperties.ElementRole="ResizeN"
                 PointerPressed="OnResizeGripPressed" Tag="N" />
-        <Border Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Background="Transparent"
+        <Border Classes="windowResizeGrip" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Background="Transparent"
                 chrome:WindowDecorationProperties.ElementRole="ResizeS"
                 PointerPressed="OnResizeGripPressed" Tag="S" />
-        <Border Width="5" HorizontalAlignment="Left" VerticalAlignment="Stretch" Background="Transparent"
+        <Border Classes="windowResizeGrip" Width="5" HorizontalAlignment="Left" VerticalAlignment="Stretch" Background="Transparent"
                 chrome:WindowDecorationProperties.ElementRole="ResizeW"
                 PointerPressed="OnResizeGripPressed" Tag="W" />
-        <Border Width="5" HorizontalAlignment="Right" VerticalAlignment="Stretch" Background="Transparent"
+        <Border Classes="windowResizeGrip" Width="5" HorizontalAlignment="Right" VerticalAlignment="Stretch" Background="Transparent"
                 chrome:WindowDecorationProperties.ElementRole="ResizeE"
                 PointerPressed="OnResizeGripPressed" Tag="E" />
-        <Border Width="11" Height="11" HorizontalAlignment="Left" VerticalAlignment="Top" Background="Transparent"
+        <Border Classes="windowResizeGrip" Width="11" Height="11" HorizontalAlignment="Left" VerticalAlignment="Top" Background="Transparent"
                 chrome:WindowDecorationProperties.ElementRole="ResizeNW"
                 PointerPressed="OnResizeGripPressed" Tag="NW" />
-        <Border Width="11" Height="11" HorizontalAlignment="Right" VerticalAlignment="Top" Background="Transparent"
+        <Border Classes="windowResizeGrip" Width="11" Height="11" HorizontalAlignment="Right" VerticalAlignment="Top" Background="Transparent"
                 chrome:WindowDecorationProperties.ElementRole="ResizeNE"
                 PointerPressed="OnResizeGripPressed" Tag="NE" />
-        <Border Width="11" Height="11" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="Transparent"
+        <Border Classes="windowResizeGrip" Width="11" Height="11" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="Transparent"
                 chrome:WindowDecorationProperties.ElementRole="ResizeSW"
                 PointerPressed="OnResizeGripPressed" Tag="SW" />
-        <Border Width="11" Height="11" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="Transparent"
+        <Border Classes="windowResizeGrip" Width="11" Height="11" HorizontalAlignment="Right" VerticalAlignment="Bottom" Background="Transparent"
                 chrome:WindowDecorationProperties.ElementRole="ResizeSE"
                 PointerPressed="OnResizeGripPressed" Tag="SE" />
+
+        <!-- 按钮布局和命中均位于窗口顶边；高于缩放热区，低于菜单及模态遮罩。 -->
+        <StackPanel Name="WindowControls" Orientation="Horizontal" HorizontalAlignment="Right"
+                    VerticalAlignment="Top" ZIndex="10">
+            <Button Classes="wctl" Width="46" Height="46" Click="OnMinimize" ToolTip.Tip="最小化"
+                    AutomationProperties.Name="最小化">
+                <Viewbox Width="14" Height="14">
+                    <Canvas Width="24" Height="24">
+                        <Path Classes="ic" Stroke="{DynamicResource TextTertiary}" StrokeThickness="1.6"
+                              Data="M2.5 12h19" />
+                    </Canvas>
+                </Viewbox>
+            </Button>
+            <Button Classes="wctl" x:Name="MaxButton" Width="46" Height="46" Click="OnToggleMaximize" ToolTip.Tip="最大化">
+                <Viewbox Width="14" Height="14">
+                    <Canvas Width="24" Height="24">
+                        <Path Classes="ic" x:Name="MaxButtonIcon" Stroke="{DynamicResource TextTertiary}" StrokeThickness="1.6"
+                              Data="M3 3h18v18H3z" />
+                    </Canvas>
+                </Viewbox>
+            </Button>
+            <Button Classes="wctl-close" Width="46" Height="46" Click="OnClose" ToolTip.Tip="关闭"
+                    AutomationProperties.Name="关闭">
+                <Viewbox Width="14" Height="14">
+                    <Canvas Width="24" Height="24">
+                        <Path Classes="ic" Stroke="{DynamicResource TextTertiary}" StrokeThickness="1.6"
+                              Data="M3.5 3.5l17 17M20.5 3.5l-17 17" />
+                    </Canvas>
+                </Viewbox>
+            </Button>
+        </StackPanel>
 
         <!-- Shell 确认层：公共模板与主题位于 Presentation/Styles/ConfirmationDialogs.axaml。 -->
         <Panel x:Name="InterceptOverlay" IsVisible="{Binding IsInterceptVisible}" ZIndex="91">

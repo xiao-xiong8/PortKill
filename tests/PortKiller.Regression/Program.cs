@@ -48,6 +48,7 @@ internal static class Program
                 UiChecks.Run(true); return 0;
             }
             if (args.Contains("--ui-only")) { UiChecks.Run(); Console.WriteLine("窗口验证通过。"); return 0; }
+            if (args.Contains("--titlebar-ui-only")) { UiChecks.Run(titleBarOnly: true); return 0; }
             if (args.Contains("--update-ui-only")) { UiChecks.Run(updatesOnly: true); return 0; }
             if (args.Contains("--screen-fit-ui-only")) { ScreenFitChecks.Placement(); UiChecks.Run(screenFitOnly: true); return 0; }
             Run("小屏/DPI 窗口工作区边界", ScreenFitChecks.Placement);
